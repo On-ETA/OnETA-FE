@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "http://43.203.168.182:8080";
+const DEFAULT_API_BASE_URL = "http://on-eta.com";
 const DEFAULT_TIMEOUT_MS = 10000;
 const configuredApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
 
