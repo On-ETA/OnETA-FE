@@ -10,10 +10,10 @@ import { Linking } from "react-native";
 
 import { buildApiUrl } from "./client";
 
-const GOOGLE_AUTH_ENDPOINT = "/oauth2/authorization/google";
+const GOOGLE_AUTH_ENDPOINT = "https://homerun-be.onrender.com/oauth2/authorization/google";
 
 export function getGoogleAuthUrl() {
-  return buildApiUrl(GOOGLE_AUTH_ENDPOINT);
+  return GOOGLE_AUTH_ENDPOINT;
 }
 
 export async function startGoogleAuth() {

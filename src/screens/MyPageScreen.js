@@ -46,6 +46,7 @@ export function MyPageScreen({
   onOpenPassword,
   onOpenPrivacy,
   onOpenTerms,
+  onWithdrawComplete,
 }) {
   const [withdrawStep, setWithdrawStep] = useState(null);
   const [myPageInfo, setMyPageInfo] = useState(defaultMyPageInfo);
@@ -90,6 +91,11 @@ export function MyPageScreen({
 
   const handleWithdrawPress = () => {
     setWithdrawStep("complete");
+  };
+
+  const handleWithdrawCompletePress = () => {
+    closeWithdrawModal();
+    onWithdrawComplete?.();
   };
 
   const handleMenuPress = (menuKey) => {
@@ -263,7 +269,7 @@ export function MyPageScreen({
                 </Text>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={closeWithdrawModal}
+                  onPress={handleWithdrawCompletePress}
                   style={styles.completeButton}
                 >
                   <Text style={[styles.modalButtonText, styles.completeText]}>

@@ -92,6 +92,7 @@ function HomeRoute({ navigation, route }) {
       onOpenPassword={() => navigation.navigate(routes.changePassword)}
       onOpenPrivacy={() => navigation.navigate(routes.privacyPolicy)}
       onOpenTerms={() => navigation.navigate(routes.termsOfService)}
+      onWithdrawComplete={() => resetTo(navigation, routes.login)}
       onTabPress={(tabKey) => {
         if (tabKey === "home") {
           navigation.navigate(routes.home);
@@ -126,6 +127,7 @@ function MyPageRoute({ navigation }) {
       onOpenPassword={() => navigation.navigate(routes.changePassword)}
       onOpenPrivacy={() => navigation.navigate(routes.privacyPolicy)}
       onOpenTerms={() => navigation.navigate(routes.termsOfService)}
+      onWithdrawComplete={() => resetTo(navigation, routes.login)}
       onTabPress={(tabKey) => {
         if (tabKey === "home") {
           navigation.navigate(routes.home);
