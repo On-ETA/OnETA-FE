@@ -29,9 +29,11 @@ export async function getMyPage({ accessToken = getAccessToken(), signal } = {})
     errorMessage: "마이페이지 정보를 불러오지 못했습니다.",
   });
 
+  const myPageData = data?.data ?? data;
+
   return {
-    appVersion: data?.appVersion,
-    email: data?.email,
-    nickname: data?.nickname,
+    appVersion: myPageData?.appVersion,
+    email: myPageData?.email,
+    nickname: myPageData?.nickname,
   };
 }

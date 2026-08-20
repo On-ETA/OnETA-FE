@@ -25,8 +25,8 @@ export function InquiryScreen({ onBackPress }) {
     }
 
     const recipient =
-      process.env.EXPO_PUBLIC_INQUIRY_EMAIL ?? "contact@homerun.app";
-    const subject = `[홈런 문의] ${title.trim()}`;
+      process.env.EXPO_PUBLIC_INQUIRY_EMAIL ?? "contact@oneta.app";
+    const subject = `[온에타 문의] ${title.trim()}`;
     const body = content.trim();
     const mailUrl = `mailto:${recipient}?subject=${encodeURIComponent(
       subject

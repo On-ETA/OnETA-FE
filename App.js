@@ -201,7 +201,7 @@ function AccountInfoRoute({ navigation }) {
   return (
     <AccountInfoScreen
       onBackPress={() => goBackOrReset(navigation, routes.myPage)}
-      onConfirmPress={() => goBackOrReset(navigation, routes.myPage)}
+      onConfirmPress={() => resetTo(navigation, routes.myPage)}
     />
   );
 }
@@ -219,7 +219,7 @@ function FindPasswordRoute({ navigation }) {
   return (
     <FindEmailPasswordScreen
       onBackPress={() => goBackOrReset(navigation, routes.login)}
-      onConfirmPress={() => goBackOrReset(navigation, routes.login)}
+      onConfirmPress={() => resetTo(navigation, routes.home)}
     />
   );
 }

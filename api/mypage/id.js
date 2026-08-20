@@ -8,10 +8,10 @@
     "message": "요청이 성공적으로 처리되었습니다",
     "data": {
       "author": "운영진",
-      "content": "안녕하세요, 홈런(HomeRun) 운영진입니다.",
+      "content": "안녕하세요, 온에타(Oneta) 운영진입니다.",
       "createdAt": "2026-05-22T15:44:39",
       "id": 1,
-      "title": "[필독] 홈런(HomeRun) 서비스 정식 오픈 안내",
+      "title": "[필독] 온에타(Oneta) 서비스 정식 오픈 안내",
       "viewCount": 1
     }
   }

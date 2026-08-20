@@ -3,9 +3,9 @@
  /api/mypage/password
  요청 :
  {
-  "currentPassword": "homeruntest123",
-  "newPassword": "homeruntest12345",
-  "newPasswordConfirm": "homeruntest12345"
+  "currentPassword": "onetatest123",
+  "newPassword": "onetatest12345",
+  "newPasswordConfirm": "onetatest12345"
  }
   성공 응답 예시 :
   200

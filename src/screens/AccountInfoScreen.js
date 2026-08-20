@@ -4,16 +4,34 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from "react-native";
 
+import { changeNickname } from "../../api/mypage/nickname";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import BackIcon from "../../assets/images/L.svg";
 import { colors, layout, typography } from "../theme";
 
 export function AccountInfoScreen({ onBackPress, onConfirmPress }) {
   const [nickname, setNickname] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleConfirmPress = async () => {
+    setErrorMessage("");
+    setIsSubmitting(true);
+
+    try {
+      await changeNickname({ newNickname: nickname });
+      onConfirmPress?.();
+    } catch (error) {
+      setErrorMessage(getNicknameErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <AppScreen>
@@ -42,7 +60,10 @@ export function AccountInfoScreen({ onBackPress, onConfirmPress }) {
             <View style={styles.content}>
               <TextInput
                 cursorColor={colors.black}
-                onChangeText={setNickname}
+                onChangeText={(value) => {
+                  setNickname(value);
+                  setErrorMessage("");
+                }}
                 placeholder="닉네임"
                 placeholderTextColor={colors.gray06}
                 selectionColor={colors.black}
@@ -55,16 +76,37 @@ export function AccountInfoScreen({ onBackPress, onConfirmPress }) {
         </KeyboardAvoidingView>
 
         <View style={styles.footer}>
+          {errorMessage ? (
+            <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+              {errorMessage}
+            </Text>
+          ) : null}
           <PrimaryButton
-            onPress={onConfirmPress}
-            style={styles.confirmButton}
+            disabled={isSubmitting}
+            onPress={handleConfirmPress}
+            style={[styles.confirmButton, isSubmitting && styles.disabled]}
             textStyle={styles.confirmText}
           >
-            확인
+            {isSubmitting ? "처리 중" : "확인"}
           </PrimaryButton>
         </View>
       </View>
     </AppScreen>
+  );
+}
+
+function getNicknameErrorMessage(error) {
+  const fieldErrors = error?.data?.data ?? error?.details?.data;
+
+  if (fieldErrors && typeof fieldErrors === "object") {
+    return Object.values(fieldErrors).find(Boolean) ?? "닉네임 변경에 실패했습니다.";
+  }
+
+  return (
+    error?.data?.message ??
+    error?.details?.message ??
+    error?.message ??
+    "닉네임 변경에 실패했습니다. 다시 시도해 주세요."
   );
 }
 
@@ -122,7 +164,7 @@ const styles = StyleSheet.create({
     borderColor: colors.gray03,
     borderRadius: 8,
     backgroundColor: colors.gray02,
-    color: colors.gray06,
+    color: colors.black,
     ...Platform.select({
       web: {
         outlineColor: "transparent",
@@ -155,5 +197,14 @@ const styles = StyleSheet.create({
   confirmText: {
     ...typography.body01Sb,
     color: colors.white,
+  },
+  disabled: {
+    opacity: 0.6,
+  },
+  errorText: {
+    alignSelf: "stretch",
+    marginBottom: 8,
+    ...typography.caption01M,
+    color: colors.point,
   },
 });

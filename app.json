@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "homerun",
-    "slug": "homerun",
+    "name": "oneta",
+    "slug": "oneta",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": ["**/*"],
     "android": {
-      "package": "com.homerun.app"
+      "package": "com.oneta.app"
     },
     "ios": {
       "supportsTablet": false

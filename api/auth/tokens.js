@@ -1,5 +1,5 @@
-const ACCESS_TOKEN_KEY = "homerun.accessToken";
-const REFRESH_TOKEN_KEY = "homerun.refreshToken";
+const ACCESS_TOKEN_KEY = "oneta.accessToken";
+const REFRESH_TOKEN_KEY = "oneta.refreshToken";
 
 let memoryTokens = {
   accessToken: null,

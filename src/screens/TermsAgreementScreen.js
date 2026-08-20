@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import BackIcon from "../../assets/images/L.svg";
@@ -16,7 +16,7 @@ const TERMS = [
     id: "service",
     title: "서비스 이용약관 동의 (필수)",
     description:
-      "홈런 서비스는 회원에게 경기 정보, 기록 관리, 커뮤니티 기능 등 다양한 서비스를 제공합니다. 회원은 서비스를 이용할 때 관련 법령과 본 약관을 준수해야 하며, 타인의 권리를 침해하거나 서비스 운영을 방해하는 행위를 해서는 안 됩니다. 회사는 안정적인 서비스 제공을 위해 필요한 경우 서비스 내용을 변경하거나 점검할 수 있습니다.",
+      "온에타 서비스는 회원에게 경기 정보, 기록 관리, 커뮤니티 기능 등 다양한 서비스를 제공합니다. 회원은 서비스를 이용할 때 관련 법령과 본 약관을 준수해야 하며, 타인의 권리를 침해하거나 서비스 운영을 방해하는 행위를 해서는 안 됩니다. 회사는 안정적인 서비스 제공을 위해 필요한 경우 서비스 내용을 변경하거나 점검할 수 있습니다.",
   },
   {
     id: "privacy",

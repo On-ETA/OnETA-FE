@@ -13,7 +13,7 @@ export function SignupCompleteScreen({ onHomePress, onLoginPress }) {
             <View style={styles.messageBox}>
               <Text style={styles.title}>회원가입이 완료되었어요!</Text>
               <Text style={styles.description}>
-                홈런에 오신 걸 환영합니다.
+                온에타에 오신 걸 환영합니다.
                 {"\n"}
                 지금 바로 다양한 서비스를 이용해 보세요!
               </Text>

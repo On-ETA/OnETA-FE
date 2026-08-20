@@ -1,4 +1,4 @@
-# HomeRun-FE
+# Oneta-FE
 
 ## 실행 방법
 

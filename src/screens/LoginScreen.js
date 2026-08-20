@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,7 +20,7 @@ import {
   PrimaryButton,
   SocialLoginButtons,
 } from "../components";
-import HomerunLogo from "../../assets/images/homerun_logo.svg";
+import OnetaLogo from "../../assets/images/on-eta_logo.png";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";
 import VisibleIcon from "../../assets/images/icon_visible.svg";
 import { colors, layout, typography } from "../theme";
@@ -39,6 +40,7 @@ export function LoginScreen({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState("");
   // 가로로 긴 화면처럼 높이가 낮을 때도 전체 로그인 요소가 같은 비율로 화면 안에 들어오도록 조절합니다.
   const isShortHeight = availableHeight < 600;
   const isWideRoomy =
@@ -69,6 +71,8 @@ export function LoginScreen({
         Math.max(isShortHeight ? 12 : 18, 44 * verticalScale),
       ),
       transform: [{ translateY: isWideRoomy ? -22 : 0 }],
+      width: Math.round(150 * layoutScale * logoScale),
+      height: Math.round(58 * layoutScale * logoScale),
     },
     input: {
       height: controlHeight,
@@ -104,11 +108,12 @@ export function LoginScreen({
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail || !password) {
-      Alert.alert("로그인", "이메일과 비밀번호를 입력해 주세요.");
+      setLoginError("이메일과 비밀번호를 입력해 주세요.");
       return;
     }
 
     setIsSubmitting(true);
+    setLoginError("");
 
     try {
       const loginResponse = await login({
@@ -119,10 +124,7 @@ export function LoginScreen({
       setAuthTokens(extractAuthTokens(loginResponse));
       onLoginPress?.();
     } catch (error) {
-      Alert.alert(
-        "로그인",
-        error?.message ?? "로그인에 실패했습니다. 다시 시도해 주세요.",
-      );
+      setLoginError(getLoginErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -152,11 +154,11 @@ export function LoginScreen({
         style={styles.scroller}
       >
         <View style={[styles.content, responsiveLayout.content]}>
-          <HomerunLogo
-            accessibilityLabel="홈런"
-            height={Math.round(58 * layoutScale * logoScale)}
+          <Image
+            accessibilityLabel="온에타"
+            resizeMode="contain"
+            source={OnetaLogo}
             style={[styles.logo, responsiveLayout.logo]}
-            width={Math.round(150 * layoutScale * logoScale)}
           />
 
         <View style={[styles.form, responsiveLayout.form]}>
@@ -164,7 +166,10 @@ export function LoginScreen({
             autoCapitalize="none"
             autoComplete="email"
             keyboardType="email-address"
-            onChangeText={setEmail}
+            onChangeText={(value) => {
+              setEmail(value);
+              setLoginError("");
+            }}
             placeholder="이메일"
             style={responsiveLayout.input}
             value={email}
@@ -172,13 +177,21 @@ export function LoginScreen({
           <PasswordInput
             autoCapitalize="none"
             autoComplete="password"
-            onChangeText={setPassword}
+            onChangeText={(value) => {
+              setPassword(value);
+              setLoginError("");
+            }}
             onToggleVisibility={() => setShowPassword((value) => !value)}
             placeholder="비밀번호"
             secureTextEntry={!showPassword}
             style={responsiveLayout.input}
             value={password}
           />
+          {loginError ? (
+            <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+              {loginError}
+            </Text>
+          ) : null}
           <PrimaryButton
             disabled={isSubmitting}
             onPress={handleLoginPress}
@@ -245,6 +258,16 @@ export function LoginScreen({
   );
 }
 
+function getLoginErrorMessage(error) {
+  const fieldErrors = error?.data?.data;
+
+  if (fieldErrors && typeof fieldErrors === "object") {
+    return Object.values(fieldErrors).find(Boolean) ?? "로그인에 실패했습니다.";
+  }
+
+  return error?.message ?? "로그인에 실패했습니다. 다시 시도해 주세요.";
+}
+
 function PasswordInput({
   onToggleVisibility,
   secureTextEntry,
@@ -286,6 +309,8 @@ const styles = StyleSheet.create({
   },
   logo: {
     alignSelf: "center",
+    width: 150,
+    height: 58,
   },
   form: {},
   passwordInputWrap: {
@@ -293,6 +318,11 @@ const styles = StyleSheet.create({
   },
   passwordInput: {
     paddingRight: 58,
+  },
+  errorText: {
+    ...typography.caption01M,
+    color: "#E5484D",
+    lineHeight: 19.2,
   },
   eyeButton: {
     position: "absolute",

@@ -303,11 +303,11 @@ export function SignupScreen({ onBackPress, onNextPress }) {
                   value={email}
                 />
                 <SideButton
-                  active={isSendEmailButtonActive}
-                  disabled={!canSendEmailCode}
+                  active={!isEmailVerified && isSendEmailButtonActive}
+                  disabled={isEmailVerified || !canSendEmailCode}
                   onPress={handleSendEmailCode}
                 >
-                  {isSendingEmail ? "전송" : "인증"}
+                  {isEmailVerified ? "완료" : isSendingEmail ? "전송" : "인증"}
                 </SideButton>
               </View>
               {shouldShowInputPreview && trimmedEmail && (
@@ -327,8 +327,8 @@ export function SignupScreen({ onBackPress, onNextPress }) {
                   value={verificationCode}
                 />
                 <SideButton
-                  active={isVerifyEmailButtonActive}
-                  disabled={!canVerifyEmailCode}
+                  active={!isEmailVerified && isVerifyEmailButtonActive}
+                  disabled={isEmailVerified || !canVerifyEmailCode}
                   onPress={handleVerifyEmailCode}
                 >
                   {isEmailVerified ? "완료" : isVerifyingEmail ? "확인" : "확인"}

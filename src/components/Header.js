@@ -1,10 +1,10 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import BackIconDefault from "../../assets/images/L.svg";
 import BellIcon from "../../assets/images/icon_bell.svg";
 import BellNoneIcon from "../../assets/images/icon_bell_none.svg";
-import HomerunLogo from "../../assets/images/homerun_logo.svg";
+import OnetaLogo from "../../assets/images/on-eta_logo.png";
 import { colors, typography } from "../theme";
 
 const MAIN_BACKGROUND = "#FCFDFE";
@@ -47,7 +47,12 @@ export function Header({
       >
         {isMain ? (
           <>
-            <HomerunLogo accessibilityLabel="홈런" height={39} width={102} />
+            <Image
+              accessibilityLabel="온에타"
+              resizeMode="contain"
+              source={OnetaLogo}
+              style={styles.logo}
+            />
             <Pressable
               accessibilityLabel="알림"
               accessibilityRole="button"
@@ -134,6 +139,10 @@ const styles = StyleSheet.create({
   mainIconButton: {
     width: 40,
     height: 40,
+  },
+  logo: {
+    width: 102,
+    height: 39,
   },
   backIconButton: {
     width: 24,

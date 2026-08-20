@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,6 +12,8 @@ import {
 } from "react-native";
 
 import { sendEmailVerificationCode } from "../../api/auth/email/send";
+import { login } from "../../api/auth/login";
+import { extractAuthTokens, setAuthTokens } from "../../api/auth/tokens";
 import { verifyEmailCode } from "../../api/auth/email/verify";
 import { resetPassword } from "../../api/reset";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";
@@ -30,6 +31,21 @@ const EMAIL_AUTH_STATUS = {
   failed: "failed",
 };
 
+function getApiErrorMessage(error, fallbackMessage) {
+  const fieldErrors = error?.data?.data ?? error?.details?.data;
+
+  if (fieldErrors && typeof fieldErrors === "object") {
+    return Object.values(fieldErrors).find(Boolean) ?? fallbackMessage;
+  }
+
+  return (
+    error?.data?.message ??
+    error?.details?.message ??
+    error?.message ??
+    fallbackMessage
+  );
+}
+
 export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
   const { height, width } = useWindowDimensions();
   const frameWidth = Math.min(width, layout.mobileFrameWidth);
@@ -42,6 +58,7 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
+  const [resetErrorMessage, setResetErrorMessage] = useState("");
   const [emailAuthStatus, setEmailAuthStatus] = useState(
     EMAIL_AUTH_STATUS.idle,
   );
@@ -73,14 +90,14 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
       isEmailVerified);
   const isVerifyEmailButtonActive =
     canVerifyEmailCode || isVerifyingEmail || isEmailVerified;
-  const availableContentWidth =
-    frameWidth - layout.screenMargin * 2;
+  const availableContentWidth = frameWidth - layout.screenMargin * 2;
   const shouldShowInputPreview = availableContentWidth < 340;
   const shouldUseInlineFooter = frameWidth > height || height < 640;
 
   const handleEmailChange = (value) => {
     setEmail(value);
     setEmailStatus(null);
+    setResetErrorMessage("");
     setEmailAuthStatus(EMAIL_AUTH_STATUS.idle);
 
     if (verifiedEmail && value.trim() !== verifiedEmail) {
@@ -89,12 +106,13 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
   };
 
   const handleSendEmailCode = async () => {
+    setResetErrorMessage("");
+
     if (!trimmedEmail) {
       setEmailStatus({
         type: "error",
         message: "이메일을 입력해 주세요.",
       });
-      Alert.alert("비밀번호 찾기", "이메일을 입력해 주세요.");
       return;
     }
 
@@ -111,31 +129,35 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
       setEmailAuthStatus(EMAIL_AUTH_STATUS.sent);
       setEmailStatus({
         type: "success",
-        message: "인증번호를 이메일로 보냈습니다.",
+        message: "인증번호를 발송했습니다.",
       });
-      Alert.alert("비밀번호 찾기", "인증번호를 이메일로 보냈습니다.");
     } catch (error) {
-      const errorMessage =
-        error?.message ?? "인증번호 발송에 실패했습니다. 다시 시도해 주세요.";
+      const errorMessage = getApiErrorMessage(
+        error,
+        "인증번호 발송에 실패했습니다. 다시 시도해 주세요.",
+      );
 
       setEmailStatus({
         type: "error",
         message: errorMessage,
       });
       setEmailAuthStatus(EMAIL_AUTH_STATUS.idle);
-      Alert.alert("비밀번호 찾기", errorMessage);
     } finally {
       setIsSendingEmail(false);
     }
   };
 
   const handleVerifyEmailCode = async () => {
+    setResetErrorMessage("");
+
     if (!trimmedEmail || !trimmedVerificationCode) {
+      const errorMessage = "이메일과 인증번호를 입력해 주세요.";
+
       setEmailStatus({
         type: "error",
-        message: "이메일과 인증번호를 입력해 주세요.",
+        message: errorMessage,
       });
-      Alert.alert("비밀번호 찾기", "이메일과 인증번호를 입력해 주세요.");
+      setResetErrorMessage(errorMessage);
       return;
     }
 
@@ -157,10 +179,11 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
         type: "success",
         message: "이메일 인증이 완료되었습니다.",
       });
-      Alert.alert("비밀번호 찾기", "이메일 인증이 완료되었습니다.");
     } catch (error) {
-      const errorMessage =
-        error?.message ?? "인증번호 확인에 실패했습니다. 다시 시도해 주세요.";
+      const errorMessage = getApiErrorMessage(
+        error,
+        "인증번호 확인에 실패했습니다. 다시 시도해 주세요.",
+      );
 
       setVerifiedEmail("");
       setEmailAuthStatus(EMAIL_AUTH_STATUS.failed);
@@ -168,25 +191,27 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
         type: "error",
         message: errorMessage,
       });
-      Alert.alert("비밀번호 찾기", errorMessage);
+      setResetErrorMessage(errorMessage);
     } finally {
       setIsVerifyingEmail(false);
     }
   };
 
   const handleConfirmPress = async () => {
+    setResetErrorMessage("");
+
     if (!trimmedEmail || !newPassword || !newPasswordConfirm) {
-      Alert.alert("비밀번호 찾기", "필수 정보를 모두 입력해 주세요.");
+      setResetErrorMessage("필수 정보를 모두 입력해 주세요.");
       return;
     }
 
     if (!isEmailVerified) {
-      Alert.alert("비밀번호 찾기", "이메일 인증을 완료해 주세요.");
+      setResetErrorMessage("이메일 인증을 완료해 주세요.");
       return;
     }
 
     if (newPassword !== newPasswordConfirm) {
-      Alert.alert("비밀번호 찾기", "비밀번호가 일치하지 않습니다.");
+      setResetErrorMessage("비밀번호가 일치하지 않습니다.");
       return;
     }
 
@@ -198,16 +223,20 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
         newPassword,
         newPasswordConfirm,
       });
-      Alert.alert("비밀번호 찾기", "비밀번호가 변경되었습니다.", [
-        {
-          text: "확인",
-          onPress: () => onConfirmPress?.(),
-        },
-      ]);
+
+      const loginResponse = await login({
+        email: trimmedEmail,
+        password: newPassword,
+      });
+
+      setAuthTokens(extractAuthTokens(loginResponse));
+      onConfirmPress?.();
     } catch (error) {
-      Alert.alert(
-        "비밀번호 찾기",
-        error?.message ?? "비밀번호 재설정에 실패했습니다. 다시 시도해 주세요.",
+      setResetErrorMessage(
+        getApiErrorMessage(
+          error,
+          "비밀번호 재설정에 실패했습니다. 다시 시도해 주세요.",
+        ),
       );
     } finally {
       setIsSubmitting(false);
@@ -215,14 +244,21 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
   };
 
   const confirmButton = (
-    <PrimaryButton
-      disabled={isSubmitting}
-      onPress={handleConfirmPress}
-      style={[styles.confirmButton, isSubmitting && styles.disabled]}
-      textStyle={styles.confirmText}
-    >
-      {isSubmitting ? "처리 중" : "확인"}
-    </PrimaryButton>
+    <>
+      {resetErrorMessage ? (
+        <Text accessibilityLiveRegion="polite" style={styles.resetError}>
+          {resetErrorMessage}
+        </Text>
+      ) : null}
+      <PrimaryButton
+        disabled={isSubmitting}
+        onPress={handleConfirmPress}
+        style={[styles.confirmButton, isSubmitting && styles.disabled]}
+        textStyle={styles.confirmText}
+      >
+        {isSubmitting ? "처리 중" : "확인"}
+      </PrimaryButton>
+    </>
   );
 
   return (
@@ -261,11 +297,11 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
                   value={email}
                 />
                 <SideButton
-                  active={isSendEmailButtonActive}
-                  disabled={!canSendEmailCode}
+                  active={!isEmailVerified && isSendEmailButtonActive}
+                  disabled={isEmailVerified || !canSendEmailCode}
                   onPress={handleSendEmailCode}
                 >
-                  {isSendingEmail ? "전송" : "인증"}
+                  {isEmailVerified ? "완료" : isSendingEmail ? "전송" : "인증"}
                 </SideButton>
               </View>
               {shouldShowInputPreview && trimmedEmail && (
@@ -274,14 +310,17 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
               <View style={styles.row}>
                 <FindPasswordInput
                   keyboardType="number-pad"
-                  onChangeText={setVerificationCode}
+                  onChangeText={(value) => {
+                    setVerificationCode(value);
+                    setResetErrorMessage("");
+                  }}
                   placeholder="인증번호 입력 *"
                   style={styles.emailInput}
                   value={verificationCode}
                 />
                 <SideButton
-                  active={isVerifyEmailButtonActive}
-                  disabled={!canVerifyEmailCode}
+                  active={!isEmailVerified && isVerifyEmailButtonActive}
+                  disabled={isEmailVerified || !canVerifyEmailCode}
                   onPress={handleVerifyEmailCode}
                 >
                   {isEmailVerified ? "완료" : isVerifyingEmail ? "확인" : "확인"}
@@ -309,7 +348,10 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
               <PasswordInput
                 autoCapitalize="none"
                 autoComplete="password"
-                onChangeText={setNewPassword}
+                onChangeText={(value) => {
+                  setNewPassword(value);
+                  setResetErrorMessage("");
+                }}
                 onToggleVisibility={() =>
                   setShowNewPassword((value) => !value)
                 }
@@ -321,7 +363,10 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
               <PasswordInput
                 autoCapitalize="none"
                 autoComplete="password"
-                onChangeText={setNewPasswordConfirm}
+                onChangeText={(value) => {
+                  setNewPasswordConfirm(value);
+                  setResetErrorMessage("");
+                }}
                 onToggleVisibility={() =>
                   setShowNewPasswordConfirm((value) => !value)
                 }
@@ -596,5 +641,11 @@ const styles = StyleSheet.create({
   confirmText: {
     ...typography.body01Sb,
     color: colors.white,
+  },
+  resetError: {
+    alignSelf: "stretch",
+    marginBottom: 8,
+    ...typography.caption01M,
+    color: colors.point,
   },
 });

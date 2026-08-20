@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "http://on-eta.com";
+const DEFAULT_API_BASE_URL = "https://api.on-eta.com";
 const DEFAULT_TIMEOUT_MS = 10000;
 const configuredApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
 
