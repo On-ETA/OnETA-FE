@@ -93,11 +93,6 @@ export function FirstLastRouteScreen() {
       </View>
 
       <View style={styles.noticeRow}>
-        <View style={styles.characterBadge}>
-          <View style={styles.characterCircle}>
-            <Text style={styles.characterText}>캐릭터1</Text>
-          </View>
-        </View>
         <View style={styles.noticeBubble}>
           <Text style={styles.noticeText}>출발 전 미리 알림을 설정할 수 있어요!</Text>
           <Pressable
@@ -175,7 +170,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 16,
     paddingHorizontal: 11,
-    paddingBottom: 142,
+    paddingBottom: 24,
   },
   routeCard: {
     alignSelf: "center",
@@ -308,43 +303,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  characterBadge: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 40,
-    borderWidth: 1,
-    borderColor: colors.gray03,
-    backgroundColor: colors.sub,
-  },
-  characterCircle: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 17,
-    backgroundColor: "#D9F7E3",
-  },
-  characterText: {
-    fontFamily: typography.caption02M.fontFamily,
-    fontSize: 7,
-    fontWeight: "600",
-    lineHeight: 9,
-    color: colors.gray08,
-  },
   noticeBubble: {
-    width: 276,
+    width: 328,
     padding: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
     borderColor: colors.gray03,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
-    borderBottomLeftRadius: 0,
+    borderRadius: 8,
     backgroundColor: colors.gray02,
   },
   noticeSettingButton: {

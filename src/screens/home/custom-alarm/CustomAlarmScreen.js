@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 16,
     paddingHorizontal: 16,
-    paddingBottom: 142,
+    paddingBottom: 24,
   },
   section: {
     width: 328,

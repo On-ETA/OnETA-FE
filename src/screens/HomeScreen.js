@@ -1,14 +1,14 @@
 import React, { useState } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 
-import { HomeTopSection, MainTabBar } from "../components";
+import { HomeTopSection } from "../components";
 import { AddressManagementScreen } from "./AddressManagementScreen";
 import { CustomAlarmScreen } from "./home/custom-alarm/CustomAlarmScreen";
 import { GarageDepartureAlarmAddScreen } from "./home/custom-alarm/GarageDepartureAlarmAddScreen";
 import { FirstLastRouteScreen } from "./home/first-last/FirstLastRouteScreen";
 import { MyPageScreen } from "./MyPageScreen";
-import { colors, layout, typography } from "../theme";
+import { colors, layout } from "../theme";
 
 const homeBackground = colors.gray01;
 
@@ -50,6 +50,7 @@ export function HomeScreen({
           {activeTab === "myPage" ? (
             <MyPageScreen
               embedded
+              onBackPress={() => handleTabPress("home")}
               onProfilePress={onOpenAccountInfo}
               onOpenNotifications={onOpenNotifications}
               onOpenPassword={onOpenPassword}
@@ -60,18 +61,6 @@ export function HomeScreen({
               onWithdrawComplete={onWithdrawComplete}
               notificationCount={notificationCount}
             />
-          ) : activeTab === "character" ? (
-            <>
-              <HomeTopSection
-                notificationCount={notificationCount}
-                onBellPress={onOpenNotifications}
-                showAddress={false}
-                showTabs={false}
-              />
-              <View style={styles.placeholder}>
-                <Text style={styles.placeholderTitle}>캐릭터</Text>
-              </View>
-            </>
           ) : activeTab === "home" ? (
             isAddressManagerVisible ? (
               <AddressManagementScreen
@@ -91,14 +80,11 @@ export function HomeScreen({
                   setIsGarageDepartureAddVisible(true)
                 }
                 onHomeTabPress={setActiveHomeTab}
+                onMyPagePress={() => handleTabPress("myPage")}
               />
             )
           ) : null}
         </View>
-
-        {isAddressManagerVisible || isGarageDepartureAddVisible ? null : (
-          <MainTabBar activeTab={activeTab} onTabPress={handleTabPress} />
-        )}
       </View>
     </View>
   );
@@ -111,6 +97,7 @@ function HomeDashboard({
   onBellPress,
   onGarageDepartureAddPress,
   onHomeTabPress,
+  onMyPagePress,
 }) {
   return (
     <>
@@ -119,7 +106,9 @@ function HomeDashboard({
         notificationCount={notificationCount}
         onAddressPress={onAddressPress}
         onBellPress={onBellPress}
+        onMyPagePress={onMyPagePress}
         onTabPress={onHomeTabPress}
+        showMyPageButton
       />
       {activeHomeTab === "customAlarm" ? (
         <CustomAlarmScreen
@@ -151,14 +140,5 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: homeBackground,
-  },
-  placeholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeholderTitle: {
-    ...typography.head01Sb,
-    color: colors.gray09,
   },
 });

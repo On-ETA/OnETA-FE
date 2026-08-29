@@ -37,6 +37,7 @@ const SERVICE_ITEMS = [
 
 export function MyPageScreen({
   embedded = false,
+  onBackPress,
   onProfilePress,
   showHeader = true,
   notificationCount = 0,
@@ -129,8 +130,10 @@ export function MyPageScreen({
       {showHeader ? (
         <HomeTopSection
           notificationCount={notificationCount}
+          onBackPress={onBackPress}
           onBellPress={onOpenNotifications}
           showAddress={false}
+          showBackButton
           showTabs={false}
           title="마이페이지"
         />

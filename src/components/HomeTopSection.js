@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import BellIcon from "../../assets/images/icon_bell.svg";
 import BellNoneIcon from "../../assets/images/icon_bell_none.svg";
+import BackIcon from "../../assets/images/L.svg";
+import MyPageIcon from "../../assets/images/icon_mypage.svg";
 import ArrowRightIcon from "../../assets/images/R.svg";
 import MapIcon from "../../public/images/map.svg";
 import { colors, typography } from "../theme";
@@ -13,9 +15,13 @@ export function HomeTopSection({
   activeTab = "firstLast",
   notificationCount = 0,
   onAddressPress,
+  onBackPress,
   onBellPress,
+  onMyPagePress,
   onTabPress,
   showAddress = true,
+  showBackButton = false,
+  showMyPageButton = false,
   showTabs = true,
   title,
 }) {
@@ -41,19 +47,45 @@ export function HomeTopSection({
               />
             </Pressable>
           ) : title ? (
-            <Text style={styles.titleText}>{title}</Text>
+            <View style={styles.titleGroup}>
+              {showBackButton ? (
+                <Pressable
+                  accessibilityLabel="뒤로가기"
+                  accessibilityRole="button"
+                  hitSlop={12}
+                  onPress={onBackPress}
+                  style={styles.backButton}
+                >
+                  <BackIcon height={24} style={styles.headerIcon} width={24} />
+                </Pressable>
+              ) : null}
+              <Text style={styles.titleText}>{title}</Text>
+            </View>
           ) : (
             <View style={styles.emptyLeft} />
           )}
+          <View style={styles.headerActions}>
           <Pressable
             accessibilityLabel="알림"
             accessibilityRole="button"
             hitSlop={12}
             onPress={onBellPress}
-            style={styles.bellButton}
+            style={styles.iconButton}
           >
-            <HeaderBellIcon height={24} style={styles.bellIcon} width={24} />
+            <HeaderBellIcon height={24} style={styles.headerIcon} width={24} />
           </Pressable>
+          {showMyPageButton ? (
+            <Pressable
+              accessibilityLabel="마이페이지"
+              accessibilityRole="button"
+              hitSlop={12}
+              onPress={onMyPagePress}
+              style={styles.iconButton}
+            >
+              <MyPageIcon height={24} style={styles.headerIcon} width={24} />
+            </Pressable>
+          ) : null}
+          </View>
         </View>
 
         {showTabs ? (
@@ -141,6 +173,18 @@ const styles = StyleSheet.create({
     ...typography.head01Sb,
     color: colors.gray08,
   },
+  titleGroup: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  backButton: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   addressArrowIcon: {
     marginLeft: 7,
   },
@@ -148,13 +192,18 @@ const styles = StyleSheet.create({
     width: 1,
     height: 40,
   },
-  bellButton: {
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  iconButton: {
     width: 40,
     height: 40,
     alignItems: "center",
     justifyContent: "center",
   },
-  bellIcon: {
+  headerIcon: {
     width: 24,
     height: 24,
     aspectRatio: 1,

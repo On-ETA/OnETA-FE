@@ -2,40 +2,43 @@ import React, { useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from "react-native";
 
+import { sendInquiry } from "../../api/mypage/inquiry";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import { colors, typography } from "../theme";
 
 export function InquiryScreen({ onBackPress }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const isSubmitDisabled = !title.trim() || !content.trim();
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (isSubmitDisabled) {
-      Alert.alert("문의하기", "제목과 문의 내용을 모두 입력해주세요.");
-      return;
-    }
-
-    const recipient =
-      process.env.EXPO_PUBLIC_INQUIRY_EMAIL ?? "contact@oneta.app";
-    const subject = `[온에타 문의] ${title.trim()}`;
-    const body = content.trim();
-    const mailUrl = `mailto:${recipient}?subject=${encodeURIComponent(
-      subject
-    )}&body=${encodeURIComponent(body)}`;
+    setErrorMessage("");
+    setIsSubmitting(true);
 
     try {
-      await Linking.openURL(mailUrl);
-    } catch {
-      Alert.alert("메일 앱을 열 수 없어요", "기기에 메일 앱 설정을 확인해주세요.");
+      await sendInquiry({
+        title,
+        content,
+      });
+      Alert.alert("문의하기", "문의가 등록되었습니다.", [
+        {
+          text: "확인",
+          onPress: onBackPress,
+        },
+      ]);
+    } catch (error) {
+      setErrorMessage(getInquiryErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -53,7 +56,10 @@ export function InquiryScreen({ onBackPress }) {
             keyboardShouldPersistTaps="handled"
           >
             <TextInput
-              onChangeText={setTitle}
+              onChangeText={(value) => {
+                setTitle(value);
+                setErrorMessage("");
+              }}
               placeholder="제목"
               placeholderTextColor={colors.gray06}
               style={styles.titleInput}
@@ -63,7 +69,10 @@ export function InquiryScreen({ onBackPress }) {
 
             <TextInput
               multiline
-              onChangeText={setContent}
+              onChangeText={(value) => {
+                setContent(value);
+                setErrorMessage("");
+              }}
               placeholder="문의 내용을 작성해주세요"
               placeholderTextColor={colors.gray06}
               style={styles.contentInput}
@@ -72,7 +81,14 @@ export function InquiryScreen({ onBackPress }) {
               value={content}
             />
 
+            {errorMessage ? (
+              <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+                {errorMessage}
+              </Text>
+            ) : null}
+
             <PrimaryButton
+              disabled={isSubmitting}
               onPress={handleSubmit}
               style={styles.submitButton}
               textStyle={styles.submitText}
@@ -83,6 +99,21 @@ export function InquiryScreen({ onBackPress }) {
         </KeyboardAvoidingView>
       </View>
     </AppScreen>
+  );
+}
+
+function getInquiryErrorMessage(error) {
+  const fieldErrors = error?.data?.data ?? error?.details?.data ?? error?.data;
+
+  if (fieldErrors && typeof fieldErrors === "object") {
+    return Object.values(fieldErrors).find(Boolean) ?? "문의 전송에 실패했습니다.";
+  }
+
+  return (
+    error?.data?.message ??
+    error?.details?.message ??
+    error?.message ??
+    "문의 전송에 실패했습니다. 다시 시도해주세요."
   );
 }
 
@@ -129,8 +160,15 @@ const styles = StyleSheet.create({
     color: colors.gray06,
     ...typography.body01Sb,
   },
+  errorText: {
+    alignSelf: "stretch",
+    marginTop: 30,
+    marginBottom: 8,
+    ...typography.caption01M,
+    color: colors.point,
+  },
   submitButton: {
-    marginTop: 38,
+    marginTop: 8,
     display: "flex",
     width: "100%",
     height: 54,
