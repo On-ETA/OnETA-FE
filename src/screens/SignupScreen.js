@@ -12,10 +12,10 @@ import {
   View,
 } from "react-native";
 
-import { sendEmailVerificationCode } from "../../api/auth/email/send";
-import { verifyEmailCode } from "../../api/auth/email/verify";
-import { signup } from "../../api/auth/signup";
-import { extractAuthTokens } from "../../api/auth/tokens";
+import { sendEmailVerificationCode } from "../api/auth/email/send";
+import { verifyEmailCode } from "../api/auth/email/verify";
+import { signup } from "../api/auth/signup";
+import { extractAuthTokens } from "../api/auth/tokens";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import BackIcon from "../../assets/images/L.svg";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";

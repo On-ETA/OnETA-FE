@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 
-import { changeNickname } from "../../api/mypage/nickname";
+import { changeNickname } from "../api/mypage/nickname";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import BackIcon from "../../assets/images/L.svg";
 import { colors, layout, typography } from "../theme";

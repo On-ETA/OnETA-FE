@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 
-import { sendInquiry } from "../../api/mypage/inquiry";
+import { sendInquiry } from "../api/mypage/inquiry";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import { colors, typography } from "../theme";
 

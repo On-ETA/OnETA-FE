@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { getNotices } from "../../api/mypage/notice";
+import { getNotices } from "../api/mypage/notice";
 import { AppScreen, Header } from "../components";
 import { colors } from "../theme";
 

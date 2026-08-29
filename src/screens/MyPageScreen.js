@@ -9,7 +9,7 @@ import PenIcon from "../../assets/images/icon_pen.svg";
 import LockIcon from "../../assets/images/icon_lock.svg";
 import RightIcon from "../../assets/images/R.svg";
 import packageJson from "../../package.json";
-import { getMyPage } from "../../api/mypage";
+import { getMyPage } from "../api/mypage";
 import { AppScreen, HomeTopSection } from "../components";
 import { colors, typography } from "../theme";
 

@@ -11,11 +11,11 @@ import {
   View,
 } from "react-native";
 
-import { sendEmailVerificationCode } from "../../api/auth/email/send";
-import { login } from "../../api/auth/login";
-import { extractAuthTokens, setAuthTokens } from "../../api/auth/tokens";
-import { verifyEmailCode } from "../../api/auth/email/verify";
-import { resetPassword } from "../../api/reset";
+import { sendEmailVerificationCode } from "../api/auth/email/send";
+import { login } from "../api/auth/login";
+import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
+import { verifyEmailCode } from "../api/auth/email/verify";
+import { resetPassword } from "../api/reset";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";
 import VisibleIcon from "../../assets/images/icon_visible.svg";
 import BackIcon from "../../assets/images/L.svg";

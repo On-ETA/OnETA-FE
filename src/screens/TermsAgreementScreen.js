@@ -6,8 +6,8 @@ import CheckboxFillIcon from "../../assets/images/Checkbox_fill.svg";
 import CheckboxIcon from "../../assets/images/Checkbox.svg";
 import DownIcon from "../../assets/images/Down.svg";
 import UpIcon from "../../assets/images/Up.svg";
-import { agreeToSignupTerms } from "../../api/auth/consent";
-import { extractAuthTokens, setAuthTokens } from "../../api/auth/tokens";
+import { agreeToSignupTerms } from "../api/auth/consent";
+import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import { colors, layout, typography } from "../theme";
 

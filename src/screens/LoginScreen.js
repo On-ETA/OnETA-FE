@@ -11,9 +11,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { login } from "../../api/auth/login";
-import { extractAuthTokens, setAuthTokens } from "../../api/auth/tokens";
-import { startGoogleAuth } from "../../api/google";
+import { login } from "../api/auth/login";
+import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
+import { startGoogleAuth } from "../api/google";
 import {
   AppScreen,
   FormTextInput,
