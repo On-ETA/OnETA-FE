@@ -5,7 +5,13 @@ import { StatusBar } from "expo-status-bar";
 import { HomeTopSection } from "../components";
 import { AddressManagementScreen } from "./AddressManagementScreen";
 import { CustomAlarmScreen } from "./home/custom-alarm/CustomAlarmScreen";
+import {
+  GarageDepartureAlarmEditScreen,
+  ScheduleAlarmEditScreen,
+} from "./home/custom-alarm/CustomAlarmEditScreen";
 import { GarageDepartureAlarmAddScreen } from "./home/custom-alarm/GarageDepartureAlarmAddScreen";
+import { ScheduleAlarmAddScreen } from "./home/custom-alarm/ScheduleAlarmAddScreen";
+import { FirstLastRouteDetailScreen } from "./home/first-last/FirstLastRouteDetailScreen";
 import { FirstLastRouteScreen } from "./home/first-last/FirstLastRouteScreen";
 import { MyPageScreen } from "./MyPageScreen";
 import { colors, layout } from "../theme";
@@ -28,12 +34,19 @@ export function HomeScreen({
   const [activeTab, setActiveTab] = useState(initialTab);
   const [activeHomeTab, setActiveHomeTab] = useState("firstLast");
   const [isAddressManagerVisible, setIsAddressManagerVisible] = useState(false);
+  const [isRouteDetailVisible, setIsRouteDetailVisible] = useState(false);
+  const [isScheduleAlarmAddVisible, setIsScheduleAlarmAddVisible] =
+    useState(false);
   const [isGarageDepartureAddVisible, setIsGarageDepartureAddVisible] =
     useState(false);
+  const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
 
   const handleTabPress = (tabKey) => {
     setIsAddressManagerVisible(false);
+    setIsRouteDetailVisible(false);
+    setIsScheduleAlarmAddVisible(false);
     setIsGarageDepartureAddVisible(false);
+    setEditingCustomAlarm(null);
 
     if (onTabPress?.(tabKey)) {
       return;
@@ -70,6 +83,30 @@ export function HomeScreen({
               <GarageDepartureAlarmAddScreen
                 onBackPress={() => setIsGarageDepartureAddVisible(false)}
               />
+            ) : isScheduleAlarmAddVisible ? (
+              <ScheduleAlarmAddScreen
+                onBackPress={() => setIsScheduleAlarmAddVisible(false)}
+              />
+            ) : editingCustomAlarm?.type === "schedule" ? (
+              <ScheduleAlarmEditScreen
+                alarm={editingCustomAlarm.alarm}
+                onBackPress={() => setEditingCustomAlarm(null)}
+                onSavePress={() => setEditingCustomAlarm(null)}
+              />
+            ) : editingCustomAlarm?.type === "garage" ? (
+              <GarageDepartureAlarmEditScreen
+                alarm={editingCustomAlarm.alarm}
+                onBackPress={() => setEditingCustomAlarm(null)}
+                onChangeBusPress={() => {
+                  setEditingCustomAlarm(null);
+                  setIsGarageDepartureAddVisible(true);
+                }}
+                onSavePress={() => setEditingCustomAlarm(null)}
+              />
+            ) : isRouteDetailVisible ? (
+              <FirstLastRouteDetailScreen
+                onBackPress={() => setIsRouteDetailVisible(false)}
+              />
             ) : (
               <HomeDashboard
                 activeHomeTab={activeHomeTab}
@@ -81,6 +118,16 @@ export function HomeScreen({
                 }
                 onHomeTabPress={setActiveHomeTab}
                 onMyPagePress={() => handleTabPress("myPage")}
+                onRouteDetailPress={() => setIsRouteDetailVisible(true)}
+                onScheduleAlarmAddPress={() =>
+                  setIsScheduleAlarmAddVisible(true)
+                }
+                onGarageAlarmEditPress={(alarm) =>
+                  setEditingCustomAlarm({ type: "garage", alarm })
+                }
+                onScheduleAlarmEditPress={(alarm) =>
+                  setEditingCustomAlarm({ type: "schedule", alarm })
+                }
               />
             )
           ) : null}
@@ -96,13 +143,20 @@ function HomeDashboard({
   onAddressPress,
   onBellPress,
   onGarageDepartureAddPress,
+  onGarageAlarmEditPress,
   onHomeTabPress,
   onMyPagePress,
+  onRouteDetailPress,
+  onScheduleAlarmAddPress,
+  onScheduleAlarmEditPress,
 }) {
   return (
     <>
       <HomeTopSection
         activeTab={activeHomeTab}
+        addressLabel={
+          activeHomeTab === "firstLast" ? "주소 등록하기" : "우리집"
+        }
         notificationCount={notificationCount}
         onAddressPress={onAddressPress}
         onBellPress={onBellPress}
@@ -113,9 +167,12 @@ function HomeDashboard({
       {activeHomeTab === "customAlarm" ? (
         <CustomAlarmScreen
           onGarageDepartureAddPress={onGarageDepartureAddPress}
+          onGarageAlarmEditPress={onGarageAlarmEditPress}
+          onScheduleAlarmAddPress={onScheduleAlarmAddPress}
+          onScheduleAlarmEditPress={onScheduleAlarmEditPress}
         />
       ) : (
-        <FirstLastRouteScreen />
+        <FirstLastRouteScreen onRouteDetailPress={onRouteDetailPress} />
       )}
     </>
   );
