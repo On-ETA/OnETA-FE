@@ -13,6 +13,7 @@ const homeBackground = colors.gray01;
 
 export function HomeTopSection({
   activeTab = "firstLast",
+  addressLabel = "우리집",
   notificationCount = 0,
   onAddressPress,
   onBackPress,
@@ -38,12 +39,12 @@ export function HomeTopSection({
               onPress={onAddressPress}
               style={styles.addressButton}
             >
-              <MapIcon height={24} style={styles.addressMapIcon} width={24} />
-              <Text style={styles.addressText}>주소 등록하기</Text>
+              <MapIcon height={26} style={styles.addressMapIcon} width={26} />
+              <Text style={styles.addressText}>{addressLabel}</Text>
               <ArrowRightIcon
-                height={20}
+                height={21}
                 style={styles.addressArrowIcon}
-                width={20}
+                width={21}
               />
             </Pressable>
           ) : title ? (
@@ -65,26 +66,26 @@ export function HomeTopSection({
             <View style={styles.emptyLeft} />
           )}
           <View style={styles.headerActions}>
-          <Pressable
-            accessibilityLabel="알림"
-            accessibilityRole="button"
-            hitSlop={12}
-            onPress={onBellPress}
-            style={styles.iconButton}
-          >
-            <HeaderBellIcon height={24} style={styles.headerIcon} width={24} />
-          </Pressable>
-          {showMyPageButton ? (
             <Pressable
-              accessibilityLabel="마이페이지"
+              accessibilityLabel="알림"
               accessibilityRole="button"
               hitSlop={12}
-              onPress={onMyPagePress}
+              onPress={onBellPress}
               style={styles.iconButton}
             >
-              <MyPageIcon height={24} style={styles.headerIcon} width={24} />
+              <HeaderBellIcon height={25} style={styles.headerIcon} width={25} />
             </Pressable>
-          ) : null}
+            {showMyPageButton ? (
+              <Pressable
+                accessibilityLabel="마이페이지"
+                accessibilityRole="button"
+                hitSlop={12}
+                onPress={onMyPagePress}
+                style={styles.iconButton}
+              >
+                <MyPageIcon height={25} style={styles.headerIcon} width={25} />
+              </Pressable>
+            ) : null}
           </View>
         </View>
 
@@ -142,13 +143,12 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     width: 360,
     maxWidth: "100%",
-    paddingTop: 16,
-    paddingRight: 16,
+    paddingTop: 18,
+    paddingHorizontal: 16,
     paddingBottom: 0,
-    paddingLeft: 16,
     flexDirection: "column",
     alignItems: "flex-start",
-    gap: 16,
+    gap: 22,
   },
   homeHeader: {
     width: "100%",
@@ -158,16 +158,18 @@ const styles = StyleSheet.create({
     backgroundColor: homeBackground,
   },
   addressButton: {
-    minHeight: 36,
+    minHeight: 38,
     flexDirection: "row",
     alignItems: "center",
   },
   addressMapIcon: {
-    marginRight: 4,
+    marginRight: 6,
   },
   addressText: {
     ...typography.head01Sb,
     color: colors.gray08,
+    fontSize: 22,
+    lineHeight: 24,
   },
   titleText: {
     ...typography.head01Sb,
@@ -186,7 +188,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   addressArrowIcon: {
-    marginLeft: 7,
+    marginLeft: 8,
+    opacity: 0.65,
   },
   emptyLeft: {
     width: 1,
@@ -195,22 +198,22 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 8,
   },
   iconButton: {
-    width: 40,
-    height: 40,
+    width: 34,
+    height: 34,
     alignItems: "center",
     justifyContent: "center",
   },
   headerIcon: {
-    width: 24,
-    height: 24,
+    width: 25,
+    height: 25,
     aspectRatio: 1,
   },
   routeTabs: {
     width: "100%",
-    height: 43,
+    height: 45,
     flexDirection: "row",
     borderBottomWidth: 1,
     borderBottomColor: colors.gray04,
@@ -221,14 +224,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   routeTabOn: {
-    borderBottomWidth: 2,
+    borderBottomWidth: 3,
     borderBottomColor: colors.main,
   },
   routeTabText: {
     fontFamily: "Pretendard",
     fontSize: 16,
     fontStyle: "normal",
-    fontWeight: "500",
+    fontWeight: "600",
     lineHeight: 22.4,
     textAlign: "center",
     color: colors.gray06,
