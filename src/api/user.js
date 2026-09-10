@@ -20,14 +20,26 @@ import { requestJson } from "./client";
 
 const USER_ENDPOINT = "/api/user";
 
+export function normalizeUser(user) {
+  const userData = user?.data ?? user;
+
+  return {
+    email: userData?.email,
+    nickname: userData?.nickname,
+    raw: userData,
+  };
+}
+
 export async function getUser({ accessToken = getAccessToken(), signal } = {}) {
-  return requestJson({
+  const response = await requestJson({
     path: USER_ENDPOINT,
     method: "GET",
     accessToken,
     signal,
     errorMessage: "회원 정보를 불러오지 못했습니다.",
   });
+
+  return normalizeUser(response);
 }
 
 export async function deleteUser({ accessToken = getAccessToken(), signal } = {}) {

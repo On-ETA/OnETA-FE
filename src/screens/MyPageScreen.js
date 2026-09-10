@@ -10,7 +10,7 @@ import LockIcon from "../../assets/images/icon_lock.svg";
 import RightIcon from "../../assets/images/R.svg";
 import packageJson from "../../package.json";
 import { logout } from "../api/auth/logout";
-import { getMyPage } from "../api/mypage";
+import { deleteUser, getUser } from "../api/user";
 import { AppScreen, HomeTopSection } from "../components";
 import { colors, typography } from "../theme";
 
@@ -53,6 +53,7 @@ export function MyPageScreen({
 }) {
   const [withdrawStep, setWithdrawStep] = useState(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [myPageInfo, setMyPageInfo] = useState(defaultMyPageInfo);
 
   useEffect(() => {
@@ -60,14 +61,14 @@ export function MyPageScreen({
 
     async function loadMyPageInfo() {
       try {
-        const data = await getMyPage();
+        const data = await getUser();
 
         if (!isActive) {
           return;
         }
 
         setMyPageInfo({
-          appVersion: data.appVersion ?? defaultMyPageInfo.appVersion,
+          appVersion: defaultMyPageInfo.appVersion,
           email: data.email ?? defaultMyPageInfo.email,
           nickname: data.nickname ?? defaultMyPageInfo.nickname,
         });
@@ -93,8 +94,24 @@ export function MyPageScreen({
     setWithdrawStep(null);
   };
 
-  const handleWithdrawPress = () => {
-    setWithdrawStep("complete");
+  const handleWithdrawPress = async () => {
+    if (isWithdrawing) {
+      return;
+    }
+
+    setIsWithdrawing(true);
+
+    try {
+      await deleteUser();
+      setWithdrawStep("complete");
+    } catch (error) {
+      Alert.alert(
+        "회원 탈퇴 실패",
+        error?.message ?? "회원 탈퇴에 실패했습니다.",
+      );
+    } finally {
+      setIsWithdrawing(false);
+    }
   };
 
   const handleWithdrawCompletePress = () => {
@@ -286,8 +303,12 @@ export function MyPageScreen({
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
+                    disabled={isWithdrawing}
                     onPress={handleWithdrawPress}
-                    style={styles.withdrawButton}
+                    style={[
+                      styles.withdrawButton,
+                      isWithdrawing && styles.withdrawButtonDisabled,
+                    ]}
                   >
                     <Text
                       style={[
@@ -295,7 +316,7 @@ export function MyPageScreen({
                         styles.withdrawButtonText,
                       ]}
                     >
-                      탈퇴
+                      {isWithdrawing ? "처리중" : "탈퇴"}
                     </Text>
                   </Pressable>
                 </View>
@@ -537,6 +558,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
     backgroundColor: colors.main,
+  },
+  withdrawButtonDisabled: {
+    opacity: 0.7,
   },
   withdrawButtonText: {
     color: colors.white,
