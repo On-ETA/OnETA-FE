@@ -43,6 +43,8 @@ const searchResults = [
 export function AddressManagementScreen({ onBackPress }) {
   const [screenMode, setScreenMode] = useState("list");
   const [addresses, setAddresses] = useState([]);
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
+  const [addressLoadError, setAddressLoadError] = useState("");
   const [selectedResult, setSelectedResult] = useState(null);
   const [editingAddress, setEditingAddress] = useState(null);
 
@@ -50,6 +52,9 @@ export function AddressManagementScreen({ onBackPress }) {
     let isActive = true;
 
     async function loadAddresses() {
+      setIsLoadingAddresses(true);
+      setAddressLoadError("");
+
       try {
         const nextAddresses = await getAddresses();
 
@@ -59,6 +64,11 @@ export function AddressManagementScreen({ onBackPress }) {
       } catch {
         if (isActive) {
           setAddresses([]);
+          setAddressLoadError("주소를 불러오지 못했습니다.");
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingAddresses(false);
         }
       }
     }
@@ -239,10 +249,20 @@ export function AddressManagementScreen({ onBackPress }) {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {isLoadingAddresses ? (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>주소를 불러오는 중입니다.</Text>
+          </View>
+        ) : null}
+        {!isLoadingAddresses && addressLoadError ? (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>{addressLoadError}</Text>
+          </View>
+        ) : null}
         {addresses.map((address) => (
           <AddressCard
             address={address}
-            key={address.id}
+            key={address.id ?? address.addressId}
             onCurrentPress={() => handleCurrentAddressPress(address)}
             onEditPress={() => {
               setEditingAddress(address);
@@ -575,6 +595,20 @@ const styles = StyleSheet.create({
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.gray02,
+  },
+  statusCard: {
+    width: "100%",
+    height: 76,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.gray04,
+    borderRadius: 8,
+    backgroundColor: colors.white,
+  },
+  statusText: {
+    ...typography.caption01M,
+    color: colors.gray06,
   },
   searchContent: { paddingTop: 29, paddingHorizontal: 24 },
   searchTitle: {

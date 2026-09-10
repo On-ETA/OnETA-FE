@@ -12,18 +12,27 @@ function buildCurrentAddressEndpoint(addressId) {
 }
 
 export function normalizeAddress(address) {
+  const addressId = address?.addressId ?? address?.id;
+  const addressText =
+    address?.address ??
+    address?.detail ??
+    address?.roadAddress ??
+    address?.jibunAddress ??
+    "";
+  const isCurrent =
+    address?.current ?? address?.isCurrent ?? address?.currentAddress ?? false;
+
   return {
-    id: address?.id ?? address?.addressId,
-    addressId: address?.addressId ?? address?.id,
+    id: addressId,
+    addressId,
     name: address?.name ?? address?.addressName ?? address?.title ?? "주소 이름",
-    detail:
-      address?.detail ??
-      address?.address ??
-      address?.roadAddress ??
-      address?.jibunAddress ??
-      "",
-    isCurrent:
-      address?.isCurrent ?? address?.current ?? address?.currentAddress ?? false,
+    detail: addressText,
+    address: addressText,
+    placeName: address?.placeName ?? address?.name ?? "주소",
+    current: isCurrent,
+    isCurrent,
+    x: address?.x,
+    y: address?.y,
     raw: address,
   };
 }
