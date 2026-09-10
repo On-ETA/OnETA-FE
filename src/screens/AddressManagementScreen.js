@@ -32,11 +32,15 @@ const searchResults = [
     id: "hongik-dorm-1",
     name: "홍익대학교 제2기숙사",
     roadAddress: DEFAULT_ADDRESS_DETAIL,
+    x: 126.9256,
+    y: 37.5515,
   },
   {
     id: "hongik-dorm-2",
     name: "홍익대학교 제2기숙사",
     roadAddress: DEFAULT_ADDRESS_DETAIL,
+    x: 126.9256,
+    y: 37.5515,
   },
 ];
 
@@ -105,7 +109,8 @@ export function AddressManagementScreen({ onBackPress }) {
         payload: {
           name: alias || "주소 이름",
           address: selectedResult.roadAddress,
-          placeName: selectedResult.name,
+          x: selectedResult.x,
+          y: selectedResult.y,
         },
       });
       const createdAddress = response?.data
@@ -115,6 +120,8 @@ export function AddressManagementScreen({ onBackPress }) {
             name: alias || "주소 이름",
             detail: selectedResult.roadAddress,
             placeName: selectedResult.name,
+            x: selectedResult.x,
+            y: selectedResult.y,
             isCurrent: false,
           };
 

@@ -55,6 +55,10 @@ export async function getAddresses({
 }
 
 export async function createAddress({
+  name,
+  address,
+  x,
+  y,
   payload,
   accessToken = getAccessToken(),
   signal,
@@ -62,7 +66,12 @@ export async function createAddress({
   return requestJson({
     path: ADDRESSES_ENDPOINT,
     method: "POST",
-    body: payload,
+    body: payload ?? {
+      name,
+      address,
+      x,
+      y,
+    },
     accessToken,
     signal,
     errorMessage: "주소 등록에 실패했습니다.",
