@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import MailIcon from "../../assets/images/icon_mail.svg";
 import MessageIcon from "../../assets/images/icon_message.svg";
@@ -9,6 +9,7 @@ import PenIcon from "../../assets/images/icon_pen.svg";
 import LockIcon from "../../assets/images/icon_lock.svg";
 import RightIcon from "../../assets/images/R.svg";
 import packageJson from "../../package.json";
+import { logout } from "../api/auth/logout";
 import { getMyPage } from "../api/mypage";
 import { AppScreen, HomeTopSection } from "../components";
 import { colors, typography } from "../theme";
@@ -47,9 +48,11 @@ export function MyPageScreen({
   onOpenPassword,
   onOpenPrivacy,
   onOpenTerms,
+  onLogoutComplete,
   onWithdrawComplete,
 }) {
   const [withdrawStep, setWithdrawStep] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [myPageInfo, setMyPageInfo] = useState(defaultMyPageInfo);
 
   useEffect(() => {
@@ -97,6 +100,31 @@ export function MyPageScreen({
   const handleWithdrawCompletePress = () => {
     closeWithdrawModal();
     onWithdrawComplete?.();
+  };
+
+  const handleLogoutPress = async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+
+    try {
+      await logout();
+      onLogoutComplete?.();
+    } catch (error) {
+      if (error?.status === 403 || error?.code === "C005") {
+        onLogoutComplete?.();
+        return;
+      }
+
+      Alert.alert(
+        "로그아웃 실패",
+        error?.message ?? "로그아웃에 실패했습니다.",
+      );
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const handleMenuPress = (menuKey) => {
@@ -193,8 +221,18 @@ export function MyPageScreen({
 
         <View style={styles.bottomActions}>
           <View style={styles.accountActions}>
-            <Pressable style={styles.logoutButton}>
-              <Text style={styles.logoutButtonText}>로그아웃</Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isLoggingOut}
+              onPress={handleLogoutPress}
+              style={[
+                styles.logoutButton,
+                isLoggingOut && styles.logoutButtonDisabled,
+              ]}
+            >
+              <Text style={styles.logoutButtonText}>
+                {isLoggingOut ? "처리중" : "로그아웃"}
+              </Text>
             </Pressable>
 
             <Pressable
@@ -387,6 +425,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray06,
     alignItems: "center",
     justifyContent: "center",
+  },
+  logoutButtonDisabled: {
+    opacity: 0.7,
   },
   logoutButtonText: {
     ...typography.caption01M,

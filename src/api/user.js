@@ -1,6 +1,6 @@
 /*
-  회원 탈퇴, DELETE
-  /api/user
+  회원 정보 조회, GET /api/user
+  회원 탈퇴, DELETE /api/user
 
   성공 응답:
   {
@@ -19,6 +19,16 @@ import { clearAuthTokens, getAccessToken } from "./auth/tokens";
 import { requestJson } from "./client";
 
 const USER_ENDPOINT = "/api/user";
+
+export async function getUser({ accessToken = getAccessToken(), signal } = {}) {
+  return requestJson({
+    path: USER_ENDPOINT,
+    method: "GET",
+    accessToken,
+    signal,
+    errorMessage: "회원 정보를 불러오지 못했습니다.",
+  });
+}
 
 export async function deleteUser({ accessToken = getAccessToken(), signal } = {}) {
   const data = await requestJson({

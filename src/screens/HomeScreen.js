@@ -22,6 +22,7 @@ export function HomeScreen({
   onOpenContact,
   onOpenPrivacy,
   onOpenTerms,
+  onLogoutComplete,
   onWithdrawComplete,
   onTabPress,
 }) {
@@ -58,6 +59,7 @@ export function HomeScreen({
               onOpenNotices={onOpenNotices}
               onOpenPrivacy={onOpenPrivacy}
               onOpenTerms={onOpenTerms}
+              onLogoutComplete={onLogoutComplete}
               onWithdrawComplete={onWithdrawComplete}
               notificationCount={notificationCount}
             />

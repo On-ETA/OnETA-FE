@@ -1,10 +1,23 @@
-import React, { useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import ArrowLeftIcon from "../../assets/images/L.svg";
 import MapIcon from "../../public/images/map.svg";
 import MemoIcon from "../../public/images/memo.svg";
 import PlusIcon from "../../public/images/plus.svg";
+import {
+  createAddress,
+  getAddresses,
+  normalizeAddress,
+  setCurrentAddress,
+} from "../api/addresses";
 import { Header } from "../components";
 import { colors, typography } from "../theme";
 
@@ -12,22 +25,91 @@ const MAX_ADDRESS_COUNT = 5;
 
 export function AddressManagementScreen({ onBackPress }) {
   const [addresses, setAddresses] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const hasCurrentAddress = addresses.some((address) => address.isCurrent);
 
-  const addAddress = () => {
-    setAddresses((current) => {
-      if (current.length >= MAX_ADDRESS_COUNT) {
-        return current;
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadAddresses() {
+      try {
+        const nextAddresses = await getAddresses();
+
+        if (isActive) {
+          setAddresses(nextAddresses);
+        }
+      } catch {
+        if (isActive) {
+          setAddresses([]);
+        }
       }
+    }
 
-      return [
-        ...current,
-        {
-          id: `${Date.now()}-${current.length}`,
+    loadAddresses();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const addAddress = async () => {
+    if (isSubmitting || addresses.length >= MAX_ADDRESS_COUNT) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await createAddress({
+        payload: {
           name: "주소 이름",
-          detail: "마포구 와우산로94 홍익대학교 제2기숙사",
+          address: "마포구 와우산로94 홍익대학교 제2기숙사",
         },
-      ];
-    });
+      });
+      const createdAddress = response?.data
+        ? normalizeAddress(response.data)
+        : {
+            id: `${Date.now()}-${addresses.length}`,
+            name: "주소 이름",
+            detail: "마포구 와우산로94 홍익대학교 제2기숙사",
+          };
+
+      setAddresses((current) =>
+        current.length >= MAX_ADDRESS_COUNT
+          ? current
+          : [...current, createdAddress],
+      );
+    } catch (error) {
+      Alert.alert(
+        "주소 등록 실패",
+        error?.message ?? "주소 등록에 실패했습니다.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSetCurrentAddress = async (address) => {
+    const addressId = address.addressId ?? address.id;
+
+    if (!addressId) {
+      return;
+    }
+
+    try {
+      await setCurrentAddress({ addressId });
+      setAddresses((current) =>
+        current.map((item) => ({
+          ...item,
+          isCurrent: (item.addressId ?? item.id) === addressId,
+        })),
+      );
+    } catch (error) {
+      Alert.alert(
+        "현재 주소 설정 실패",
+        error?.message ?? "현재 주소 설정에 실패했습니다.",
+      );
+    }
   };
 
   return (
@@ -50,7 +132,7 @@ export function AddressManagementScreen({ onBackPress }) {
               <View style={styles.addressCardTitleRow}>
                 <MapIcon height={20} width={20} />
                 <Text style={styles.addressCardTitle}>{address.name}</Text>
-                {index === 0 ? (
+                {address.isCurrent || (!hasCurrentAddress && index === 0) ? (
                   <View style={styles.currentAddressBadge}>
                     <Text style={styles.currentAddressBadgeText}>
                       현재 설정된 주소
@@ -65,6 +147,7 @@ export function AddressManagementScreen({ onBackPress }) {
               accessibilityLabel={`${address.name} 수정`}
               accessibilityRole="button"
               hitSlop={8}
+              onPress={() => handleSetCurrentAddress(address)}
               style={styles.addressEditButton}
             >
               <MemoIcon height={24} style={styles.addressMemoIcon} width={24} />
@@ -76,8 +159,9 @@ export function AddressManagementScreen({ onBackPress }) {
           <Pressable
             accessibilityLabel="주소 추가"
             accessibilityRole="button"
+            disabled={isSubmitting}
             onPress={addAddress}
-            style={styles.addressAddCard}
+            style={[styles.addressAddCard, isSubmitting && styles.disabledCard]}
           >
             <PlusIcon height={30} width={30} />
           </Pressable>
@@ -213,5 +297,8 @@ const styles = StyleSheet.create({
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.gray02,
+  },
+  disabledCard: {
+    opacity: 0.7,
   },
 });

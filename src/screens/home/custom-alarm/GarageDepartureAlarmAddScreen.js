@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -9,6 +9,7 @@ import {
 } from "react-native";
 
 import { Header } from "../../../components";
+import { searchBusRoutes } from "../../../api/busRoutes";
 import { colors, typography } from "../../../theme";
 
 const GARAGE_BUS_RESULTS = [
@@ -26,18 +27,74 @@ const GARAGE_BUS_RESULTS = [
 
 export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [searchText, setSearchText] = useState("");
+  const [serverBusResults, setServerBusResults] = useState([]);
   const trimmedSearchText = searchText.trim();
   const hasSearchText = trimmedSearchText.length > 0;
   const busResults = useMemo(
-    () =>
-      hasSearchText
-        ? GARAGE_BUS_RESULTS.map((result) => ({
-            ...result,
-            name: `${trimmedSearchText}번`,
-          }))
-        : [],
-    [hasSearchText, trimmedSearchText],
+    () => {
+      if (!hasSearchText) {
+        return [];
+      }
+
+      if (serverBusResults.length > 0) {
+        return serverBusResults;
+      }
+
+      return GARAGE_BUS_RESULTS.map((result) => ({
+        ...result,
+        name: `${trimmedSearchText}번`,
+      }));
+    },
+    [hasSearchText, serverBusResults, trimmedSearchText],
   );
+
+  useEffect(() => {
+    if (!hasSearchText) {
+      setServerBusResults([]);
+      return undefined;
+    }
+
+    let isActive = true;
+
+    async function loadBusRoutes() {
+      try {
+        const response = await searchBusRoutes({ keyword: trimmedSearchText });
+        const routes = Array.isArray(response?.data) ? response.data : response;
+
+        if (!isActive || !Array.isArray(routes)) {
+          return;
+        }
+
+        setServerBusResults(
+          routes.map((route) => ({
+            id: route.id ?? route.routeId ?? route.busRouteId,
+            interval: route.interval ?? route.dispatchInterval ?? "-",
+            name:
+              route.name ??
+              route.routeName ??
+              route.busNumber ??
+              `${trimmedSearchText}번`,
+            route:
+              route.route ??
+              route.description ??
+              route.direction ??
+              route.stationNames ??
+              "",
+          })),
+        );
+      } catch {
+        if (isActive) {
+          setServerBusResults([]);
+        }
+      }
+    }
+
+    loadBusRoutes();
+
+    return () => {
+      isActive = false;
+    };
+  }, [hasSearchText, trimmedSearchText]);
 
   return (
     <View style={styles.screen}>

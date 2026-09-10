@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import BackIcon from "../../assets/images/L.svg";
 import SettingIcon from "../../assets/images/setting.svg";
+import { getArrivalNotifications } from "../api/notifications/arrival";
 import { AppScreen, Header } from "../components";
 import { colors, typography } from "../theme";
 
@@ -33,11 +34,43 @@ const DEFAULT_NOTIFICATIONS = [
  * - onNotificationPress: 카드 클릭 시 routeKey/payload를 기반으로 상세 화면 이동에 사용
  */
 export function NotificationsScreen({
-  notifications = DEFAULT_NOTIFICATIONS,
+  notifications,
   onBackPress,
   onNotificationPress,
   onSettingsPress,
 }) {
+  const [serverNotifications, setServerNotifications] = useState([]);
+
+  useEffect(() => {
+    if (notifications) {
+      return undefined;
+    }
+
+    let isActive = true;
+
+    async function loadNotifications() {
+      try {
+        const nextNotifications = await getArrivalNotifications();
+
+        if (isActive) {
+          setServerNotifications(nextNotifications);
+        }
+      } catch {
+        if (isActive) {
+          setServerNotifications(DEFAULT_NOTIFICATIONS);
+        }
+      }
+    }
+
+    loadNotifications();
+
+    return () => {
+      isActive = false;
+    };
+  }, [notifications]);
+
+  const notificationItems = notifications ?? serverNotifications;
+
   return (
     <AppScreen>
       <View style={styles.container}>
@@ -64,7 +97,7 @@ export function NotificationsScreen({
         />
 
         <View style={styles.list}>
-          {notifications.map((item) => {
+          {notificationItems.map((item) => {
             const isDanger = item.type === "danger";
 
             return (
