@@ -117,12 +117,18 @@ function parseRouteDetails(routeDetails) {
 }
 
 function createRouteDescription(notification) {
-  const details = parseRouteDetails(notification?.routeDetails);
+  const details = notification?.route ?? parseRouteDetails(notification?.routeDetails);
   const origin = details?.origin ?? notification?.origin;
   const destination = details?.destination ?? notification?.destination;
+  const originAddress = details?.originAddress;
+  const destinationAddress = details?.destinationAddress;
 
   if (origin && destination) {
     return `${origin} → ${destination}`;
+  }
+
+  if (originAddress && destinationAddress) {
+    return `${originAddress} → ${destinationAddress}`;
   }
 
   return notification?.routeDetails ?? "";
@@ -162,6 +168,7 @@ export function normalizeArrivalNotification(notification) {
     reminderOffsetMinutes: notification?.reminderOffsetMinutes,
     repeatDays: notification?.repeatDays ?? [],
     routeDetails: notification?.routeDetails,
+    route: notification?.route,
     scheduleType: notification?.scheduleType,
     enabled: Boolean(notification?.isActive),
     payload: notification,
@@ -223,13 +230,17 @@ export async function getArrivalNotificationById({
     throw new Error("도착 알림 id가 필요합니다.");
   }
 
-  return requestArrivalNotificationJson({
+  const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationEndpoint(id),
     method: "GET",
     accessToken,
     signal,
     errorMessage: "도착 알림을 불러오지 못했습니다.",
   });
+
+  const notification = response?.data ?? response;
+
+  return normalizeArrivalNotification(notification);
 }
 
 export async function updateArrivalNotification({
