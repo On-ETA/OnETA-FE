@@ -16,7 +16,10 @@ import {
   deleteDepotNotification,
   getMyDepotNotifications,
 } from "../../../api/notifications/depot";
-import { getArrivalNotifications } from "../../../api/notifications/arrival";
+import {
+  getArrivalNotifications,
+  updateArrivalNotificationStatus,
+} from "../../../api/notifications/arrival";
 import { colors, typography } from "../../../theme";
 
 // TODO: API 연동 시 아래 더미 데이터를 교체하세요.
@@ -29,6 +32,12 @@ import { colors, typography } from "../../../theme";
 const initialGarageAlarms = [];
 
 const initialScheduleAlarms = [];
+
+function getArrivalNotificationId(alarm) {
+  const id = alarm?.notificationId ?? alarm?.id;
+
+  return typeof id === "string" ? id.replace(/^arrival-/, "") : id;
+}
 
 export function CustomAlarmScreen({
   onGarageDepartureAddPress,
@@ -43,6 +52,7 @@ export function CustomAlarmScreen({
   const [isLoadingScheduleAlarms, setIsLoadingScheduleAlarms] = useState(false);
   const [scheduleAlarmError, setScheduleAlarmError] = useState("");
   const [isDeletingAlarms, setIsDeletingAlarms] = useState(false);
+  const [updatingScheduleAlarmIds, setUpdatingScheduleAlarmIds] = useState([]);
   const [editingSections, setEditingSections] = useState({
     garage: false,
     schedule: false,
@@ -149,12 +159,50 @@ export function CustomAlarmScreen({
     );
   };
 
-  const toggleScheduleAlarm = (alarmId) => {
+  const toggleScheduleAlarm = async (alarmId) => {
+    const targetAlarm = scheduleAlarms.find((alarm) => alarm.id === alarmId);
+    const notificationId = getArrivalNotificationId(targetAlarm);
+
+    if (!targetAlarm || !notificationId) {
+      Alert.alert("알림 상태 변경 실패", "변경할 알림 id를 찾지 못했습니다.");
+      return;
+    }
+
+    if (updatingScheduleAlarmIds.includes(alarmId)) {
+      return;
+    }
+
+    const nextEnabled = !targetAlarm.enabled;
+
+    setUpdatingScheduleAlarmIds((current) => [...current, alarmId]);
     setScheduleAlarms((current) =>
       current.map((alarm) =>
-        alarm.id === alarmId ? { ...alarm, enabled: !alarm.enabled } : alarm,
+        alarm.id === alarmId ? { ...alarm, enabled: nextEnabled } : alarm,
       ),
     );
+
+    try {
+      await updateArrivalNotificationStatus({
+        id: notificationId,
+        payload: { isActive: nextEnabled },
+      });
+    } catch (error) {
+      setScheduleAlarms((current) =>
+        current.map((alarm) =>
+          alarm.id === alarmId
+            ? { ...alarm, enabled: targetAlarm.enabled }
+            : alarm,
+        ),
+      );
+      Alert.alert(
+        "알림 상태 변경 실패",
+        error?.message ?? "도착 알림 상태 변경에 실패했습니다.",
+      );
+    } finally {
+      setUpdatingScheduleAlarmIds((current) =>
+        current.filter((id) => id !== alarmId),
+      );
+    }
   };
 
   const requestSelectedDelete = () => {
@@ -291,6 +339,7 @@ export function CustomAlarmScreen({
                   }}
                   onToggleAlarm={() => toggleScheduleAlarm(alarm.id)}
                   selected={selected}
+                  updating={updatingScheduleAlarmIds.includes(alarm.id)}
                 />
               );
             })}
@@ -428,6 +477,7 @@ function ScheduleAlarmRow({
   onPress,
   onToggleAlarm,
   selected,
+  updating,
 }) {
   return (
     <Pressable
@@ -449,8 +499,9 @@ function ScheduleAlarmRow({
         <Pressable
           accessibilityRole="switch"
           accessibilityState={{ checked: alarm.enabled }}
+          disabled={updating}
           onPress={onToggleAlarm}
-          style={styles.switchButton}
+          style={[styles.switchButton, updating && styles.switchButtonDisabled]}
         >
           <Switch enabled={alarm.enabled} />
         </Pressable>
@@ -736,6 +787,9 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     alignItems: "center",
     justifyContent: "center",
+  },
+  switchButtonDisabled: {
+    opacity: 0.5,
   },
   switchTrack: {
     width: 44,
