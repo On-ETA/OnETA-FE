@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
 import MemoIcon from "../../../../public/images/memo.svg";
 import PlusIcon from "../../../../public/images/plus.svg";
+import { getMyDepotNotifications } from "../../../api/notifications/depot";
 import { colors, typography } from "../../../theme";
 
 // TODO: API 연동 시 아래 더미 데이터를 교체하세요.
@@ -25,6 +26,8 @@ export function CustomAlarmScreen({
 }) {
   const [garageAlarms, setGarageAlarms] = useState(initialGarageAlarms);
   const [scheduleAlarms, setScheduleAlarms] = useState(initialScheduleAlarms);
+  const [isLoadingGarageAlarms, setIsLoadingGarageAlarms] = useState(false);
+  const [garageAlarmError, setGarageAlarmError] = useState("");
   const [editingSections, setEditingSections] = useState({
     garage: false,
     schedule: false,
@@ -35,6 +38,44 @@ export function CustomAlarmScreen({
   const isDeleteModalVisible = deleteTargetIds.length > 0;
   const isAnyEditing = editingSections.garage || editingSections.schedule;
   const hasEditableAlarms = garageAlarms.length > 0 || scheduleAlarms.length > 0;
+
+  useEffect(() => {
+    let isActive = true;
+    const controller = new AbortController();
+
+    async function loadGarageAlarms() {
+      setIsLoadingGarageAlarms(true);
+      setGarageAlarmError("");
+
+      try {
+        const alarms = await getMyDepotNotifications({
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setGarageAlarms(alarms);
+        }
+      } catch (error) {
+        if (isActive) {
+          setGarageAlarms([]);
+          setGarageAlarmError(
+            error?.message ?? "차고지 출발 알림을 불러오지 못했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingGarageAlarms(false);
+        }
+      }
+    }
+
+    loadGarageAlarms();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, []);
 
   const toggleEditSection = (sectionKey) => {
     setEditingSections((current) => {
@@ -109,7 +150,11 @@ export function CustomAlarmScreen({
           onEditPress={() => toggleEditSection("garage")}
           title="차고지 출발 알림"
         />
-        {garageAlarms.length > 0 ? (
+        {isLoadingGarageAlarms ? (
+          <EmptyAlarmBox text="차고지 출발 알림을 불러오는 중입니다." />
+        ) : garageAlarmError ? (
+          <EmptyAlarmBox text={garageAlarmError} />
+        ) : garageAlarms.length > 0 ? (
           <ScrollView
             contentContainerStyle={styles.garageList}
             horizontal
@@ -238,12 +283,10 @@ function AlarmSectionHeader({ onAddPress, onEditPress, title }) {
   );
 }
 
-function EmptyAlarmBox() {
+function EmptyAlarmBox({ text = "우측 더하기 버튼으로 알림을 추가해보세요" }) {
   return (
     <View style={styles.emptyAlarmBox}>
-      <Text style={styles.emptyAlarmText}>
-        우측 더하기 버튼으로 알림을 추가해보세요
-      </Text>
+      <Text style={styles.emptyAlarmText}>{text}</Text>
     </View>
   );
 }
