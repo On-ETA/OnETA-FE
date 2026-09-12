@@ -1,10 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
 import MemoIcon from "../../../../public/images/memo.svg";
 import PlusIcon from "../../../../public/images/plus.svg";
-import { getMyDepotNotifications } from "../../../api/notifications/depot";
+import {
+  deleteDepotNotification,
+  getMyDepotNotifications,
+} from "../../../api/notifications/depot";
 import { colors, typography } from "../../../theme";
 
 // TODO: API 연동 시 아래 더미 데이터를 교체하세요.
@@ -28,6 +39,7 @@ export function CustomAlarmScreen({
   const [scheduleAlarms, setScheduleAlarms] = useState(initialScheduleAlarms);
   const [isLoadingGarageAlarms, setIsLoadingGarageAlarms] = useState(false);
   const [garageAlarmError, setGarageAlarmError] = useState("");
+  const [isDeletingAlarms, setIsDeletingAlarms] = useState(false);
   const [editingSections, setEditingSections] = useState({
     garage: false,
     schedule: false,
@@ -125,17 +137,42 @@ export function CustomAlarmScreen({
     setDeleteTargetIds([]);
   };
 
-  const confirmDelete = () => {
-    setGarageAlarms((current) =>
-      current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
-    );
-    setScheduleAlarms((current) =>
-      current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
-    );
-    setSelectedIds((current) =>
-      current.filter((alarmId) => !deleteTargetIds.includes(alarmId)),
-    );
-    setDeleteTargetIds([]);
+  const confirmDelete = async () => {
+    if (isDeletingAlarms) {
+      return;
+    }
+
+    const garageTargetIds = garageAlarms
+      .filter((alarm) => deleteTargetIds.includes(alarm.id))
+      .map((alarm) => alarm.userBusId ?? alarm.id);
+
+    setIsDeletingAlarms(true);
+
+    try {
+      await Promise.all(
+        garageTargetIds.map((userBusId) =>
+          deleteDepotNotification({ userBusId }),
+        ),
+      );
+
+      setGarageAlarms((current) =>
+        current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
+      );
+      setScheduleAlarms((current) =>
+        current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
+      );
+      setSelectedIds((current) =>
+        current.filter((alarmId) => !deleteTargetIds.includes(alarmId)),
+      );
+      setDeleteTargetIds([]);
+    } catch (error) {
+      Alert.alert(
+        "알림 삭제 실패",
+        error?.message ?? "차고지 출발 알림 삭제에 실패했습니다.",
+      );
+    } finally {
+      setIsDeletingAlarms(false);
+    }
   };
 
   return (
@@ -247,6 +284,7 @@ export function CustomAlarmScreen({
       <DeleteConfirmModal
         onCancel={closeDeleteModal}
         onConfirm={confirmDelete}
+        deleting={isDeletingAlarms}
         visible={isDeleteModalVisible}
       />
     </View>
@@ -387,18 +425,33 @@ function ScheduleAlarmRow({
   );
 }
 
-function DeleteConfirmModal({ onCancel, onConfirm, visible }) {
+function DeleteConfirmModal({ deleting = false, onCancel, onConfirm, visible }) {
   return (
     <Modal animationType="fade" transparent visible={visible}>
       <View style={styles.modalOverlay}>
         <View style={styles.confirmCard}>
           <Text style={styles.confirmTitle}>선택한 알림을 삭제할까요?</Text>
           <View style={styles.confirmActions}>
-            <Pressable accessibilityRole="button" onPress={onCancel} style={styles.cancelButton}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={deleting}
+              onPress={onCancel}
+              style={styles.cancelButton}
+            >
               <Text style={styles.cancelButtonText}>취소</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={onConfirm} style={styles.confirmButton}>
-              <Text style={styles.confirmButtonText}>삭제</Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={deleting}
+              onPress={onConfirm}
+              style={[
+                styles.confirmButton,
+                deleting && styles.confirmButtonDisabled,
+              ]}
+            >
+              <Text style={styles.confirmButtonText}>
+                {deleting ? "삭제 중" : "삭제"}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -758,6 +811,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 21,
     backgroundColor: colors.point,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.72,
   },
   confirmButtonText: {
     fontFamily: "SUIT",
