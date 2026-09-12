@@ -1,8 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import Svg, { Path } from "react-native-svg";
 
-import { getArrivalNotificationById } from "../../../api/notifications/arrival";
+import {
+  getArrivalNotificationById,
+  updateArrivalNotification,
+} from "../../../api/notifications/arrival";
 import { Header } from "../../../components";
 import { colors, typography } from "../../../theme";
 
@@ -15,6 +25,15 @@ const apiDayToKoreanDay = {
   FRI: "금",
   SAT: "토",
   SUN: "일",
+};
+const koreanDayToApiDay = {
+  월: "MON",
+  화: "TUE",
+  수: "WED",
+  목: "THU",
+  금: "FRI",
+  토: "SAT",
+  일: "SUN",
 };
 
 // TODO: API 연동 시 아래 화면의 더미 경로/알림 데이터를 교체하세요.
@@ -43,6 +62,25 @@ function formatArrivalTime(time) {
   ).padStart(2, "0")}`;
 }
 
+function formatTargetArrivalTimeForApi(time) {
+  if (!time) {
+    return "";
+  }
+
+  if (typeof time === "string") {
+    const [hour = "00", minute = "00", second = "00"] = time.split(":");
+
+    return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}:${second.padStart(
+      2,
+      "0",
+    )}`;
+  }
+
+  return `${String(time.hour ?? 0).padStart(2, "0")}:${String(
+    time.minute ?? 0,
+  ).padStart(2, "0")}:${String(time.second ?? 0).padStart(2, "0")}`;
+}
+
 function getPrimaryTransitSegment(route) {
   return route?.segments?.find((segment) => segment.transitType !== "WALK");
 }
@@ -53,6 +91,16 @@ function getRepeatDays(repeatDays) {
     : [];
 }
 
+function getRouteDetails(alarm) {
+  if (alarm?.routeDetails) {
+    return alarm.routeDetails;
+  }
+
+  const route = alarm?.route ?? alarm?.raw?.route;
+
+  return route ? JSON.stringify(route) : undefined;
+}
+
 export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
   const [routeName, setRouteName] = useState(alarm?.routeName ?? "출근길");
   const [selectedDays, setSelectedDays] = useState(
@@ -60,6 +108,7 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
   );
   const [arrivalAlarm, setArrivalAlarm] = useState(alarm);
   const [isLoadingAlarm, setIsLoadingAlarm] = useState(false);
+  const [isSavingAlarm, setIsSavingAlarm] = useState(false);
   const [alarmError, setAlarmError] = useState("");
   const notificationId = getNotificationId(alarm);
   const route = arrivalAlarm?.route ?? arrivalAlarm?.raw?.route;
@@ -123,10 +172,63 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
     );
   };
 
-  const handleSave = () => {
-    // TODO: PATCH /home/custom-alarms/{alarmId}
-    // body: { routeName, selectedDays, reminderMinutes: 10 }
-    onSavePress?.();
+  const handleSave = async () => {
+    if (isSavingAlarm) {
+      return;
+    }
+
+    if (!notificationId) {
+      Alert.alert("알림 수정 실패", "수정할 알림 id를 찾지 못했습니다.");
+      return;
+    }
+
+    const reminderOffsetMinutes = arrivalAlarm?.reminderOffsetMinutes ?? [];
+
+    if (
+      !Array.isArray(reminderOffsetMinutes) ||
+      reminderOffsetMinutes.length === 0
+    ) {
+      Alert.alert("알림 수정 실패", "출발 전 알림 시간이 필요합니다.");
+      return;
+    }
+
+    const payload = {
+      routeName: routeName.trim() || undefined,
+      targetArrivalTime: formatTargetArrivalTimeForApi(
+        arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
+      ),
+      reminderOffsetMinutes,
+      repeatDays: selectedDays
+        .map((day) => koreanDayToApiDay[day])
+        .filter(Boolean)
+        .join(","),
+      routeDetails: getRouteDetails(arrivalAlarm),
+      scheduleType: arrivalAlarm?.scheduleType,
+    };
+
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === undefined || payload[key] === "") {
+        delete payload[key];
+      }
+    });
+
+    setIsSavingAlarm(true);
+
+    try {
+      await updateArrivalNotification({
+        id: notificationId,
+        payload,
+      });
+
+      onSavePress?.();
+    } catch (error) {
+      Alert.alert(
+        "알림 수정 실패",
+        error?.message ?? "도착 알림 수정에 실패했습니다.",
+      );
+    } finally {
+      setIsSavingAlarm(false);
+    }
   };
 
   return (
@@ -239,8 +341,18 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
           <Pressable accessibilityRole="button" onPress={onBackPress} style={styles.cancelButton}>
             <Text style={styles.cancelText}>취소</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={handleSave} style={styles.saveButton}>
-            <Text style={styles.saveText}>저장</Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isSavingAlarm}
+            onPress={handleSave}
+            style={[
+              styles.saveButton,
+              isSavingAlarm && styles.saveButtonDisabled,
+            ]}
+          >
+            <Text style={styles.saveText}>
+              {isSavingAlarm ? "저장 중" : "저장"}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -636,6 +748,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: colors.main,
+  },
+  saveButtonDisabled: {
+    backgroundColor: colors.gray05,
   },
   saveText: {
     fontFamily: "SUIT",
