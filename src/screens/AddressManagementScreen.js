@@ -72,6 +72,7 @@ export function AddressManagementScreen({
   const [selectedResult, setSelectedResult] = useState(null);
   const [editingAddress, setEditingAddress] = useState(null);
   const [isDeletingAddress, setIsDeletingAddress] = useState(false);
+  const [settingCurrentAddressId, setSettingCurrentAddressId] = useState(null);
 
   useEffect(() => {
     let isActive = true;
@@ -237,17 +238,38 @@ export function AddressManagementScreen({
   const handleCurrentAddressPress = async (address) => {
     const addressId = address.addressId ?? address.id;
 
-    if (!addressId || address.isCurrent) {
+    if (!addressId || address.isCurrent || settingCurrentAddressId === addressId) {
       return;
     }
 
+    setSettingCurrentAddressId(addressId);
+
     try {
-      await setCurrentAddress({ addressId });
+      const response = await setCurrentAddress({ addressId });
+      const changedAddress = response?.data
+        ? normalizeAddress(response.data)
+        : null;
+
       setAddresses((current) => {
-        const nextAddresses = current.map((item) => ({
-          ...item,
-          isCurrent: (item.addressId ?? item.id) === addressId,
-        }));
+        const nextAddresses = current.map((item) => {
+          const itemAddressId = item.addressId ?? item.id;
+          const isSelectedAddress = itemAddressId === addressId;
+
+          if (!isSelectedAddress) {
+            return {
+              ...item,
+              current: false,
+              isCurrent: false,
+            };
+          }
+
+          return {
+            ...item,
+            ...(changedAddress ?? {}),
+            current: true,
+            isCurrent: true,
+          };
+        });
 
         onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
 
@@ -258,6 +280,8 @@ export function AddressManagementScreen({
         "현재 주소 설정 실패",
         error?.message ?? "현재 주소 설정에 실패했습니다.",
       );
+    } finally {
+      setSettingCurrentAddressId(null);
     }
   };
 
@@ -329,6 +353,9 @@ export function AddressManagementScreen({
         {addresses.map((address) => (
           <AddressCard
             address={address}
+            isSettingCurrent={
+              settingCurrentAddressId === (address.addressId ?? address.id)
+            }
             key={address.id ?? address.addressId}
             onCurrentPress={() => handleCurrentAddressPress(address)}
             onEditPress={() => {
@@ -481,12 +508,19 @@ function ScreenHeader({ onBackPress, title }) {
   );
 }
 
-function AddressCard({ address, onCurrentPress, onEditPress }) {
+function AddressCard({
+  address,
+  isSettingCurrent = false,
+  onCurrentPress,
+  onEditPress,
+}) {
   return (
     <Pressable
+      accessibilityLabel={`${address.name} 현재 주소로 설정`}
       accessibilityRole="button"
+      disabled={isSettingCurrent}
       onPress={onCurrentPress}
-      style={styles.addressCard}
+      style={[styles.addressCard, isSettingCurrent && styles.disabledButton]}
     >
       <View style={styles.addressCardTextGroup}>
         <View style={styles.addressCardTitleRow}>
