@@ -15,10 +15,71 @@
     "message": "인증이 필요합니다."
   }
 */
+import { reissueAuthTokens } from "./auth/reissue";
 import { clearAuthTokens, getAccessToken } from "./auth/tokens";
 import { requestJson } from "./client";
 
 const USER_ENDPOINT = "/api/user";
+
+function isAuthError(error) {
+  return (
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.code === "C007" ||
+    error?.code === "C005"
+  );
+}
+
+function createBusinessError(response, fallbackMessage) {
+  if (!response?.code || response.code === "SUCCESS") {
+    return null;
+  }
+
+  const error = new Error(response.message ?? fallbackMessage);
+
+  error.code = response.code;
+  error.data = response;
+
+  return error;
+}
+
+async function requestUserJson(options) {
+  const fallbackMessage = options.errorMessage ?? "회원 요청에 실패했습니다.";
+
+  try {
+    const response = await requestJson(options);
+    const businessError = createBusinessError(response, fallbackMessage);
+
+    if (businessError) {
+      throw businessError;
+    }
+
+    return response;
+  } catch (error) {
+    if (!isAuthError(error)) {
+      throw error;
+    }
+
+    try {
+      const { accessToken } = await reissueAuthTokens({
+        signal: options.signal,
+      });
+      const response = await requestJson({
+        ...options,
+        accessToken,
+      });
+      const businessError = createBusinessError(response, fallbackMessage);
+
+      if (businessError) {
+        throw businessError;
+      }
+
+      return response;
+    } catch {
+      throw error;
+    }
+  }
+}
 
 export function normalizeUser(user) {
   const userData = user?.data ?? user;
@@ -31,7 +92,7 @@ export function normalizeUser(user) {
 }
 
 export async function getUser({ accessToken = getAccessToken(), signal } = {}) {
-  const response = await requestJson({
+  const response = await requestUserJson({
     path: USER_ENDPOINT,
     method: "GET",
     accessToken,
@@ -43,7 +104,7 @@ export async function getUser({ accessToken = getAccessToken(), signal } = {}) {
 }
 
 export async function deleteUser({ accessToken = getAccessToken(), signal } = {}) {
-  const data = await requestJson({
+  const data = await requestUserJson({
     path: USER_ENDPOINT,
     method: "DELETE",
     accessToken,
