@@ -51,6 +51,7 @@ export function AddressManagementScreen({ onBackPress }) {
   const [addressLoadError, setAddressLoadError] = useState("");
   const [selectedResult, setSelectedResult] = useState(null);
   const [editingAddress, setEditingAddress] = useState(null);
+  const [isDeletingAddress, setIsDeletingAddress] = useState(false);
 
   useEffect(() => {
     let isActive = true;
@@ -163,21 +164,26 @@ export function AddressManagementScreen({ onBackPress }) {
   };
 
   const deleteAddress = async () => {
-    if (!editingAddress) {
+    if (!editingAddress || isDeletingAddress) {
       setScreenMode("list");
       return;
     }
 
     const addressId = editingAddress.addressId ?? editingAddress.id;
 
+    setIsDeletingAddress(true);
+
     try {
       await deleteAddressRequest({ addressId });
       setAddresses((current) =>
         current.filter((item) => (item.addressId ?? item.id) !== addressId),
       );
+      setEditingAddress(null);
       setScreenMode("list");
     } catch (error) {
       Alert.alert("주소 삭제 실패", error?.message ?? "주소 삭제에 실패했습니다.");
+    } finally {
+      setIsDeletingAddress(false);
     }
   };
 
@@ -242,6 +248,7 @@ export function AddressManagementScreen({ onBackPress }) {
         }}
         buttonLabel="저장"
         initialAlias={editingAddress?.name ?? ""}
+        isDeleting={isDeletingAddress}
         onBackPress={handleBackPress}
         onChangeAddress={() => setScreenMode("search")}
         onDelete={deleteAddress}
@@ -343,6 +350,7 @@ function AddressFormScreen({
   address,
   buttonLabel,
   initialAlias,
+  isDeleting = false,
   onBackPress,
   onChangeAddress,
   onDelete,
@@ -393,10 +401,13 @@ function AddressFormScreen({
         {onDelete ? (
           <Pressable
             accessibilityRole="button"
+            disabled={isDeleting}
             onPress={onDelete}
-            style={styles.deleteButton}
+            style={[styles.deleteButton, isDeleting && styles.disabledButton]}
           >
-            <Text style={styles.deleteButtonText}>주소 삭제</Text>
+            <Text style={styles.deleteButtonText}>
+              {isDeleting ? "삭제중" : "주소 삭제"}
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -755,6 +766,9 @@ const styles = StyleSheet.create({
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.white,
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
   deleteButtonText: {
     fontFamily: "SUIT",
