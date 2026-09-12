@@ -11,6 +11,14 @@ function buildCurrentAddressEndpoint(addressId) {
   return `${buildAddressEndpoint(addressId)}/current`;
 }
 
+function compactPayload(payload) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(
+      ([, value]) => value !== undefined && value !== null,
+    ),
+  );
+}
+
 export function normalizeAddress(address) {
   const addressId = address?.addressId ?? address?.id;
   const addressText =
@@ -80,6 +88,10 @@ export async function createAddress({
 
 export async function updateAddress({
   addressId,
+  name,
+  address,
+  x,
+  y,
   payload,
   accessToken = getAccessToken(),
   signal,
@@ -91,7 +103,12 @@ export async function updateAddress({
   return requestJson({
     path: buildAddressEndpoint(addressId),
     method: "PATCH",
-    body: payload,
+    body: payload ?? compactPayload({
+      name,
+      address,
+      x,
+      y,
+    }),
     accessToken,
     signal,
     errorMessage: "주소 수정에 실패했습니다.",

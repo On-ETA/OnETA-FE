@@ -141,16 +141,18 @@ export function AddressManagementScreen({ onBackPress }) {
     const addressId = editingAddress.addressId ?? editingAddress.id;
 
     try {
-      await updateAddressRequest({
+      const response = await updateAddressRequest({
         addressId,
-        payload: {
-          name: alias || editingAddress.name,
-        },
+        name: alias || editingAddress.name,
       });
+      const updatedAddress = response?.data
+        ? normalizeAddress(response.data)
+        : null;
+
       setAddresses((current) =>
         current.map((address) =>
           (address.addressId ?? address.id) === addressId
-            ? { ...address, name: alias || address.name }
+            ? updatedAddress ?? { ...address, name: alias || address.name }
             : address,
         ),
       );
