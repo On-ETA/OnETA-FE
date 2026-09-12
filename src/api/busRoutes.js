@@ -148,6 +148,30 @@ export function normalizeBusRouteDirections(direction) {
   };
 }
 
+export function normalizeBusRouteLocations(locations) {
+  const data = locations?.data ?? locations ?? {};
+  const activeBuses = Array.isArray(data.activeBuses)
+    ? data.activeBuses.map((bus, index) => ({
+        id: `${bus?.plainNo ?? "bus"}-${bus?.sectOrd ?? index}`,
+        atStop: Boolean(bus?.atStop),
+        depotDeparted: Boolean(bus?.depotDeparted),
+        plainNo: bus?.plainNo ?? "",
+        sectOrd: bus?.sectOrd,
+        raw: bus,
+      }))
+    : [];
+
+  return {
+    routeId: data.routeId,
+    depotDeparted: Boolean(data.depotDeparted),
+    depotDepartedBusNo: data.depotDepartedBusNo ?? "",
+    turnaroundDeparted: Boolean(data.turnaroundDeparted),
+    turnaroundDepartedBusNo: data.turnaroundDepartedBusNo ?? "",
+    activeBuses,
+    raw: data,
+  };
+}
+
 async function requestBusRouteJson(options) {
   const fallbackMessage = options.errorMessage ?? "버스 API 요청에 실패했습니다.";
 
@@ -239,11 +263,13 @@ export async function getBusRouteLocations({
     throw new Error("버스 노선 id가 필요합니다.");
   }
 
-  return requestBusRouteJson({
+  const response = await requestBusRouteJson({
     path: buildBusRouteLocationsEndpoint(routeId),
     method: "GET",
     accessToken,
     signal,
     errorMessage: "버스 위치 정보를 불러오지 못했습니다.",
   });
+
+  return normalizeBusRouteLocations(response);
 }

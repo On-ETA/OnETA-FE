@@ -11,7 +11,11 @@ import {
 } from "react-native";
 
 import { Header } from "../../../components";
-import { getBusRouteDirections, searchBusRoutes } from "../../../api/busRoutes";
+import {
+  getBusRouteDirections,
+  getBusRouteLocations,
+  searchBusRoutes,
+} from "../../../api/busRoutes";
 import { colors, typography } from "../../../theme";
 
 const GARAGE_BUS_RESULTS = [
@@ -91,6 +95,38 @@ function formatBusInterval(interval) {
   return interval === "-" ? "배차 간격 정보 없음" : `배차 간격 ${interval}분`;
 }
 
+function getDirectionDepartureInfo(direction, locations) {
+  if (!locations) {
+    return "";
+  }
+
+  const directionType = direction?.type ?? direction?.id;
+  const isDepotDirection = directionType === "DEPOT";
+  const departed = isDepotDirection
+    ? locations.depotDeparted
+    : locations.turnaroundDeparted;
+  const busNo = isDepotDirection
+    ? locations.depotDepartedBusNo
+    : locations.turnaroundDepartedBusNo;
+
+  if (!departed) {
+    return "아직 출발 정보가 없습니다.";
+  }
+
+  return busNo ? `최근 출발 차량 ${busNo}` : "최근 출발 차량이 있습니다.";
+}
+
+function getLocationSummary(locations) {
+  if (!locations) {
+    return "";
+  }
+
+  const activeBusCount = locations.activeBuses.length;
+  const atStopCount = locations.activeBuses.filter((bus) => bus.atStop).length;
+
+  return `현재 운행 중 ${activeBusCount}대 · 정류장 정차 ${atStopCount}대`;
+}
+
 export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [selectedBus, setSelectedBus] = useState(null);
   const [selectedDirectionId, setSelectedDirectionId] = useState(null);
@@ -99,6 +135,9 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [isSearchingBusRoutes, setIsSearchingBusRoutes] = useState(false);
   const [busSearchError, setBusSearchError] = useState("");
   const [loadingDirectionRouteId, setLoadingDirectionRouteId] = useState(null);
+  const [busLocations, setBusLocations] = useState(null);
+  const [isLoadingBusLocations, setIsLoadingBusLocations] = useState(false);
+  const [busLocationError, setBusLocationError] = useState("");
   const isDirectionStep = Boolean(selectedBus);
   const trimmedSearchText = searchText.trim();
   const hasSearchText = trimmedSearchText.length > 0;
@@ -208,6 +247,54 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
     };
   }, [hasSearchText, trimmedSearchText]);
 
+  useEffect(() => {
+    const routeId = selectedBus?.routeId ?? selectedBus?.id;
+
+    if (!routeId) {
+      setBusLocations(null);
+      setBusLocationError("");
+      setIsLoadingBusLocations(false);
+      return undefined;
+    }
+
+    let isActive = true;
+    const controller = new AbortController();
+
+    async function loadBusLocations() {
+      setIsLoadingBusLocations(true);
+      setBusLocationError("");
+
+      try {
+        const locations = await getBusRouteLocations({
+          routeId,
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setBusLocations(locations);
+        }
+      } catch (error) {
+        if (isActive) {
+          setBusLocations(null);
+          setBusLocationError(
+            error?.message ?? "버스 위치 정보를 불러오지 못했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingBusLocations(false);
+        }
+      }
+    }
+
+    loadBusLocations();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [selectedBus?.id, selectedBus?.routeId]);
+
   return (
     <View style={styles.screen}>
       <Header
@@ -221,6 +308,9 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
       {isDirectionStep ? (
         <BusDirectionStep
           bus={selectedBus}
+          busLocationError={busLocationError}
+          busLocations={busLocations}
+          isLoadingBusLocations={isLoadingBusLocations}
           onChangeBus={() => {
             setSelectedBus(null);
             setSelectedDirectionId(null);
@@ -311,12 +401,16 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
 
 function BusDirectionStep({
   bus,
+  busLocationError,
+  busLocations,
+  isLoadingBusLocations,
   onChangeBus,
   onDirectionPress,
   onSubmit,
   selectedDirectionId,
 }) {
   const canSubmit = Boolean(selectedDirectionId);
+  const locationSummary = getLocationSummary(busLocations);
 
   return (
     <View style={styles.directionStep}>
@@ -363,6 +457,19 @@ function BusDirectionStep({
                 <Text style={styles.directionDescription}>
                   {direction.description}
                 </Text>
+                {isLoadingBusLocations ? (
+                  <Text style={styles.directionMeta}>
+                    실시간 위치를 불러오는 중입니다.
+                  </Text>
+                ) : null}
+                {!isLoadingBusLocations && getDirectionDepartureInfo(
+                  direction,
+                  busLocations,
+                ) ? (
+                  <Text style={styles.directionMeta}>
+                    {getDirectionDepartureInfo(direction, busLocations)}
+                  </Text>
+                ) : null}
               </Pressable>
             );
           })}
@@ -375,7 +482,10 @@ function BusDirectionStep({
             버스가 차고지에서 출발할 때 알려드릴게요.
           </Text>
           <Text style={styles.infoText}>
-            알림은 1회 발송 후 자동으로 꺼지니 필요할 때 다시 켜주세요.
+            {isLoadingBusLocations
+              ? "실시간 버스 위치를 확인하고 있습니다."
+              : busLocationError || locationSummary ||
+                "알림은 1회 발송 후 자동으로 꺼지니 필요할 때 다시 켜주세요."}
           </Text>
         </View>
         <Pressable
@@ -721,6 +831,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 19.6,
     color: colors.gray06,
+  },
+  directionMeta: {
+    marginTop: 8,
+    ...typography.caption01M,
+    color: colors.gray07,
   },
   directionFooter: {
     paddingHorizontal: 20,
