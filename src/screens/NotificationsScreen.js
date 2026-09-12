@@ -16,6 +16,7 @@ import {
   DEFAULT_TEST_FCM_TITLE,
   sendTestFcm,
 } from "../api/test/fcm";
+import { syncBus } from "../api/test/syncBus";
 import { AppScreen, Header } from "../components";
 import { colors, typography } from "../theme";
 
@@ -55,6 +56,7 @@ export function NotificationsScreen({
   const [testTitle, setTestTitle] = useState(DEFAULT_TEST_FCM_TITLE);
   const [testBody, setTestBody] = useState(DEFAULT_TEST_FCM_BODY);
   const [isSendingTestFcm, setIsSendingTestFcm] = useState(false);
+  const [isSyncingBus, setIsSyncingBus] = useState(false);
 
   useEffect(() => {
     if (notifications) {
@@ -106,6 +108,31 @@ export function NotificationsScreen({
       );
     } finally {
       setIsSendingTestFcm(false);
+    }
+  };
+
+  const handleSyncBus = async () => {
+    if (isSyncingBus) {
+      return;
+    }
+
+    setIsSyncingBus(true);
+
+    try {
+      const response = await syncBus();
+      Alert.alert(
+        "버스 동기화",
+        typeof response === "string"
+          ? response
+          : response?.message ?? "버스 동기화를 실행했습니다.",
+      );
+    } catch (error) {
+      Alert.alert(
+        "버스 동기화 실패",
+        error?.message ?? "버스 동기화 테스트에 실패했습니다.",
+      );
+    } finally {
+      setIsSyncingBus(false);
     }
   };
 
@@ -163,6 +190,19 @@ export function NotificationsScreen({
             >
               <Text style={styles.testSendButtonText}>
                 {isSendingTestFcm ? "발송 중" : "테스트 알림 보내기"}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isSyncingBus}
+              onPress={handleSyncBus}
+              style={[
+                styles.syncBusButton,
+                isSyncingBus && styles.testSendButtonDisabled,
+              ]}
+            >
+              <Text style={styles.syncBusButtonText}>
+                {isSyncingBus ? "동기화 중" : "버스 동기화 테스트"}
               </Text>
             </Pressable>
           </View>
@@ -287,6 +327,19 @@ const styles = StyleSheet.create({
   testSendButtonText: {
     ...typography.body03Sb,
     color: colors.white,
+  },
+  syncBusButton: {
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gray03,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.white,
+  },
+  syncBusButtonText: {
+    ...typography.body03Sb,
+    color: colors.gray09,
   },
   card: {
     width: "100%",
