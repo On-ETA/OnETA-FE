@@ -16,6 +16,7 @@ import {
   getBusRouteLocations,
   searchBusRoutes,
 } from "../../../api/busRoutes";
+import { createDepotNotification } from "../../../api/notifications/depot";
 import { colors, typography } from "../../../theme";
 
 function createDirection({ id, title, departurePoint }) {
@@ -93,6 +94,47 @@ function getLocationSummary(locations) {
   return `현재 운행 중 ${activeBusCount}대 · 정류장 정차 ${atStopCount}대`;
 }
 
+function getBusNumber(bus) {
+  return String(bus?.busNumber ?? bus?.routeNumber ?? bus?.name ?? "")
+    .replace(/번$/, "")
+    .trim();
+}
+
+function getDirectionType(direction) {
+  return direction?.type ?? direction?.direction ?? direction?.id ?? "";
+}
+
+function getDirectionTitleName(direction) {
+  return String(direction?.title ?? "")
+    .replace(/\s*방면$/, "")
+    .trim();
+}
+
+function getDirectionName(bus, direction) {
+  const directionType = getDirectionType(direction);
+  const titleName = getDirectionTitleName(direction);
+
+  if (directionType === "DEPOT") {
+    return (
+      bus?.depotName ||
+      direction?.name ||
+      direction?.directionName ||
+      titleName
+    );
+  }
+
+  if (directionType === "TURNAROUND") {
+    return (
+      bus?.turnaroundName ||
+      direction?.name ||
+      direction?.directionName ||
+      titleName
+    );
+  }
+
+  return direction?.name || direction?.directionName || titleName;
+}
+
 export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [selectedBus, setSelectedBus] = useState(null);
   const [selectedDirectionId, setSelectedDirectionId] = useState(null);
@@ -104,6 +146,7 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [busLocations, setBusLocations] = useState(null);
   const [isLoadingBusLocations, setIsLoadingBusLocations] = useState(false);
   const [busLocationError, setBusLocationError] = useState("");
+  const [isSubmittingAlarm, setIsSubmittingAlarm] = useState(false);
   const isDirectionStep = Boolean(selectedBus);
   const trimmedSearchText = searchText.trim();
   const hasSearchText = trimmedSearchText.length > 0;
@@ -169,11 +212,44 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
     onBackPress?.();
   };
 
-  const handleAlarmSubmit = () => {
-    // TODO: POST /home/custom-alarm/garage-departure
-    // body: { busId: selectedBus.id, directionId: selectedDirection.id }
-    if (selectedBus && selectedDirection) {
+  const handleAlarmSubmit = async () => {
+    if (!selectedBus || !selectedDirection || isSubmittingAlarm) {
+      return;
+    }
+
+    const routeId = selectedBus.routeId ?? selectedBus.id;
+    const busNumber = getBusNumber(selectedBus);
+    const direction = getDirectionType(selectedDirection);
+    const directionName = getDirectionName(selectedBus, selectedDirection);
+
+    if (!routeId || !busNumber || !direction || !directionName) {
+      Alert.alert(
+        "알림 등록 실패",
+        "버스 알림 등록에 필요한 정보를 확인하지 못했습니다.",
+      );
+      return;
+    }
+
+    setIsSubmittingAlarm(true);
+
+    try {
+      await createDepotNotification({
+        payload: {
+          routeId,
+          busNumber,
+          direction,
+          directionName,
+        },
+      });
+
       onBackPress?.();
+    } catch (error) {
+      Alert.alert(
+        "알림 등록 실패",
+        error?.message ?? "차고지 출발 알림 등록에 실패했습니다.",
+      );
+    } finally {
+      setIsSubmittingAlarm(false);
     }
   };
 
@@ -273,6 +349,7 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
           busLocationError={busLocationError}
           busLocations={busLocations}
           isLoadingBusLocations={isLoadingBusLocations}
+          isSubmitting={isSubmittingAlarm}
           onChangeBus={() => {
             setSelectedBus(null);
             setSelectedDirectionId(null);
@@ -371,12 +448,13 @@ function BusDirectionStep({
   busLocationError,
   busLocations,
   isLoadingBusLocations,
+  isSubmitting,
   onChangeBus,
   onDirectionPress,
   onSubmit,
   selectedDirectionId,
 }) {
-  const canSubmit = Boolean(selectedDirectionId);
+  const canSubmit = Boolean(selectedDirectionId) && !isSubmitting;
   const locationSummary = getLocationSummary(busLocations);
 
   return (
@@ -467,7 +545,7 @@ function BusDirectionStep({
               canSubmit && styles.alarmButtonTextActive,
             ]}
           >
-            알림 설정
+            {isSubmitting ? "등록 중" : "알림 설정"}
           </Text>
         </Pressable>
       </View>
