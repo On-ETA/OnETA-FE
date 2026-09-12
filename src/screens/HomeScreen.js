@@ -79,6 +79,7 @@ export function HomeScreen({
           ) : activeTab === "home" ? (
             isAddressManagerVisible ? (
               <AddressManagementScreen
+                onAuthRequired={onLogoutComplete}
                 onBackPress={() => setIsAddressManagerVisible(false)}
               />
             ) : isGarageDepartureAddVisible ? (

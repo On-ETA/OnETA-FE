@@ -1,4 +1,5 @@
 import { getAccessToken } from "./auth/tokens";
+import { reissueAuthTokens } from "./auth/reissue";
 import { requestJson } from "./client";
 
 const ADDRESSES_ENDPOINT = "/api/addresses";
@@ -17,6 +18,36 @@ function compactPayload(payload) {
       ([, value]) => value !== undefined && value !== null,
     ),
   );
+}
+
+function isAuthError(error) {
+  return (
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.code === "C007" ||
+    error?.code === "C005"
+  );
+}
+
+async function requestAddressJson(options) {
+  try {
+    return await requestJson(options);
+  } catch (error) {
+    if (!isAuthError(error)) {
+      throw error;
+    }
+
+    try {
+      const { accessToken } = await reissueAuthTokens();
+
+      return await requestJson({
+        ...options,
+        accessToken,
+      });
+    } catch {
+      throw error;
+    }
+  }
 }
 
 export function normalizeAddress(address) {
@@ -49,7 +80,7 @@ export async function getAddresses({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
-  const response = await requestJson({
+  const response = await requestAddressJson({
     path: ADDRESSES_ENDPOINT,
     method: "GET",
     accessToken,
@@ -71,7 +102,7 @@ export async function createAddress({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
-  return requestJson({
+  return requestAddressJson({
     path: ADDRESSES_ENDPOINT,
     method: "POST",
     body: payload ?? {
@@ -100,7 +131,7 @@ export async function updateAddress({
     throw new Error("주소 id가 필요합니다.");
   }
 
-  return requestJson({
+  return requestAddressJson({
     path: buildAddressEndpoint(addressId),
     method: "PATCH",
     body: payload ?? compactPayload({
@@ -124,7 +155,7 @@ export async function deleteAddress({
     throw new Error("주소 id가 필요합니다.");
   }
 
-  return requestJson({
+  return requestAddressJson({
     path: buildAddressEndpoint(addressId),
     method: "DELETE",
     accessToken,
@@ -142,7 +173,7 @@ export async function setCurrentAddress({
     throw new Error("주소 id가 필요합니다.");
   }
 
-  return requestJson({
+  return requestAddressJson({
     path: buildCurrentAddressEndpoint(addressId),
     method: "PUT",
     accessToken,

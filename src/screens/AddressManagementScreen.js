@@ -44,7 +44,16 @@ const searchResults = [
   },
 ];
 
-export function AddressManagementScreen({ onBackPress }) {
+function isAuthError(error) {
+  return (
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.code === "C007" ||
+    error?.code === "C005"
+  );
+}
+
+export function AddressManagementScreen({ onAuthRequired, onBackPress }) {
   const [screenMode, setScreenMode] = useState("list");
   const [addresses, setAddresses] = useState([]);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
@@ -66,10 +75,20 @@ export function AddressManagementScreen({ onBackPress }) {
         if (isActive) {
           setAddresses(nextAddresses);
         }
-      } catch {
+      } catch (error) {
         if (isActive) {
           setAddresses([]);
-          setAddressLoadError("주소를 불러오지 못했습니다.");
+          if (isAuthError(error)) {
+            setAddressLoadError("로그인이 필요합니다.");
+            Alert.alert("로그인이 필요합니다", "다시 로그인해 주세요.", [
+              {
+                text: "확인",
+                onPress: onAuthRequired,
+              },
+            ]);
+          } else {
+            setAddressLoadError("주소를 불러오지 못했습니다.");
+          }
         }
       } finally {
         if (isActive) {
