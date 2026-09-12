@@ -41,6 +41,7 @@ export function HomeScreen({
   const [isGarageDepartureAddVisible, setIsGarageDepartureAddVisible] =
     useState(false);
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
+  const [currentAddressLabel, setCurrentAddressLabel] = useState("");
 
   const handleTabPress = (tabKey) => {
     setIsAddressManagerVisible(false);
@@ -81,6 +82,7 @@ export function HomeScreen({
               <AddressManagementScreen
                 onAuthRequired={onLogoutComplete}
                 onBackPress={() => setIsAddressManagerVisible(false)}
+                onCurrentAddressChange={setCurrentAddressLabel}
               />
             ) : isGarageDepartureAddVisible ? (
               <GarageDepartureAlarmAddScreen
@@ -113,6 +115,10 @@ export function HomeScreen({
             ) : (
               <HomeDashboard
                 activeHomeTab={activeHomeTab}
+                addressLabel={
+                  currentAddressLabel ||
+                  (activeHomeTab === "firstLast" ? "주소 등록하기" : "우리집")
+                }
                 notificationCount={notificationCount}
                 onAddressPress={() => setIsAddressManagerVisible(true)}
                 onBellPress={onOpenNotifications}
@@ -142,6 +148,7 @@ export function HomeScreen({
 
 function HomeDashboard({
   activeHomeTab,
+  addressLabel,
   notificationCount,
   onAddressPress,
   onBellPress,
@@ -157,9 +164,7 @@ function HomeDashboard({
     <>
       <HomeTopSection
         activeTab={activeHomeTab}
-        addressLabel={
-          activeHomeTab === "firstLast" ? "주소 등록하기" : "우리집"
-        }
+        addressLabel={addressLabel}
         notificationCount={notificationCount}
         onAddressPress={onAddressPress}
         onBellPress={onBellPress}
