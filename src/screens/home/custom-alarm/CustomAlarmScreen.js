@@ -16,6 +16,7 @@ import {
   deleteDepotNotification,
   getMyDepotNotifications,
 } from "../../../api/notifications/depot";
+import { getArrivalNotifications } from "../../../api/notifications/arrival";
 import { colors, typography } from "../../../theme";
 
 // TODO: API 연동 시 아래 더미 데이터를 교체하세요.
@@ -39,6 +40,8 @@ export function CustomAlarmScreen({
   const [scheduleAlarms, setScheduleAlarms] = useState(initialScheduleAlarms);
   const [isLoadingGarageAlarms, setIsLoadingGarageAlarms] = useState(false);
   const [garageAlarmError, setGarageAlarmError] = useState("");
+  const [isLoadingScheduleAlarms, setIsLoadingScheduleAlarms] = useState(false);
+  const [scheduleAlarmError, setScheduleAlarmError] = useState("");
   const [isDeletingAlarms, setIsDeletingAlarms] = useState(false);
   const [editingSections, setEditingSections] = useState({
     garage: false,
@@ -81,7 +84,34 @@ export function CustomAlarmScreen({
       }
     }
 
+    async function loadScheduleAlarms() {
+      setIsLoadingScheduleAlarms(true);
+      setScheduleAlarmError("");
+
+      try {
+        const alarms = await getArrivalNotifications({
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setScheduleAlarms(alarms);
+        }
+      } catch (error) {
+        if (isActive) {
+          setScheduleAlarms([]);
+          setScheduleAlarmError(
+            error?.message ?? "내 일정 알림을 불러오지 못했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingScheduleAlarms(false);
+        }
+      }
+    }
+
     loadGarageAlarms();
+    loadScheduleAlarms();
 
     return () => {
       isActive = false;
@@ -236,7 +266,11 @@ export function CustomAlarmScreen({
           </Text>
           <Text style={[styles.tableHeaderText, styles.alarmColumn]}>알림</Text>
         </View>
-        {scheduleAlarms.length > 0 ? (
+        {isLoadingScheduleAlarms ? (
+          <EmptyAlarmBox text="내 일정 알림을 불러오는 중입니다." />
+        ) : scheduleAlarmError ? (
+          <EmptyAlarmBox text={scheduleAlarmError} />
+        ) : scheduleAlarms.length > 0 ? (
           <View style={styles.scheduleList}>
             {scheduleAlarms.map((alarm) => {
               const selected = selectedIds.includes(alarm.id);
