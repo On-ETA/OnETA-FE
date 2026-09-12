@@ -17,6 +17,7 @@ import {
   getMyDepotNotifications,
 } from "../../../api/notifications/depot";
 import {
+  deleteArrivalNotifications,
   getArrivalNotifications,
   updateArrivalNotificationStatus,
 } from "../../../api/notifications/arrival";
@@ -223,15 +224,22 @@ export function CustomAlarmScreen({
     const garageTargetIds = garageAlarms
       .filter((alarm) => deleteTargetIds.includes(alarm.id))
       .map((alarm) => alarm.userBusId ?? alarm.id);
+    const scheduleTargetIds = scheduleAlarms
+      .filter((alarm) => deleteTargetIds.includes(alarm.id))
+      .map(getArrivalNotificationId)
+      .filter((id) => id !== undefined && id !== null && id !== "");
 
     setIsDeletingAlarms(true);
 
     try {
-      await Promise.all(
-        garageTargetIds.map((userBusId) =>
+      await Promise.all([
+        ...garageTargetIds.map((userBusId) =>
           deleteDepotNotification({ userBusId }),
         ),
-      );
+        scheduleTargetIds.length > 0
+          ? deleteArrivalNotifications({ ids: scheduleTargetIds })
+          : Promise.resolve(),
+      ]);
 
       setGarageAlarms((current) =>
         current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
@@ -246,7 +254,7 @@ export function CustomAlarmScreen({
     } catch (error) {
       Alert.alert(
         "알림 삭제 실패",
-        error?.message ?? "차고지 출발 알림 삭제에 실패했습니다.",
+        error?.message ?? "알림 삭제에 실패했습니다.",
       );
     } finally {
       setIsDeletingAlarms(false);

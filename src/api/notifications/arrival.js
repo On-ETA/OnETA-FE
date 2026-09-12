@@ -12,6 +12,14 @@ function buildArrivalNotificationStatusEndpoint(id) {
   return `${buildArrivalNotificationEndpoint(id)}/status`;
 }
 
+function buildArrivalNotificationsDeleteEndpoint(ids) {
+  const query = new URLSearchParams();
+
+  query.append("ids", ids.join(","));
+
+  return `${ARRIVAL_NOTIFICATIONS_ENDPOINT}?${query.toString()}`;
+}
+
 function isAuthError(error) {
   return (
     error?.status === 401 ||
@@ -207,14 +215,17 @@ export async function createArrivalNotification({
 }
 
 export async function deleteArrivalNotifications({
-  payload,
+  ids,
   accessToken = getAccessToken(),
   signal,
 } = {}) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new Error("삭제할 도착 알림 id가 필요합니다.");
+  }
+
   return requestArrivalNotificationJson({
-    path: ARRIVAL_NOTIFICATIONS_ENDPOINT,
+    path: buildArrivalNotificationsDeleteEndpoint(ids),
     method: "DELETE",
-    body: payload,
     accessToken,
     signal,
     errorMessage: "도착 알림 삭제에 실패했습니다.",
