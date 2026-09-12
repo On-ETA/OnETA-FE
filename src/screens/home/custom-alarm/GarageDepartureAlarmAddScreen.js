@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Platform,
@@ -18,74 +18,40 @@ import {
 } from "../../../api/busRoutes";
 import { colors, typography } from "../../../theme";
 
-const GARAGE_BUS_RESULTS = [
-  {
-    id: "147-1",
-    interval: "15분",
-    route: "망원유수지 - 신촌역",
+function createDirection({ id, title, departurePoint }) {
+  return {
+    id,
+    title,
+    description: `${departurePoint} 정류장에서 출고 시 1회 알림`,
+  };
+}
+
+function normalizeGarageBusResult(route) {
+  const routeId = route.routeId;
+  const routeName = route.routeName || route.routeNm || "";
+  const startPoint = route.startPoint || "기점";
+  const endPoint = route.endPoint || "종점";
+
+  return {
+    id: routeId,
+    routeId,
+    name: `${routeName}번`,
+    interval: route.term ? `${route.term}분` : "정보 없음",
+    route: `${startPoint} - ${endPoint}`,
     directions: [
-      {
-        id: "sinchon",
-        title: "신촌역 방면",
-        description: "망원유수지 정류장에서 출고 시 1회 알림",
-      },
-      {
-        id: "mangwon",
-        title: "망원유수지 방면",
-        description: "신촌역 정류장에서 출고 시 1회 알림",
-      },
-      {
-        id: "hapjeong",
-        title: "합정역 방면",
-        description: "신촌역 정류장에서 출고 시 1회 알림",
-      },
+      createDirection({
+        id: `${routeId}-to-end`,
+        title: `${endPoint} 방면`,
+        departurePoint: startPoint,
+      }),
+      createDirection({
+        id: `${routeId}-to-start`,
+        title: `${startPoint} 방면`,
+        departurePoint: endPoint,
+      }),
     ],
-  },
-  {
-    id: "147-2",
-    interval: "15분",
-    route: "망원유수지 - 신촌역",
-    directions: [
-      {
-        id: "sinchon",
-        title: "신촌역 방면",
-        description: "망원유수지 정류장에서 출고 시 1회 알림",
-      },
-      {
-        id: "mangwon",
-        title: "망원유수지 방면",
-        description: "신촌역 정류장에서 출고 시 1회 알림",
-      },
-      {
-        id: "hongdae",
-        title: "홍대입구역 방면",
-        description: "망원유수지 정류장에서 출고 시 1회 알림",
-      },
-    ],
-  },
-  {
-    id: "147-3",
-    interval: "12분",
-    route: "월드컵경기장 - 한성대입구",
-    directions: [
-      {
-        id: "hansung",
-        title: "한성대입구 방면",
-        description: "월드컵경기장 정류장에서 출고 시 1회 알림",
-      },
-      {
-        id: "stadium",
-        title: "월드컵경기장 방면",
-        description: "한성대입구 정류장에서 출고 시 1회 알림",
-      },
-      {
-        id: "cityhall",
-        title: "시청 방면",
-        description: "월드컵경기장 정류장에서 출고 시 1회 알림",
-      },
-    ],
-  },
-];
+  };
+}
 
 function formatBusInterval(interval) {
   if (interval === undefined || interval === null || interval === "") {
@@ -131,9 +97,9 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [selectedBus, setSelectedBus] = useState(null);
   const [selectedDirectionId, setSelectedDirectionId] = useState(null);
   const [searchText, setSearchText] = useState("");
-  const [serverBusResults, setServerBusResults] = useState([]);
-  const [isSearchingBusRoutes, setIsSearchingBusRoutes] = useState(false);
-  const [busSearchError, setBusSearchError] = useState("");
+  const [busResults, setBusResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchErrorMessage, setSearchErrorMessage] = useState("");
   const [loadingDirectionRouteId, setLoadingDirectionRouteId] = useState(null);
   const [busLocations, setBusLocations] = useState(null);
   const [isLoadingBusLocations, setIsLoadingBusLocations] = useState(false);
@@ -141,13 +107,57 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const isDirectionStep = Boolean(selectedBus);
   const trimmedSearchText = searchText.trim();
   const hasSearchText = trimmedSearchText.length > 0;
-  const busResults = useMemo(
-    () => (hasSearchText ? serverBusResults : []),
-    [hasSearchText, serverBusResults],
-  );
   const selectedDirection = selectedBus?.directions.find(
     (direction) => direction.id === selectedDirectionId,
   );
+
+  useEffect(() => {
+    if (!hasSearchText) {
+      setBusResults([]);
+      setIsSearching(false);
+      setSearchErrorMessage("");
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let isActive = true;
+    const debounceId = setTimeout(async () => {
+      setIsSearching(true);
+      setSearchErrorMessage("");
+
+      try {
+        const response = await searchBusRoutes({
+          query: trimmedSearchText,
+          signal: controller.signal,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setBusResults(Array.isArray(response) ? response : []);
+      } catch (error) {
+        if (!isActive || error?.name === "AbortError") {
+          return;
+        }
+
+        setBusResults([]);
+        setSearchErrorMessage(
+          error?.message || "버스 검색에 실패했습니다.",
+        );
+      } finally {
+        if (isActive) {
+          setIsSearching(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      isActive = false;
+      clearTimeout(debounceId);
+      controller.abort();
+    };
+  }, [hasSearchText, trimmedSearchText]);
 
   const handleBackPress = () => {
     if (isDirectionStep) {
@@ -198,54 +208,6 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
       setLoadingDirectionRouteId(null);
     }
   };
-
-  useEffect(() => {
-    if (!hasSearchText) {
-      setServerBusResults([]);
-      setBusSearchError("");
-      setIsSearchingBusRoutes(false);
-      return undefined;
-    }
-
-    let isActive = true;
-    const controller = new AbortController();
-
-    async function loadBusRoutes() {
-      setIsSearchingBusRoutes(true);
-      setBusSearchError("");
-
-      try {
-        const routes = await searchBusRoutes({
-          query: trimmedSearchText,
-          signal: controller.signal,
-        });
-
-        if (!isActive || !Array.isArray(routes)) {
-          return;
-        }
-
-        setServerBusResults(routes);
-      } catch (error) {
-        if (isActive) {
-          setServerBusResults([]);
-          setBusSearchError(
-            error?.message ?? "버스 노선 검색에 실패했습니다.",
-          );
-        }
-      } finally {
-        if (isActive) {
-          setIsSearchingBusRoutes(false);
-        }
-      }
-    }
-
-    loadBusRoutes();
-
-    return () => {
-      isActive = false;
-      controller.abort();
-    };
-  }, [hasSearchText, trimmedSearchText]);
 
   useEffect(() => {
     const routeId = selectedBus?.routeId ?? selectedBus?.id;
@@ -349,6 +311,14 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
             ) : null}
           </View>
 
+          {isSearching ? (
+            <Text style={styles.searchStateText}>검색 중입니다.</Text>
+          ) : searchErrorMessage ? (
+            <Text style={styles.searchStateText}>{searchErrorMessage}</Text>
+          ) : hasSearchText && busResults.length === 0 ? (
+            <Text style={styles.searchStateText}>검색 결과가 없습니다.</Text>
+          ) : null}
+
           {busResults.length > 0 ? (
             <ScrollView
               contentContainerStyle={styles.resultList}
@@ -383,16 +353,13 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
                 </Pressable>
               ))}
             </ScrollView>
-          ) : (
+          ) : !isSearching && !searchErrorMessage && hasSearchText ? (
             <View style={styles.resultStatus}>
               <Text style={styles.resultStatusText}>
-                {isSearchingBusRoutes
-                  ? "버스 노선을 검색하는 중입니다."
-                  : busSearchError ||
-                    (hasSearchText ? "검색 결과가 없습니다." : "")}
+                검색 결과가 없습니다.
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
       )}
     </View>
@@ -651,6 +618,11 @@ const styles = StyleSheet.create({
   resultList: {
     marginTop: 24,
     paddingBottom: 32,
+  },
+  searchStateText: {
+    marginTop: 24,
+    ...typography.body03M,
+    color: colors.gray07,
   },
   resultItem: {
     minHeight: 96,
