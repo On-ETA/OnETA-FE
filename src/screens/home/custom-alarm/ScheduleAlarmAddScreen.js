@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
+  Alert,
   Modal,
   PanResponder,
   Pressable,
@@ -11,6 +12,7 @@ import {
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import { createArrivalNotification } from "../../../api/notifications/arrival";
 import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { colors, typography } from "../../../theme";
@@ -51,11 +53,48 @@ function getSegmentStopName(segment, edge) {
   );
 }
 
+function toTargetArrivalTime(time) {
+  const hourNumber = Number(time.hour);
+  const minuteNumber = Number(time.minute);
+  const normalizedHour =
+    time.period === "오후" && hourNumber < 12
+      ? hourNumber + 12
+      : time.period === "오전" && hourNumber === 12
+        ? 0
+        : hourNumber;
+
+  return `${String(normalizedHour).padStart(2, "0")}:${String(
+    minuteNumber,
+  ).padStart(2, "0")}:00`;
+}
+
+function mapDayToApiValue(day) {
+  const dayMap = {
+    월: "MON",
+    화: "TUE",
+    수: "WED",
+    목: "THU",
+    금: "FRI",
+    토: "SAT",
+    일: "SUN",
+  };
+
+  return dayMap[day];
+}
+
+function pickReminderOffsets(reminders) {
+  return Object.entries(reminders)
+    .filter(([, selected]) => selected)
+    .map(([minute]) => Number(minute))
+    .sort((a, b) => a - b);
+}
+
 export function ScheduleAlarmAddScreen({ onBackPress }) {
   const [routeName, setRouteName] = useState("");
   const [arrivalTime, setArrivalTime] = useState(DEFAULT_TIME);
   const [isTimePickerVisible, setIsTimePickerVisible] = useState(false);
   const [step, setStep] = useState("form");
+  const [selectedRoute, setSelectedRoute] = useState(null);
   const [routePlaces, setRoutePlaces] = useState({
     origin: "마포구 와우산로 94",
     destination: "우리집",
@@ -107,7 +146,10 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
         initialDestination={routePlaces.destination}
         initialOrigin={routePlaces.origin}
         onBackPress={handleBackPress}
-        onRouteSelect={() => setStep("alarmFinal")}
+        onRouteSelect={(route) => {
+          setSelectedRoute(route);
+          setStep("alarmFinal");
+        }}
       />
     );
   }
@@ -115,9 +157,12 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
   if (step === "alarmFinal") {
     return (
       <ScheduleAlarmFinalStep
+        arrivalTime={arrivalTime}
         onBackPress={handleBackPress}
         onPrevPress={() => setStep("routeResult")}
         onSavePress={onBackPress}
+        route={selectedRoute}
+        routeName={routeName}
       />
     );
   }
@@ -470,7 +515,7 @@ function ScheduleRouteResultStep({
 
             <Pressable
               accessibilityRole="button"
-              onPress={onRouteSelect}
+              onPress={() => onRouteSelect(selectedRoute)}
               style={styles.routeAlarmButton}
             >
               <Text style={styles.routeAlarmButtonText}>이 경로로 알림 설정</Text>
@@ -482,8 +527,16 @@ function ScheduleRouteResultStep({
   );
 }
 
-function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
+function ScheduleAlarmFinalStep({
+  arrivalTime,
+  onBackPress,
+  onPrevPress,
+  onSavePress,
+  route,
+  routeName,
+}) {
   const [selectedDays, setSelectedDays] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReminderModalVisible, setIsReminderModalVisible] = useState(false);
   const [reminders, setReminders] = useState({
     1: false,
@@ -495,6 +548,19 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
     60: false,
   });
   const days = ["월", "화", "수", "목", "금", "토", "일"];
+  const primarySegment = getPrimaryTransitSegment(route);
+  const selectedReminderOffsets = pickReminderOffsets(reminders);
+  const selectedRouteName =
+    routeName.trim() ||
+    [
+      route?.originAddress,
+      route?.destinationAddress,
+    ].filter(Boolean).join("-") ||
+    "경로1";
+  const targetArrivalTime = toTargetArrivalTime(arrivalTime);
+  const formattedArrivalTime = `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
+  const displayDuration =
+    route?.realTimeDurationMinutes ?? route?.totalDurationMinutes ?? 0;
 
   const toggleDay = (day) => {
     setSelectedDays((current) =>
@@ -508,10 +574,44 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
     setReminders((current) => ({ ...current, [key]: !current[key] }));
   };
 
-  const saveAlarm = () => {
-    // TODO: POST /home/custom-alarms/schedule
-    // body: { routeId, selectedDays, reminders }
-    onSavePress?.();
+  const saveAlarm = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    if (!route) {
+      Alert.alert("알림 등록 실패", "등록할 경로 정보를 찾지 못했습니다.");
+      return;
+    }
+
+    if (selectedReminderOffsets.length === 0) {
+      Alert.alert("알림 등록 실패", "출발 전 알림 시간을 선택해주세요.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await createArrivalNotification({
+        payload: {
+          routeName: selectedRouteName,
+          scheduleType: "NORMAL",
+          targetArrivalTime,
+          reminderOffsetMinutes: selectedReminderOffsets,
+          repeatDays: selectedDays.map(mapDayToApiValue).filter(Boolean),
+          routeDetails: JSON.stringify(route.raw ?? route),
+        },
+      });
+
+      onSavePress?.();
+    } catch (error) {
+      Alert.alert(
+        "알림 등록 실패",
+        error?.message ?? "내 일정 알림 등록에 실패했습니다.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -529,11 +629,17 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
           <View style={styles.routeBusBadge}>
             <BusIconPlain />
           </View>
-          <Text style={styles.routeBusNumber}>147</Text>
-          <Text style={styles.routeBusDirection}>· 강남역 방면</Text>
+          <Text style={styles.routeBusNumber}>
+            {primarySegment?.transitName || "대중교통"}
+          </Text>
+          <Text style={styles.routeBusDirection}>
+            {primarySegment?.endStation
+              ? `· ${primarySegment.endStation} 방면`
+              : ""}
+          </Text>
         </View>
         <View style={styles.finalTotalTime}>
-          <Text style={styles.finalTotalTimeNumber}>21</Text>
+          <Text style={styles.finalTotalTimeNumber}>{displayDuration}</Text>
           <Text style={styles.finalTotalTimeUnit}>분</Text>
         </View>
       </View>
@@ -543,14 +649,14 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
           <View style={styles.timeSummaryBlock}>
             <Text style={styles.finalLabel}>출발 적정 시간</Text>
             <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>오전 11 : 09</Text>
+              <Text style={styles.timeCardText}>경로 기준 계산</Text>
             </View>
           </View>
           <ChevronRightIcon />
           <View style={styles.timeSummaryBlock}>
             <Text style={styles.finalLabel}>도착 예정 시간</Text>
             <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>오전 11 : 30</Text>
+              <Text style={styles.timeCardText}>{formattedArrivalTime}</Text>
             </View>
           </View>
         </View>
@@ -602,10 +708,10 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
       <View style={styles.finalFooter}>
         <View style={styles.finalInfoBox}>
           <Text style={styles.finalInfoText}>
-            11시 30분까지 도착하실 수 있도록,
+            {formattedArrivalTime}까지 도착하실 수 있도록,
           </Text>
           <Text style={styles.finalInfoText}>
-            출발 적정 시간 10분 전인 10시 59분에 알려드릴게요.
+            선택한 출발 전 알림 시간에 맞춰 알려드릴게요.
           </Text>
         </View>
         <View style={styles.finalButtonRow}>
@@ -618,10 +724,13 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
           </Pressable>
           <Pressable
             accessibilityRole="button"
+            disabled={isSubmitting}
             onPress={saveAlarm}
-            style={styles.saveButton}
+            style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
           >
-            <Text style={styles.saveButtonText}>저장</Text>
+            <Text style={styles.saveButtonText}>
+              {isSubmitting ? "저장 중" : "저장"}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -1756,6 +1865,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: colors.main,
+  },
+  saveButtonDisabled: {
+    backgroundColor: colors.gray05,
   },
   saveButtonText: {
     fontFamily: "SUIT",
