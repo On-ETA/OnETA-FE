@@ -1,4 +1,5 @@
 import { getAccessToken } from "./auth/tokens";
+import { reissueAuthTokens } from "./auth/reissue";
 import { requestJson } from "./client";
 
 const BUS_ROUTES_SEARCH_ENDPOINT = "/api/bus-routes/search";
@@ -25,16 +26,142 @@ function toQueryString(params = {}) {
   return queryString ? `?${queryString}` : "";
 }
 
+function isAuthError(error) {
+  return (
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.code === "C007" ||
+    error?.code === "C005"
+  );
+}
+
+function createBusinessError(response, fallbackMessage) {
+  if (!response?.code || response.code === "SUCCESS") {
+    return null;
+  }
+
+  const error = new Error(response.message ?? fallbackMessage);
+
+  error.code = response.code;
+  error.data = response;
+
+  return error;
+}
+
+function pickBusRouteList(response) {
+  const data = response?.data ?? response;
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (!data || typeof data !== "object") {
+    return [];
+  }
+
+  const candidates = [
+    data.routes,
+    data.routeList,
+    data.busRoutes,
+    data.busRouteList,
+    data.items,
+    data.content,
+    data.result,
+    data.results,
+  ];
+
+  return candidates.find(Array.isArray) ?? [];
+}
+
+export function normalizeBusRoute(route, fallbackQuery = "") {
+  const routeId = route?.routeId ?? route?.id ?? route?.busRouteId;
+  const routeName =
+    route?.routeNm ??
+    route?.routeName ??
+    route?.name ??
+    route?.busNumber ??
+    (fallbackQuery ? `${fallbackQuery}번` : "노선 정보 없음");
+  const startPoint = route?.startPoint ?? route?.start ?? route?.origin ?? "";
+  const endPoint = route?.endPoint ?? route?.end ?? route?.destination ?? "";
+  const interval =
+    route?.term ?? route?.interval ?? route?.dispatchInterval ?? "";
+  const routePath =
+    route?.route ??
+    route?.description ??
+    route?.direction ??
+    route?.stationNames ??
+    [startPoint, endPoint].filter(Boolean).join(" - ");
+
+  return {
+    id: routeId ?? `${routeName}-${startPoint}-${endPoint}`,
+    routeId,
+    name: routeName,
+    interval,
+    route: routePath,
+    startPoint,
+    endPoint,
+    directions: route?.directions ?? route?.directionList ?? [
+      {
+        id: `${routeId ?? routeName}-direction`,
+        title: `${endPoint || "도착지"} 방면`,
+        description: `${startPoint || "출발지"} 출발 · ${
+          endPoint || "도착지"
+        } 도착`,
+      },
+    ],
+    raw: route,
+  };
+}
+
+async function requestBusRouteJson(options) {
+  const fallbackMessage = options.errorMessage ?? "버스 API 요청에 실패했습니다.";
+
+  try {
+    const response = await requestJson(options);
+    const businessError = createBusinessError(response, fallbackMessage);
+
+    if (businessError) {
+      throw businessError;
+    }
+
+    return response;
+  } catch (error) {
+    if (!isAuthError(error)) {
+      throw error;
+    }
+
+    try {
+      const { accessToken } = await reissueAuthTokens({
+        signal: options.signal,
+      });
+      const response = await requestJson({
+        ...options,
+        accessToken,
+      });
+      const businessError = createBusinessError(response, fallbackMessage);
+
+      if (businessError) {
+        throw businessError;
+      }
+
+      return response;
+    } catch {
+      throw error;
+    }
+  }
+}
+
 export async function searchBusRoutes({
   keyword,
+  query,
   params,
   accessToken = getAccessToken(),
   signal,
 } = {}) {
-  return requestJson({
+  const searchQuery = query ?? keyword;
+  const response = await requestBusRouteJson({
     path: `${BUS_ROUTES_SEARCH_ENDPOINT}${toQueryString({
-      keyword,
-      query: keyword,
+      query: searchQuery,
       ...params,
     })}`,
     method: "GET",
@@ -42,6 +169,10 @@ export async function searchBusRoutes({
     signal,
     errorMessage: "버스 노선 검색에 실패했습니다.",
   });
+
+  return pickBusRouteList(response).map((route) =>
+    normalizeBusRoute(route, searchQuery),
+  );
 }
 
 export async function getBusRouteDirections({
@@ -53,7 +184,7 @@ export async function getBusRouteDirections({
     throw new Error("버스 노선 id가 필요합니다.");
   }
 
-  return requestJson({
+  return requestBusRouteJson({
     path: buildBusRouteDirectionsEndpoint(routeId),
     method: "GET",
     accessToken,
@@ -71,7 +202,7 @@ export async function getBusRouteLocations({
     throw new Error("버스 노선 id가 필요합니다.");
   }
 
-  return requestJson({
+  return requestBusRouteJson({
     path: buildBusRouteLocationsEndpoint(routeId),
     method: "GET",
     accessToken,

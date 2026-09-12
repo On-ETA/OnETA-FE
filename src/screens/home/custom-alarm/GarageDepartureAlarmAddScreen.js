@@ -82,30 +82,27 @@ const GARAGE_BUS_RESULTS = [
   },
 ];
 
+function formatBusInterval(interval) {
+  if (interval === undefined || interval === null || interval === "") {
+    return "배차 간격 정보 없음";
+  }
+
+  return interval === "-" ? "배차 간격 정보 없음" : `배차 간격 ${interval}분`;
+}
+
 export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [selectedBus, setSelectedBus] = useState(null);
   const [selectedDirectionId, setSelectedDirectionId] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [serverBusResults, setServerBusResults] = useState([]);
+  const [isSearchingBusRoutes, setIsSearchingBusRoutes] = useState(false);
+  const [busSearchError, setBusSearchError] = useState("");
   const isDirectionStep = Boolean(selectedBus);
   const trimmedSearchText = searchText.trim();
   const hasSearchText = trimmedSearchText.length > 0;
   const busResults = useMemo(
-    () => {
-      if (!hasSearchText) {
-        return [];
-      }
-
-      if (serverBusResults.length > 0) {
-        return serverBusResults;
-      }
-
-      return GARAGE_BUS_RESULTS.map((result) => ({
-        ...result,
-        name: `${trimmedSearchText}번`,
-      }));
-    },
-    [hasSearchText, serverBusResults, trimmedSearchText],
+    () => (hasSearchText ? serverBusResults : []),
+    [hasSearchText, serverBusResults],
   );
   const selectedDirection = selectedBus?.directions.find(
     (direction) => direction.id === selectedDirectionId,
@@ -132,41 +129,39 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   useEffect(() => {
     if (!hasSearchText) {
       setServerBusResults([]);
+      setBusSearchError("");
+      setIsSearchingBusRoutes(false);
       return undefined;
     }
 
     let isActive = true;
+    const controller = new AbortController();
 
     async function loadBusRoutes() {
+      setIsSearchingBusRoutes(true);
+      setBusSearchError("");
+
       try {
-        const response = await searchBusRoutes({ keyword: trimmedSearchText });
-        const routes = Array.isArray(response?.data) ? response.data : response;
+        const routes = await searchBusRoutes({
+          query: trimmedSearchText,
+          signal: controller.signal,
+        });
 
         if (!isActive || !Array.isArray(routes)) {
           return;
         }
 
-        setServerBusResults(
-          routes.map((route) => ({
-            id: route.id ?? route.routeId ?? route.busRouteId,
-            directions: route.directions ?? route.directionList ?? [],
-            interval: route.interval ?? route.dispatchInterval ?? "-",
-            name:
-              route.name ??
-              route.routeName ??
-              route.busNumber ??
-              `${trimmedSearchText}번`,
-            route:
-              route.route ??
-              route.description ??
-              route.direction ??
-              route.stationNames ??
-              "",
-          })),
-        );
-      } catch {
+        setServerBusResults(routes);
+      } catch (error) {
         if (isActive) {
           setServerBusResults([]);
+          setBusSearchError(
+            error?.message ?? "버스 노선 검색에 실패했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsSearchingBusRoutes(false);
         }
       }
     }
@@ -175,6 +170,7 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
 
     return () => {
       isActive = false;
+      controller.abort();
     };
   }, [hasSearchText, trimmedSearchText]);
 
@@ -251,13 +247,23 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
                   <View style={styles.resultTextGroup}>
                     <Text style={styles.resultTitle}>{bus.name}</Text>
                     <Text style={styles.resultDescription}>
-                      배차 간격 {bus.interval} · {bus.route}
+                      {formatBusInterval(bus.interval)}
+                      {bus.route ? ` · ${bus.route}` : ""}
                     </Text>
                   </View>
                 </Pressable>
               ))}
             </ScrollView>
-          ) : null}
+          ) : (
+            <View style={styles.resultStatus}>
+              <Text style={styles.resultStatusText}>
+                {isSearchingBusRoutes
+                  ? "버스 노선을 검색하는 중입니다."
+                  : busSearchError ||
+                    (hasSearchText ? "검색 결과가 없습니다." : "")}
+              </Text>
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -282,7 +288,8 @@ function BusDirectionStep({
             <View style={styles.selectedBusTextGroup}>
               <Text style={styles.selectedBusName}>{bus.name}</Text>
               <Text style={styles.selectedBusDescription}>
-                배차 간격 {bus.interval} · {bus.route}
+                {formatBusInterval(bus.interval)}
+                {bus.route ? ` · ${bus.route}` : ""}
               </Text>
             </View>
           </View>
@@ -570,6 +577,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
     ...typography.body03M,
     color: colors.gray07,
+  },
+  resultStatus: {
+    minHeight: 96,
+    marginTop: 24,
+    justifyContent: "center",
+  },
+  resultStatusText: {
+    ...typography.body03M,
+    color: colors.gray06,
   },
   directionStep: {
     flex: 1,

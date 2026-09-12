@@ -10,7 +10,8 @@ import LockIcon from "../../assets/images/icon_lock.svg";
 import RightIcon from "../../assets/images/R.svg";
 import packageJson from "../../package.json";
 import { logout } from "../api/auth/logout";
-import { deleteUser, getUser } from "../api/user";
+import { getMyPage } from "../api/mypage";
+import { deleteUser } from "../api/user";
 import { AppScreen, HomeTopSection } from "../components";
 import { colors, typography } from "../theme";
 
@@ -35,6 +36,15 @@ const SERVICE_ITEMS = [
   },
   { key: "terms", label: "이용약관", Icon: NoteIcon },
 ];
+
+function isAuthError(error) {
+  return (
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.code === "C007" ||
+    error?.code === "C005"
+  );
+}
 
 export function MyPageScreen({
   embedded = false,
@@ -61,7 +71,7 @@ export function MyPageScreen({
 
     async function loadMyPageInfo() {
       try {
-        const data = await getUser();
+        const data = await getMyPage();
 
         if (!isActive) {
           return;
@@ -72,8 +82,13 @@ export function MyPageScreen({
           email: data.email ?? defaultMyPageInfo.email,
           nickname: data.nickname ?? defaultMyPageInfo.nickname,
         });
-      } catch {
+      } catch (error) {
         if (isActive) {
+          if (isAuthError(error)) {
+            onLogoutComplete?.();
+            return;
+          }
+
           setMyPageInfo(defaultMyPageInfo);
         }
       }
