@@ -18,6 +18,7 @@ import {
   deleteAddress as deleteAddressRequest,
   getAddresses,
   normalizeAddress,
+  searchAddresses,
   setCurrentAddress,
   updateAddress as updateAddressRequest,
 } from "../api/addresses";
@@ -26,23 +27,6 @@ import { colors, typography } from "../theme";
 
 const MAX_ADDRESS_COUNT = 5;
 const DEFAULT_ADDRESS_DETAIL = "마포구 와우산로94 홍익대학교 제2기숙사";
-
-const searchResults = [
-  {
-    id: "hongik-dorm-1",
-    name: "홍익대학교 제2기숙사",
-    roadAddress: DEFAULT_ADDRESS_DETAIL,
-    x: 126.9256,
-    y: 37.5515,
-  },
-  {
-    id: "hongik-dorm-2",
-    name: "홍익대학교 제2기숙사",
-    roadAddress: DEFAULT_ADDRESS_DETAIL,
-    x: 126.9256,
-    y: 37.5515,
-  },
-];
 
 function isAuthError(error) {
   return (
@@ -140,8 +124,8 @@ export function AddressManagementScreen({
     try {
       const response = await createAddress({
         payload: {
-          name: alias || "주소 이름",
-          address: selectedResult.roadAddress,
+          name: alias || selectedResult.name || "주소 이름",
+          address: selectedResult.address ?? selectedResult.roadAddress,
           x: selectedResult.x,
           y: selectedResult.y,
         },
@@ -150,8 +134,8 @@ export function AddressManagementScreen({
         ? normalizeAddress(response.data)
         : {
             id: `${selectedResult.id}-${Date.now()}`,
-            name: alias || "주소 이름",
-            detail: selectedResult.roadAddress,
+            name: alias || selectedResult.name || "주소 이름",
+            detail: selectedResult.address ?? selectedResult.roadAddress,
             placeName: selectedResult.name,
             x: selectedResult.x,
             y: selectedResult.y,
@@ -302,7 +286,7 @@ export function AddressManagementScreen({
       <AddressFormScreen
         address={{
           name: selectedResult?.name,
-          detail: selectedResult?.roadAddress,
+          detail: selectedResult?.address ?? selectedResult?.roadAddress,
         }}
         buttonLabel="주소 등록"
         initialAlias=""
@@ -380,7 +364,54 @@ export function AddressManagementScreen({
 }
 
 function AddressSearchScreen({ onBackPress, onResultPress }) {
-  const [keyword, setKeyword] = useState("와우산로94");
+  const [keyword, setKeyword] = useState("홍익대");
+  const [results, setResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const trimmedKeyword = keyword.trim();
+  const hasKeyword = trimmedKeyword.length > 0;
+
+  useEffect(() => {
+    if (!hasKeyword) {
+      setResults([]);
+      setSearchError("");
+      setIsSearching(false);
+      return undefined;
+    }
+
+    let isActive = true;
+    const controller = new AbortController();
+    const debounceId = setTimeout(async () => {
+      setIsSearching(true);
+      setSearchError("");
+
+      try {
+        const nextResults = await searchAddresses({
+          keyword: trimmedKeyword,
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setResults(nextResults);
+        }
+      } catch (error) {
+        if (isActive && error?.name !== "AbortError") {
+          setResults([]);
+          setSearchError(error?.message ?? "주소 검색에 실패했습니다.");
+        }
+      } finally {
+        if (isActive) {
+          setIsSearching(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      isActive = false;
+      clearTimeout(debounceId);
+      controller.abort();
+    };
+  }, [hasKeyword, trimmedKeyword]);
 
   return (
     <View style={styles.screen}>
@@ -407,7 +438,14 @@ function AddressSearchScreen({ onBackPress, onResultPress }) {
           </Pressable>
         </View>
         <View style={styles.resultList}>
-          {searchResults.map((result) => (
+          {isSearching ? (
+            <Text style={styles.searchStatusText}>주소를 검색하는 중입니다.</Text>
+          ) : searchError ? (
+            <Text style={styles.searchStatusText}>{searchError}</Text>
+          ) : hasKeyword && results.length === 0 ? (
+            <Text style={styles.searchStatusText}>검색 결과가 없습니다.</Text>
+          ) : null}
+          {results.map((result) => (
             <Pressable
               accessibilityRole="button"
               key={result.id}
@@ -751,6 +789,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   resultList: { marginTop: 16 },
+  searchStatusText: {
+    paddingVertical: 16,
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 19.6,
+    color: colors.gray06,
+  },
   resultRow: {
     paddingVertical: 16,
     borderBottomWidth: 1,

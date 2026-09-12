@@ -3,6 +3,7 @@ import { reissueAuthTokens } from "./auth/reissue";
 import { requestJson } from "./client";
 
 const ADDRESSES_ENDPOINT = "/api/addresses";
+const ADDRESS_SEARCH_ENDPOINT = "/api/addresses/search";
 
 function buildAddressEndpoint(addressId) {
   return `${ADDRESSES_ENDPOINT}/${encodeURIComponent(addressId)}`;
@@ -10,6 +11,20 @@ function buildAddressEndpoint(addressId) {
 
 function buildCurrentAddressEndpoint(addressId) {
   return `${buildAddressEndpoint(addressId)}/current`;
+}
+
+function toQueryString(params = {}) {
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+
+  const queryString = query.toString();
+
+  return queryString ? `?${queryString}` : "";
 }
 
 function compactPayload(payload) {
@@ -76,6 +91,36 @@ export function normalizeAddress(address) {
   };
 }
 
+export function normalizeAddressSearchResult(result, index = 0) {
+  const x = result?.x ?? result?.lng ?? result?.longitude ?? result?.lon;
+  const y = result?.y ?? result?.lat ?? result?.latitude;
+  const addressText =
+    result?.address ??
+    result?.roadAddress ??
+    result?.jibunAddress ??
+    result?.detail ??
+    "";
+  const name =
+    result?.name ??
+    result?.placeName ??
+    result?.title ??
+    (addressText || "주소");
+
+  return {
+    id:
+      result?.id ??
+      result?.addressId ??
+      result?.placeId ??
+      `${name}-${addressText}-${index}`,
+    name,
+    address: addressText,
+    roadAddress: addressText,
+    x,
+    y,
+    raw: result,
+  };
+}
+
 export async function getAddresses({
   accessToken = getAccessToken(),
   signal,
@@ -91,6 +136,25 @@ export async function getAddresses({
   const addresses = Array.isArray(response?.data) ? response.data : response;
 
   return Array.isArray(addresses) ? addresses.map(normalizeAddress) : [];
+}
+
+export async function searchAddresses({
+  keyword,
+  accessToken = getAccessToken(),
+  signal,
+} = {}) {
+  const response = await requestAddressJson({
+    path: `${ADDRESS_SEARCH_ENDPOINT}${toQueryString({ keyword })}`,
+    method: "GET",
+    accessToken,
+    signal,
+    errorMessage: "주소 검색에 실패했습니다.",
+  });
+  const results = Array.isArray(response?.data) ? response.data : response;
+
+  return Array.isArray(results)
+    ? results.map(normalizeAddressSearchResult)
+    : [];
 }
 
 export async function createAddress({
