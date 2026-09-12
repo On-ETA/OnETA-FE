@@ -1,9 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 import BackIcon from "../../assets/images/L.svg";
 import SettingIcon from "../../assets/images/setting.svg";
 import { getArrivalNotifications } from "../api/notifications/arrival";
+import {
+  DEFAULT_TEST_FCM_BODY,
+  DEFAULT_TEST_FCM_TITLE,
+  sendTestFcm,
+} from "../api/test/fcm";
 import { AppScreen, Header } from "../components";
 import { colors, typography } from "../theme";
 
@@ -40,6 +52,9 @@ export function NotificationsScreen({
   onSettingsPress,
 }) {
   const [serverNotifications, setServerNotifications] = useState([]);
+  const [testTitle, setTestTitle] = useState(DEFAULT_TEST_FCM_TITLE);
+  const [testBody, setTestBody] = useState(DEFAULT_TEST_FCM_BODY);
+  const [isSendingTestFcm, setIsSendingTestFcm] = useState(false);
 
   useEffect(() => {
     if (notifications) {
@@ -71,6 +86,29 @@ export function NotificationsScreen({
 
   const notificationItems = notifications ?? serverNotifications;
 
+  const handleSendTestFcm = async () => {
+    if (isSendingTestFcm) {
+      return;
+    }
+
+    setIsSendingTestFcm(true);
+
+    try {
+      await sendTestFcm({
+        title: testTitle,
+        body: testBody,
+      });
+      Alert.alert("테스트 알림", "테스트 푸시를 발송했습니다.");
+    } catch (error) {
+      Alert.alert(
+        "테스트 알림 실패",
+        error?.message ?? "테스트 푸시 발송에 실패했습니다.",
+      );
+    } finally {
+      setIsSendingTestFcm(false);
+    }
+  };
+
   return (
     <AppScreen>
       <View style={styles.container}>
@@ -97,6 +135,38 @@ export function NotificationsScreen({
         />
 
         <View style={styles.list}>
+          <View style={styles.testFcmPanel}>
+            <TextInput
+              onChangeText={setTestTitle}
+              placeholder="테스트 알림"
+              placeholderTextColor={colors.gray05}
+              returnKeyType="next"
+              style={styles.testInput}
+              value={testTitle}
+            />
+            <TextInput
+              multiline
+              onChangeText={setTestBody}
+              placeholder="이것은 OnETA 테스트 푸시입니다!"
+              placeholderTextColor={colors.gray05}
+              style={[styles.testInput, styles.testBodyInput]}
+              value={testBody}
+            />
+            <Pressable
+              accessibilityRole="button"
+              disabled={isSendingTestFcm}
+              onPress={handleSendTestFcm}
+              style={[
+                styles.testSendButton,
+                isSendingTestFcm && styles.testSendButtonDisabled,
+              ]}
+            >
+              <Text style={styles.testSendButtonText}>
+                {isSendingTestFcm ? "발송 중" : "테스트 알림 보내기"}
+              </Text>
+            </Pressable>
+          </View>
+
           {notificationItems.map((item) => {
             const isDanger = item.type === "danger";
 
@@ -179,6 +249,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     gap: 14,
+  },
+  testFcmPanel: {
+    alignSelf: "stretch",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gray03,
+    backgroundColor: colors.white,
+    padding: 14,
+    gap: 10,
+  },
+  testInput: {
+    minHeight: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gray03,
+    backgroundColor: colors.gray01,
+    paddingHorizontal: 12,
+    ...typography.body03M,
+    color: colors.gray09,
+  },
+  testBodyInput: {
+    minHeight: 74,
+    paddingTop: 12,
+    textAlignVertical: "top",
+  },
+  testSendButton: {
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.main,
+  },
+  testSendButtonDisabled: {
+    opacity: 0.6,
+  },
+  testSendButtonText: {
+    ...typography.body03Sb,
+    color: colors.white,
   },
   card: {
     width: "100%",
