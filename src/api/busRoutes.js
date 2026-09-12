@@ -113,6 +113,41 @@ export function normalizeBusRoute(route, fallbackQuery = "") {
   };
 }
 
+export function normalizeBusRouteDirections(direction) {
+  const data = direction?.data ?? direction ?? {};
+  const routeId = data.routeId;
+  const routeName = data.routeNm ?? data.routeName ?? data.name ?? "";
+  const interval =
+    data.term ?? data.interval ?? data.dispatchInterval ?? "";
+
+  return {
+    id: routeId ?? routeName,
+    routeId,
+    name: routeName,
+    interval,
+    route: [data.depotName, data.turnaroundName].filter(Boolean).join(" - "),
+    depotName: data.depotName ?? "",
+    depotEnum: data.depotEnum ?? "",
+    turnaroundName: data.turnaroundName ?? "",
+    turnaroundEnum: data.turnaroundEnum ?? "",
+    directions: [
+      {
+        id: data.depotEnum ?? "DEPOT",
+        type: data.depotEnum ?? "DEPOT",
+        title: `${data.depotName ?? "차고지"} 방면`,
+        description: "차고지에서 출발하는 방향입니다.",
+      },
+      {
+        id: data.turnaroundEnum ?? "TURNAROUND",
+        type: data.turnaroundEnum ?? "TURNAROUND",
+        title: `${data.turnaroundName ?? "회차지"} 방면`,
+        description: "회차지에서 돌아오는 방향입니다.",
+      },
+    ],
+    raw: data,
+  };
+}
+
 async function requestBusRouteJson(options) {
   const fallbackMessage = options.errorMessage ?? "버스 API 요청에 실패했습니다.";
 
@@ -184,13 +219,15 @@ export async function getBusRouteDirections({
     throw new Error("버스 노선 id가 필요합니다.");
   }
 
-  return requestBusRouteJson({
+  const response = await requestBusRouteJson({
     path: buildBusRouteDirectionsEndpoint(routeId),
     method: "GET",
     accessToken,
     signal,
     errorMessage: "버스 노선 방향 정보를 불러오지 못했습니다.",
   });
+
+  return normalizeBusRouteDirections(response);
 }
 
 export async function getBusRouteLocations({

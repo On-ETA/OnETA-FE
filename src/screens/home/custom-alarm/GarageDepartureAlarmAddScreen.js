@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -10,7 +11,7 @@ import {
 } from "react-native";
 
 import { Header } from "../../../components";
-import { searchBusRoutes } from "../../../api/busRoutes";
+import { getBusRouteDirections, searchBusRoutes } from "../../../api/busRoutes";
 import { colors, typography } from "../../../theme";
 
 const GARAGE_BUS_RESULTS = [
@@ -97,6 +98,7 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [serverBusResults, setServerBusResults] = useState([]);
   const [isSearchingBusRoutes, setIsSearchingBusRoutes] = useState(false);
   const [busSearchError, setBusSearchError] = useState("");
+  const [loadingDirectionRouteId, setLoadingDirectionRouteId] = useState(null);
   const isDirectionStep = Boolean(selectedBus);
   const trimmedSearchText = searchText.trim();
   const hasSearchText = trimmedSearchText.length > 0;
@@ -123,6 +125,38 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
     // body: { busId: selectedBus.id, directionId: selectedDirection.id }
     if (selectedBus && selectedDirection) {
       onBackPress?.();
+    }
+  };
+
+  const handleBusPress = async (bus) => {
+    const routeId = bus.routeId ?? bus.id;
+
+    if (!routeId || loadingDirectionRouteId === routeId) {
+      return;
+    }
+
+    setLoadingDirectionRouteId(routeId);
+
+    try {
+      const busWithDirections = await getBusRouteDirections({ routeId });
+
+      setSelectedBus({
+        ...bus,
+        ...busWithDirections,
+        id: bus.id,
+        routeId,
+        name: busWithDirections.name || bus.name,
+        interval: busWithDirections.interval || bus.interval,
+        route: busWithDirections.route || bus.route,
+      });
+      setSelectedDirectionId(null);
+    } catch (error) {
+      Alert.alert(
+        "버스 방향 조회 실패",
+        error?.message ?? "버스 방향 정보를 불러오지 못했습니다.",
+      );
+    } finally {
+      setLoadingDirectionRouteId(null);
     }
   };
 
@@ -233,14 +267,14 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
               {busResults.map((bus, index) => (
                 <Pressable
                   accessibilityRole="button"
+                  disabled={loadingDirectionRouteId === (bus.routeId ?? bus.id)}
                   key={bus.id}
-                  onPress={() => {
-                    setSelectedBus(bus);
-                    setSelectedDirectionId(null);
-                  }}
+                  onPress={() => handleBusPress(bus)}
                   style={[
                     styles.resultItem,
                     index < busResults.length - 1 && styles.resultItemDivider,
+                    loadingDirectionRouteId === (bus.routeId ?? bus.id) &&
+                      styles.resultItemDisabled,
                   ]}
                 >
                   <BusIcon />
@@ -250,6 +284,11 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
                       {formatBusInterval(bus.interval)}
                       {bus.route ? ` · ${bus.route}` : ""}
                     </Text>
+                    {loadingDirectionRouteId === (bus.routeId ?? bus.id) ? (
+                      <Text style={styles.resultLoadingText}>
+                        방향 정보를 불러오는 중입니다.
+                      </Text>
+                    ) : null}
                   </View>
                 </Pressable>
               ))}
@@ -512,6 +551,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.gray03,
   },
+  resultItemDisabled: {
+    opacity: 0.6,
+  },
   busIconCircle: {
     width: 32,
     height: 32,
@@ -577,6 +619,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
     ...typography.body03M,
     color: colors.gray07,
+  },
+  resultLoadingText: {
+    marginTop: 4,
+    ...typography.caption01M,
+    color: colors.gray06,
   },
   resultStatus: {
     minHeight: 96,
