@@ -89,11 +89,16 @@ function pickReminderOffsets(reminders) {
     .sort((a, b) => a - b);
 }
 
-export function ScheduleAlarmAddScreen({ onBackPress }) {
+export function ScheduleAlarmAddScreen({
+  initialStep = "form",
+  mapTitle = "알림 추가",
+  onBackPress,
+  onRouteConfigured,
+}) {
   const [routeName, setRouteName] = useState("");
   const [arrivalTime, setArrivalTime] = useState(DEFAULT_TIME);
   const [isTimePickerVisible, setIsTimePickerVisible] = useState(false);
-  const [step, setStep] = useState("form");
+  const [step, setStep] = useState(initialStep);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [routePlaces, setRoutePlaces] = useState({
     origin: "마포구 와우산로 94",
@@ -121,6 +126,11 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
     }
 
     if (step === "route") {
+      if (initialStep === "route") {
+        onBackPress?.();
+        return;
+      }
+
       setStep("form");
       return;
     }
@@ -131,6 +141,7 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
   if (step === "route") {
     return (
       <ScheduleRouteMapStep
+        title={mapTitle}
         onBackPress={handleBackPress}
         onConfirm={(places) => {
           setRoutePlaces(places);
@@ -146,7 +157,12 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
         initialDestination={routePlaces.destination}
         initialOrigin={routePlaces.origin}
         onBackPress={handleBackPress}
-        onRouteSelect={(route) => {
+        onRouteSelect={(route, places) => {
+          if (onRouteConfigured) {
+            onRouteConfigured(route, places);
+            return;
+          }
+
           setSelectedRoute(route);
           setStep("alarmFinal");
         }}
@@ -232,7 +248,7 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
   );
 }
 
-function ScheduleRouteMapStep({ onBackPress, onConfirm }) {
+function ScheduleRouteMapStep({ onBackPress, onConfirm, title = "알림 추가" }) {
   const SHEET_EXPANDED_OFFSET = -120;
   const SHEET_COLLAPSED_OFFSET = 156;
   const [placeKeyword, setPlaceKeyword] = useState("");
@@ -287,7 +303,7 @@ function ScheduleRouteMapStep({ onBackPress, onConfirm }) {
         <Header
           headerStyle={styles.mapHeader}
           onBackPress={onBackPress}
-          title="알림 추가"
+          title={title}
           titleStyle={styles.headerTitle}
           type="back"
         />
@@ -515,7 +531,7 @@ function ScheduleRouteResultStep({
 
             <Pressable
               accessibilityRole="button"
-              onPress={() => onRouteSelect(selectedRoute)}
+              onPress={() => onRouteSelect(selectedRoute, { origin, destination })}
               style={styles.routeAlarmButton}
             >
               <Text style={styles.routeAlarmButtonText}>이 경로로 알림 설정</Text>

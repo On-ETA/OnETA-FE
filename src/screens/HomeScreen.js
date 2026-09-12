@@ -19,6 +19,65 @@ import { colors, layout } from "../theme";
 
 const homeBackground = colors.gray01;
 
+function getPrimaryTransitSegment(route) {
+  return route?.segments?.find((segment) => segment.transitType !== "WALK");
+}
+
+function getWalkSegments(route) {
+  return route?.segments?.filter((segment) => segment.transitType === "WALK") ?? [];
+}
+
+function getSegmentStopName(segment, edge) {
+  if (!segment) {
+    return "";
+  }
+
+  if (edge === "start") {
+    return segment.startStation || segment.stations?.[0]?.name || "";
+  }
+
+  return (
+    segment.endStation ||
+    segment.stations?.[segment.stations.length - 1]?.name ||
+    ""
+  );
+}
+
+function createFirstLastRouteSummary(route, places = {}) {
+  const primarySegment = getPrimaryTransitSegment(route);
+  const walkSegments = getWalkSegments(route);
+  const firstWalk = walkSegments[0];
+  const lastWalk = walkSegments[walkSegments.length - 1];
+  const totalDuration =
+    route?.realTimeDurationMinutes ?? route?.totalDurationMinutes ?? 0;
+
+  return {
+    remainingMinutes: 12,
+    departureTime: "23:42",
+    routeNumber: primarySegment?.transitName || "대중교통",
+    routeDirection: primarySegment?.endStation
+      ? `${primarySegment.endStation} 방면`
+      : `${places.destination ?? route?.destinationAddress ?? "도착지"} 방면`,
+    walkMinutes: firstWalk?.durationMinutes ?? 5,
+    busMinutes: primarySegment?.durationMinutes ?? (totalDuration || 4),
+    afterWalkMinutes: lastWalk?.durationMinutes ?? 8,
+    boardingStopName:
+      getSegmentStopName(primarySegment, "start") ||
+      places.origin ||
+      route?.originAddress ||
+      "출발정류장",
+    boardingTime: "23:47",
+    arrivalStopName:
+      getSegmentStopName(primarySegment, "end") ||
+      places.destination ||
+      route?.destinationAddress ||
+      "도착정류장",
+    arrivalTime: "23:51",
+    preDepartureAlarmMinutes: 10,
+    route,
+  };
+}
+
 function getCurrentAddressLabel(addresses) {
   const currentAddress = addresses.find((address) => address.isCurrent);
   const displayAddress = currentAddress ?? addresses[0];
@@ -47,10 +106,13 @@ export function HomeScreen({
   const [isRouteDetailVisible, setIsRouteDetailVisible] = useState(false);
   const [isScheduleAlarmAddVisible, setIsScheduleAlarmAddVisible] =
     useState(false);
+  const [scheduleAlarmInitialStep, setScheduleAlarmInitialStep] =
+    useState("form");
   const [isGarageDepartureAddVisible, setIsGarageDepartureAddVisible] =
     useState(false);
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
   const [currentAddressLabel, setCurrentAddressLabel] = useState("");
+  const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(null);
 
   useEffect(() => {
     let isActive = true;
@@ -84,6 +146,7 @@ export function HomeScreen({
     setIsAddressManagerVisible(false);
     setIsRouteDetailVisible(false);
     setIsScheduleAlarmAddVisible(false);
+    setScheduleAlarmInitialStep("form");
     setIsGarageDepartureAddVisible(false);
     setEditingCustomAlarm(null);
 
@@ -128,7 +191,27 @@ export function HomeScreen({
               />
             ) : isScheduleAlarmAddVisible ? (
               <ScheduleAlarmAddScreen
-                onBackPress={() => setIsScheduleAlarmAddVisible(false)}
+                initialStep={scheduleAlarmInitialStep}
+                mapTitle={
+                  scheduleAlarmInitialStep === "route"
+                    ? "경로 재설정"
+                    : "알림 추가"
+                }
+                onBackPress={() => {
+                  setIsScheduleAlarmAddVisible(false);
+                  setScheduleAlarmInitialStep("form");
+                }}
+                onRouteConfigured={
+                  scheduleAlarmInitialStep === "route"
+                    ? (route, places) => {
+                        setFirstLastRouteSummary(
+                          createFirstLastRouteSummary(route, places),
+                        );
+                        setIsScheduleAlarmAddVisible(false);
+                        setScheduleAlarmInitialStep("form");
+                      }
+                    : undefined
+                }
               />
             ) : editingCustomAlarm?.type === "schedule" ? (
               <ScheduleAlarmEditScreen
@@ -166,9 +249,15 @@ export function HomeScreen({
                 onHomeTabPress={setActiveHomeTab}
                 onMyPagePress={() => handleTabPress("myPage")}
                 onRouteDetailPress={() => setIsRouteDetailVisible(true)}
-                onScheduleAlarmAddPress={() =>
-                  setIsScheduleAlarmAddVisible(true)
-                }
+                firstLastRouteSummary={firstLastRouteSummary}
+                onFirstLastRouteSetupPress={() => {
+                  setScheduleAlarmInitialStep("route");
+                  setIsScheduleAlarmAddVisible(true);
+                }}
+                onScheduleAlarmAddPress={() => {
+                  setScheduleAlarmInitialStep("form");
+                  setIsScheduleAlarmAddVisible(true);
+                }}
                 onGarageAlarmEditPress={(alarm) =>
                   setEditingCustomAlarm({ type: "garage", alarm })
                 }
@@ -194,6 +283,8 @@ function HomeDashboard({
   onGarageAlarmEditPress,
   onHomeTabPress,
   onMyPagePress,
+  onFirstLastRouteSetupPress,
+  firstLastRouteSummary,
   onRouteDetailPress,
   onScheduleAlarmAddPress,
   onScheduleAlarmEditPress,
@@ -218,7 +309,11 @@ function HomeDashboard({
           onScheduleAlarmEditPress={onScheduleAlarmEditPress}
         />
       ) : (
-        <FirstLastRouteScreen onRouteDetailPress={onRouteDetailPress} />
+        <FirstLastRouteScreen
+          onRouteDetailPress={onRouteDetailPress}
+          onRouteSetupPress={onFirstLastRouteSetupPress}
+          routeSummary={firstLastRouteSummary}
+        />
       )}
     </>
   );

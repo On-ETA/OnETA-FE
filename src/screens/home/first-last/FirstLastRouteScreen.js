@@ -19,39 +19,11 @@ const PRE_DEPARTURE_ALARMS = [
   { key: "60", label: "1시간 전" },
 ];
 
-// TODO: API 연동 시 아래 더미 데이터를 교체하세요.
-// GET /home/first-last-route
-// - routeType: "first" | "last"
-// - remainingMinutes: number
-// - departureTime: string
-// - routeNumber: string
-// - routeDirection: string
-// - walkMinutes: number
-// - busMinutes: number
-// - afterWalkMinutes: number
-// - boardingStopName: string
-// - boardingTime: string
-// - arrivalStopName: string
-// - arrivalTime: string
-// - preDepartureAlarmMinutes: number
-const routeSummary = null;
-
-// const routeSummary = {
-//   remainingMinutes: 12,
-//   departureTime: "23:42",
-//   routeNumber: "147",
-//   routeDirection: "강남역 방면",
-//   walkMinutes: 5,
-//   busMinutes: 4,
-//   afterWalkMinutes: 8,
-//   boardingStopName: "홍대정문",
-//   boardingTime: "23:47",
-//   arrivalStopName: "도착정류장",
-//   arrivalTime: "23:51",
-//   preDepartureAlarmMinutes: 10,
-// };
-
-export function FirstLastRouteScreen({ onRouteDetailPress }) {
+export function FirstLastRouteScreen({
+  onRouteDetailPress,
+  onRouteSetupPress,
+  routeSummary,
+}) {
   const [isLastRouteFirst, setIsLastRouteFirst] = useState(false);
   const [isAlarmModalVisible, setIsAlarmModalVisible] = useState(false);
   const [alarmSettings, setAlarmSettings] = useState({
@@ -108,7 +80,11 @@ export function FirstLastRouteScreen({ onRouteDetailPress }) {
                 막차
               </Text>
             </View>
-            <Pressable accessibilityRole="button" style={styles.resetButton}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onRouteSetupPress}
+              style={styles.resetButton}
+            >
               <LoadIcon height={17} width={17} />
               <Text style={styles.resetText}>경로 재설정</Text>
             </Pressable>
@@ -203,7 +179,7 @@ export function FirstLastRouteScreen({ onRouteDetailPress }) {
 
         <Pressable
           accessibilityRole="button"
-          onPress={hasConfiguredRoute ? onRouteDetailPress : undefined}
+          onPress={hasConfiguredRoute ? onRouteDetailPress : onRouteSetupPress}
           style={styles.routeAction}
         >
           <Text style={styles.routeActionText}>
