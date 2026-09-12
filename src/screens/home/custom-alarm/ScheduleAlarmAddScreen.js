@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Modal,
@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { colors, typography } from "../../../theme";
 
@@ -19,6 +20,36 @@ const DEFAULT_TIME = {
   hour: "11",
   minute: "30",
 };
+
+const DEFAULT_ORIGIN_POINT = {
+  x: 126.9256,
+  y: 37.5515,
+};
+
+const DEFAULT_DESTINATION_POINT = {
+  x: 126.9368,
+  y: 37.5552,
+};
+
+function getPrimaryTransitSegment(route) {
+  return route?.segments.find((segment) => segment.transitType !== "WALK");
+}
+
+function getSegmentStopName(segment, edge) {
+  if (!segment) {
+    return "";
+  }
+
+  if (edge === "start") {
+    return segment.startStation || segment.stations[0]?.name || "";
+  }
+
+  return (
+    segment.endStation ||
+    segment.stations[segment.stations.length - 1]?.name ||
+    ""
+  );
+}
 
 export function ScheduleAlarmAddScreen({ onBackPress }) {
   const [routeName, setRouteName] = useState("");
@@ -278,6 +309,58 @@ function ScheduleRouteResultStep({
 }) {
   const [origin, setOrigin] = useState(initialOrigin);
   const [destination, setDestination] = useState(initialDestination);
+  const [routes, setRoutes] = useState([]);
+  const [isLoadingRoutes, setIsLoadingRoutes] = useState(false);
+  const [routeError, setRouteError] = useState("");
+  const selectedRoute = routes[0];
+  const primarySegment = useMemo(
+    () => getPrimaryTransitSegment(selectedRoute),
+    [selectedRoute],
+  );
+
+  useEffect(() => {
+    let isActive = true;
+    const controller = new AbortController();
+
+    async function loadTransitRoutes() {
+      setIsLoadingRoutes(true);
+      setRouteError("");
+
+      try {
+        const nextRoutes = await searchTransitRoutes({
+          originX: DEFAULT_ORIGIN_POINT.x,
+          originY: DEFAULT_ORIGIN_POINT.y,
+          originAddress: origin,
+          destX: DEFAULT_DESTINATION_POINT.x,
+          destY: DEFAULT_DESTINATION_POINT.y,
+          destAddress: destination,
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setRoutes(nextRoutes);
+        }
+      } catch (error) {
+        if (isActive) {
+          setRoutes([]);
+          setRouteError(
+            error?.message ?? "대중교통 경로 검색에 실패했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingRoutes(false);
+        }
+      }
+    }
+
+    loadTransitRoutes();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [destination, origin]);
 
   return (
     <View style={styles.resultScreen}>
@@ -323,43 +406,77 @@ function ScheduleRouteResultStep({
       </View>
 
       <View style={styles.routeResultContent}>
-        <View style={styles.optionBadges}>
-          <View style={styles.optionBadge}>
-            <Text style={styles.optionBadgeText}>최적</Text>
+        {isLoadingRoutes ? (
+          <View style={styles.routeStatusBox}>
+            <Text style={styles.routeStatusText}>경로를 검색하는 중입니다.</Text>
           </View>
-          <View style={styles.optionBadge}>
-            <Text style={styles.optionBadgeText}>최소 시간</Text>
+        ) : routeError || !selectedRoute ? (
+          <View style={styles.routeStatusBox}>
+            <Text style={styles.routeStatusText}>
+              {routeError || "검색된 경로가 없습니다."}
+            </Text>
           </View>
-        </View>
+        ) : (
+          <>
+            <View style={styles.optionBadges}>
+              <View style={styles.optionBadge}>
+                <Text style={styles.optionBadgeText}>최적</Text>
+              </View>
+              <View style={styles.optionBadge}>
+                <Text style={styles.optionBadgeText}>
+                  환승 {selectedRoute.transferCount}회
+                </Text>
+              </View>
+            </View>
 
-        <View style={styles.totalTimeRow}>
-          <Text style={styles.totalTimeNumber}>21</Text>
-          <Text style={styles.totalTimeUnit}>분</Text>
-        </View>
+            <View style={styles.totalTimeRow}>
+              <Text style={styles.totalTimeNumber}>
+                {selectedRoute.realTimeDurationMinutes ??
+                  selectedRoute.totalDurationMinutes}
+              </Text>
+              <Text style={styles.totalTimeUnit}>분</Text>
+            </View>
 
-        <RouteTimeline />
-        <View style={styles.routeDivider} />
+            <RouteTimeline segments={selectedRoute.segments} />
+            <View style={styles.routeDivider} />
 
-        <View style={styles.routeBusInfo}>
-          <View style={styles.routeBusBadge}>
-            <BusIconPlain />
-          </View>
-          <Text style={styles.routeBusNumber}>147</Text>
-          <Text style={styles.routeBusDirection}>· 강남역 방면</Text>
-        </View>
+            <View style={styles.routeBusInfo}>
+              <View style={styles.routeBusBadge}>
+                <BusIconPlain />
+              </View>
+              <Text style={styles.routeBusNumber}>
+                {primarySegment?.transitName || "대중교통"}
+              </Text>
+              <Text style={styles.routeBusDirection}>
+                {primarySegment?.endStation
+                  ? ` · ${primarySegment.endStation} 방면`
+                  : ""}
+              </Text>
+            </View>
 
-        <View style={styles.routeStops}>
-          <StopRow active label="승차" name="홍대정문" />
-          <StopRow label="하차" name="도착정류장" />
-        </View>
+            <View style={styles.routeStops}>
+              <StopRow
+                active
+                label="승차"
+                name={getSegmentStopName(primarySegment, "start") || origin}
+              />
+              <StopRow
+                label="하차"
+                name={
+                  getSegmentStopName(primarySegment, "end") || destination
+                }
+              />
+            </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={onRouteSelect}
-          style={styles.routeAlarmButton}
-        >
-          <Text style={styles.routeAlarmButtonText}>이 경로로 알림 설정</Text>
-        </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onRouteSelect}
+              style={styles.routeAlarmButton}
+            >
+              <Text style={styles.routeAlarmButtonText}>이 경로로 알림 설정</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </View>
   );
@@ -570,30 +687,55 @@ function ReminderModal({ onClose, onToggle, reminders, visible }) {
   );
 }
 
-function RouteTimeline() {
+function RouteTimeline({ segments = [] }) {
+  const visibleSegments = segments.length > 0
+    ? segments
+    : [
+        { id: "walk-before", transitType: "WALK", durationMinutes: 5 },
+        { id: "transit", transitType: "BUS", durationMinutes: 4 },
+        { id: "walk-after", transitType: "WALK", durationMinutes: 8 },
+      ];
+  const totalDuration = visibleSegments.reduce(
+    (sum, segment) => sum + Math.max(segment.durationMinutes ?? 0, 1),
+    0,
+  );
+
   return (
     <View style={styles.routeTimeline}>
-      <View style={[styles.routeTimelineSegment, styles.routeWalkSegment]}>
-        <View style={styles.routeWalkIcon}>
-          <WalkIcon />
-        </View>
-        <View style={styles.routeTimelineTextWrap}>
-          <Text style={styles.routeTimelineText}>5분</Text>
-        </View>
-      </View>
-      <View style={[styles.routeTimelineSegment, styles.routeBusSegment]}>
-        <View style={styles.routeBusIcon}>
-          <BusIconPlain />
-        </View>
-        <View style={styles.routeTimelineTextWrap}>
-          <Text style={styles.routeTimelineTextOn}>4분</Text>
-        </View>
-      </View>
-      <View style={[styles.routeTimelineSegment, styles.routeAfterWalkSegment]}>
-        <View style={styles.routeTimelineTextWrap}>
-          <Text style={styles.routeTimelineText}>8분</Text>
-        </View>
-      </View>
+      {visibleSegments.map((segment, index) => {
+        const isTransit = segment.transitType !== "WALK";
+        const duration = Math.max(segment.durationMinutes ?? 0, 1);
+
+        return (
+          <View
+            key={segment.id ?? `${segment.transitType}-${index}`}
+            style={[
+              styles.routeTimelineSegment,
+              isTransit ? styles.routeBusSegment : styles.routeWalkSegment,
+              { flex: duration / totalDuration },
+            ]}
+          >
+            {index === 0 || isTransit ? (
+              <View
+                style={isTransit ? styles.routeBusIcon : styles.routeWalkIcon}
+              >
+                {isTransit ? <BusIconPlain /> : <WalkIcon />}
+              </View>
+            ) : null}
+            <View style={styles.routeTimelineTextWrap}>
+              <Text
+                style={
+                  isTransit
+                    ? styles.routeTimelineTextOn
+                    : styles.routeTimelineText
+                }
+              >
+                {duration}분
+              </Text>
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -1202,9 +1344,23 @@ const styles = StyleSheet.create({
     color: colors.gray07,
   },
   routeResultContent: {
+    flex: 1,
     paddingTop: 18,
     paddingHorizontal: 20,
     backgroundColor: colors.white,
+  },
+  routeStatusBox: {
+    minHeight: 180,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  routeStatusText: {
+    textAlign: "center",
+    fontFamily: "SUIT",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 21,
+    color: colors.gray06,
   },
   optionBadges: {
     flexDirection: "row",
