@@ -28,6 +28,7 @@ const ACCOUNT_ITEMS = [
 
 const SERVICE_ITEMS = [
   { key: "notice", label: "공지사항", Icon: MessageIcon },
+  { key: "faq", label: "FAQ", Icon: NoteIcon },
   { key: "contact", label: "문의하기", Icon: MailIcon },
   {
     key: "privacy",
@@ -54,6 +55,7 @@ export function MyPageScreen({
   notificationCount = 0,
   onOpenNotifications,
   onOpenNotices,
+  onOpenFaqs,
   onOpenContact,
   onOpenPassword,
   onOpenPrivacy,
@@ -170,6 +172,10 @@ export function MyPageScreen({
 
     if (menuKey === "notice") {
       onOpenNotices?.();
+    }
+
+    if (menuKey === "faq") {
+      onOpenFaqs?.();
     }
 
     if (menuKey === "contact") {

@@ -33,6 +33,7 @@ export function HomeScreen({
   onOpenPassword,
   onOpenNotifications,
   onOpenNotices,
+  onOpenFaqs,
   onOpenContact,
   onOpenPrivacy,
   onOpenTerms,
@@ -106,6 +107,7 @@ export function HomeScreen({
               onOpenNotifications={onOpenNotifications}
               onOpenPassword={onOpenPassword}
               onOpenContact={onOpenContact}
+              onOpenFaqs={onOpenFaqs}
               onOpenNotices={onOpenNotices}
               onOpenPrivacy={onOpenPrivacy}
               onOpenTerms={onOpenTerms}
