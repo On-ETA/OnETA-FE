@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 
+import { getAddresses } from "../api/addresses";
 import { HomeTopSection } from "../components";
 import { AddressManagementScreen } from "./AddressManagementScreen";
 import { CustomAlarmScreen } from "./home/custom-alarm/CustomAlarmScreen";
@@ -17,6 +18,13 @@ import { MyPageScreen } from "./MyPageScreen";
 import { colors, layout } from "../theme";
 
 const homeBackground = colors.gray01;
+
+function getCurrentAddressLabel(addresses) {
+  const currentAddress = addresses.find((address) => address.isCurrent);
+  const displayAddress = currentAddress ?? addresses[0];
+
+  return displayAddress?.name ?? "";
+}
 
 export function HomeScreen({
   notificationCount = 0,
@@ -42,6 +50,34 @@ export function HomeScreen({
     useState(false);
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
   const [currentAddressLabel, setCurrentAddressLabel] = useState("");
+
+  useEffect(() => {
+    let isActive = true;
+    const controller = new AbortController();
+
+    async function loadCurrentAddressLabel() {
+      try {
+        const addresses = await getAddresses({
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setCurrentAddressLabel(getCurrentAddressLabel(addresses));
+        }
+      } catch {
+        if (isActive) {
+          setCurrentAddressLabel("");
+        }
+      }
+    }
+
+    loadCurrentAddressLabel();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, []);
 
   const handleTabPress = (tabKey) => {
     setIsAddressManagerVisible(false);
