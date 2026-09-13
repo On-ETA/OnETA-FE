@@ -1,10 +1,10 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { AppScreen, PrimaryButton } from "../components";
 import { colors, layout, typography } from "../theme";
 
-export function SignupCompleteScreen({ onHomePress, onLoginPress }) {
+export function SignupCompleteScreen({ onLoginPress }) {
   return (
     <AppScreen>
       <View style={styles.completeBox}>
@@ -30,10 +30,6 @@ export function SignupCompleteScreen({ onHomePress, onLoginPress }) {
             >
               로그인하기
             </PrimaryButton>
-
-            <Pressable onPress={onHomePress} style={styles.homeButton}>
-              <Text style={styles.homeButtonText}>홈으로</Text>
-            </Pressable>
           </View>
         </View>
       </View>
@@ -108,26 +104,6 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     letterSpacing: -0.16,
     color: colors.white,
-    textAlign: "center",
-  },
-  homeButton: {
-    height: 54,
-    padding: 10,
-    alignSelf: "stretch",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    borderRadius: 8,
-    backgroundColor: colors.gray04,
-  },
-  homeButtonText: {
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontStyle: "normal",
-    fontWeight: "600",
-    lineHeight: 22.4,
-    letterSpacing: -0.16,
-    color: colors.gray07,
     textAlign: "center",
   },
 });

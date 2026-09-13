@@ -11,7 +11,11 @@ import {
   ScheduleAlarmEditScreen,
 } from "./home/custom-alarm/CustomAlarmEditScreen";
 import { GarageDepartureAlarmAddScreen } from "./home/custom-alarm/GarageDepartureAlarmAddScreen";
-import { ScheduleAlarmAddScreen } from "./home/custom-alarm/ScheduleAlarmAddScreen";
+import {
+  ScheduleAlarmAddScreen,
+  ScheduleRouteMapStep,
+  ScheduleRouteResultStep,
+} from "./home/custom-alarm/ScheduleAlarmAddScreen";
 import { FirstLastRouteDetailScreen } from "./home/first-last/FirstLastRouteDetailScreen";
 import { FirstLastRouteScreen } from "./home/first-last/FirstLastRouteScreen";
 import { MyPageScreen } from "./MyPageScreen";
@@ -201,6 +205,11 @@ export function HomeScreen({
   const [activeHomeTab, setActiveHomeTab] = useState("firstLast");
   const [isAddressManagerVisible, setIsAddressManagerVisible] = useState(false);
   const [isRouteDetailVisible, setIsRouteDetailVisible] = useState(false);
+  const [firstLastRouteSetupStep, setFirstLastRouteSetupStep] = useState(null);
+  const [firstLastRoutePlaces, setFirstLastRoutePlaces] = useState({
+    origin: "마포구 와우산로 94",
+    destination: "우리집",
+  });
   const [isScheduleAlarmAddVisible, setIsScheduleAlarmAddVisible] =
     useState(false);
   const [scheduleAlarmInitialStep, setScheduleAlarmInitialStep] =
@@ -242,6 +251,7 @@ export function HomeScreen({
   const handleTabPress = (tabKey) => {
     setIsAddressManagerVisible(false);
     setIsRouteDetailVisible(false);
+    setFirstLastRouteSetupStep(null);
     setIsScheduleAlarmAddVisible(false);
     setScheduleAlarmInitialStep("form");
     setIsGarageDepartureAddVisible(false);
@@ -310,6 +320,23 @@ export function HomeScreen({
                     : undefined
                 }
               />
+            ) : firstLastRouteSetupStep === "map" ? (
+              <ScheduleRouteMapStep
+                headerTitle="경로 재설정"
+                onBackPress={() => setFirstLastRouteSetupStep(null)}
+                onConfirm={(places) => {
+                  setFirstLastRoutePlaces(places);
+                  setFirstLastRouteSetupStep("result");
+                }}
+              />
+            ) : firstLastRouteSetupStep === "result" ? (
+              <ScheduleRouteResultStep
+                actionLabel="이 경로로 설정"
+                initialDestination={firstLastRoutePlaces.destination}
+                initialOrigin={firstLastRoutePlaces.origin}
+                onBackPress={() => setFirstLastRouteSetupStep("map")}
+                onRouteSelect={() => setFirstLastRouteSetupStep(null)}
+              />
             ) : editingCustomAlarm?.type === "schedule" ? (
               <ScheduleAlarmEditScreen
                 alarm={editingCustomAlarm.alarm}
@@ -346,15 +373,9 @@ export function HomeScreen({
                 onHomeTabPress={setActiveHomeTab}
                 onMyPagePress={() => handleTabPress("myPage")}
                 onRouteDetailPress={() => setIsRouteDetailVisible(true)}
-                firstLastRouteSummary={firstLastRouteSummary}
-                onFirstLastRouteSetupPress={() => {
-                  setScheduleAlarmInitialStep("route");
-                  setIsScheduleAlarmAddVisible(true);
-                }}
-                onScheduleAlarmAddPress={() => {
-                  setScheduleAlarmInitialStep("form");
-                  setIsScheduleAlarmAddVisible(true);
-                }}
+                onScheduleAlarmAddPress={() =>
+                  setIsScheduleAlarmAddVisible(true)
+                }
                 onGarageAlarmEditPress={(alarm) =>
                   setEditingCustomAlarm({ type: "garage", alarm })
                 }
@@ -383,6 +404,7 @@ function HomeDashboard({
   onFirstLastRouteSetupPress,
   firstLastRouteSummary,
   onRouteDetailPress,
+  onRouteSetupPress,
   onScheduleAlarmAddPress,
   onScheduleAlarmEditPress,
 }) {
@@ -406,11 +428,7 @@ function HomeDashboard({
           onScheduleAlarmEditPress={onScheduleAlarmEditPress}
         />
       ) : (
-        <FirstLastRouteScreen
-          onRouteDetailPress={onRouteDetailPress}
-          onRouteSetupPress={onFirstLastRouteSetupPress}
-          routeSummary={firstLastRouteSummary}
-        />
+        <FirstLastRouteScreen onRouteDetailPress={onRouteDetailPress} />
       )}
     </>
   );

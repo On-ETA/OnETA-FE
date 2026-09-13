@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
   busSegment: {
     flex: 1.05,
     borderRadius: 10,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   afterWalkSegment: {
     flex: 1.9,
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
     zIndex: 1,
   },
   timelineLabelWrap: {
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   busNumber: {
     fontFamily: "SUIT",
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray06,
   },
   stopInnerActive: {
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   stopLabel: {
     width: 42,

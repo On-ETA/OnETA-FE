@@ -11,6 +11,7 @@ export const colors = {
   gray08: "#50575D",
   gray09: "#34383B",
   main: "#33D878",
+  bus: "#1FCB68",
   sub: "#E4FCEB",
   point: "#FF6D6D",
   kakao: "#FEE500",

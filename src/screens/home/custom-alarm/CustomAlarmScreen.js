@@ -295,9 +295,9 @@ export function CustomAlarmScreen({
           title="차고지 출발 알림"
         />
         {isLoadingGarageAlarms ? (
-          <EmptyAlarmBox text="차고지 출발 알림을 불러오는 중입니다." />
+          <EmptyAlarmBox />
         ) : garageAlarmError ? (
-          <EmptyAlarmBox text={garageAlarmError} />
+          <EmptyAlarmBox />
         ) : garageAlarms.length > 0 ? (
           <ScrollView
             contentContainerStyle={styles.garageList}
@@ -344,9 +344,9 @@ export function CustomAlarmScreen({
           <Text style={[styles.tableHeaderText, styles.alarmColumn]}>알림</Text>
         </View>
         {isLoadingScheduleAlarms ? (
-          <EmptyAlarmBox text="내 일정 알림을 불러오는 중입니다." />
+          <EmptyAlarmBox />
         ) : scheduleAlarmError ? (
-          <EmptyAlarmBox text={scheduleAlarmError} />
+          <EmptyAlarmBox />
         ) : scheduleAlarms.length > 0 ? (
           <View style={styles.scheduleList}>
             {scheduleAlarms.map((alarm) => {
@@ -847,7 +847,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   bulkDeleteButton: {
     position: "absolute",

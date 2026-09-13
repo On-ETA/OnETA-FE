@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
@@ -15,6 +16,7 @@ import Svg, { Path } from "react-native-svg";
 import { createArrivalNotification } from "../../../api/notifications/arrival";
 import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
+import { NaverMapView } from "../../../components/NaverMapView";
 import { colors, typography } from "../../../theme";
 
 const DEFAULT_TIME = {
@@ -34,7 +36,9 @@ const DEFAULT_DESTINATION_POINT = {
 };
 
 function getPrimaryTransitSegment(route) {
-  return route?.segments.find((segment) => segment.transitType !== "WALK");
+  return route?.segments?.find(
+    (segment) => segment.transitType !== "WALK",
+  );
 }
 
 function getSegmentStopName(segment, edge) {
@@ -43,12 +47,18 @@ function getSegmentStopName(segment, edge) {
   }
 
   if (edge === "start") {
-    return segment.startStation || segment.stations[0]?.name || "";
+    return (
+      segment.startStation ||
+      segment.stations?.[0]?.name ||
+      ""
+    );
   }
 
   return (
     segment.endStation ||
-    segment.stations[segment.stations.length - 1]?.name ||
+    segment.stations?.[
+      segment.stations.length - 1
+    ]?.name ||
     ""
   );
 }
@@ -56,6 +66,7 @@ function getSegmentStopName(segment, edge) {
 function toTargetArrivalTime(time) {
   const hourNumber = Number(time.hour);
   const minuteNumber = Number(time.minute);
+
   const normalizedHour =
     time.period === "오후" && hourNumber < 12
       ? hourNumber + 12
@@ -63,9 +74,10 @@ function toTargetArrivalTime(time) {
         ? 0
         : hourNumber;
 
-  return `${String(normalizedHour).padStart(2, "0")}:${String(
-    minuteNumber,
-  ).padStart(2, "0")}:00`;
+  return `${String(normalizedHour).padStart(
+    2,
+    "0",
+  )}:${String(minuteNumber).padStart(2, "0")}:00`;
 }
 
 function mapDayToApiValue(day) {
@@ -96,21 +108,29 @@ export function ScheduleAlarmAddScreen({
   onRouteConfigured,
 }) {
   const [routeName, setRouteName] = useState("");
-  const [arrivalTime, setArrivalTime] = useState(DEFAULT_TIME);
-  const [isTimePickerVisible, setIsTimePickerVisible] = useState(false);
+
+  const [arrivalTime, setArrivalTime] =
+    useState(DEFAULT_TIME);
+
+  const [
+    isTimePickerVisible,
+    setIsTimePickerVisible,
+  ] = useState(false);
+
   const [step, setStep] = useState(initialStep);
-  const [selectedRoute, setSelectedRoute] = useState(null);
+
+  const [selectedRoute, setSelectedRoute] =
+    useState(null);
+
   const [routePlaces, setRoutePlaces] = useState({
     origin: "마포구 와우산로 94",
     destination: "우리집",
   });
 
-  const formattedTime = `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
+  const formattedTime =
+    `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
 
   const handleNextPress = () => {
-    // TODO: 다음 단계 API/화면 연결
-    // POST /home/custom-alarms/schedule/draft
-    // body: { routeName, targetArrivalTime: formattedTime }
     setStep("route");
   };
 
@@ -154,7 +174,9 @@ export function ScheduleAlarmAddScreen({
   if (step === "routeResult") {
     return (
       <ScheduleRouteResultStep
-        initialDestination={routePlaces.destination}
+        initialDestination={
+          routePlaces.destination
+        }
         initialOrigin={routePlaces.origin}
         onBackPress={handleBackPress}
         onRouteSelect={(route, places) => {
@@ -175,7 +197,9 @@ export function ScheduleAlarmAddScreen({
       <ScheduleAlarmFinalStep
         arrivalTime={arrivalTime}
         onBackPress={handleBackPress}
-        onPrevPress={() => setStep("routeResult")}
+        onPrevPress={() =>
+          setStep("routeResult")
+        }
         onSavePress={onBackPress}
         route={selectedRoute}
         routeName={routeName}
@@ -194,9 +218,14 @@ export function ScheduleAlarmAddScreen({
       />
 
       <View style={styles.content}>
-        <Text style={styles.heading}>매일 이용하는 경로를 등록해주세요</Text>
+        <Text style={styles.heading}>
+          매일 이용하는 경로를 등록해주세요
+        </Text>
 
-        <Text style={styles.label}>경로 이름을 입력해주세요 (선택)</Text>
+        <Text style={styles.label}>
+          경로 이름을 입력해주세요 (선택)
+        </Text>
+
         <TextInput
           onChangeText={setRouteName}
           placeholder="경로 01"
@@ -205,15 +234,26 @@ export function ScheduleAlarmAddScreen({
           value={routeName}
         />
 
-        <Text style={[styles.label, styles.timeLabel]}>
+        <Text
+          style={[
+            styles.label,
+            styles.timeLabel,
+          ]}
+        >
           몇 시까지 도착하고 싶으신가요?
         </Text>
+
         <Pressable
           accessibilityRole="button"
-          onPress={() => setIsTimePickerVisible(true)}
+          onPress={() =>
+            setIsTimePickerVisible(true)
+          }
           style={styles.timeInput}
         >
-          <Text style={styles.timeInputText}>{formattedTime}</Text>
+          <Text style={styles.timeInputText}>
+            {formattedTime}
+          </Text>
+
           <ChevronDownIcon />
         </Pressable>
       </View>
@@ -224,19 +264,26 @@ export function ScheduleAlarmAddScreen({
           onPress={onBackPress}
           style={styles.cancelButton}
         >
-          <Text style={styles.cancelButtonText}>취소</Text>
+          <Text style={styles.cancelButtonText}>
+            취소
+          </Text>
         </Pressable>
+
         <Pressable
           accessibilityRole="button"
           onPress={handleNextPress}
           style={styles.nextButton}
         >
-          <Text style={styles.nextButtonText}>다음</Text>
+          <Text style={styles.nextButtonText}>
+            다음
+          </Text>
         </Pressable>
       </View>
 
       <TimePickerSheet
-        onClose={() => setIsTimePickerVisible(false)}
+        onClose={() =>
+          setIsTimePickerVisible(false)
+        }
         onConfirm={(time) => {
           setArrivalTime(time);
           setIsTimePickerVisible(false);
@@ -248,72 +295,192 @@ export function ScheduleAlarmAddScreen({
   );
 }
 
-function ScheduleRouteMapStep({ onBackPress, onConfirm, title = "알림 추가" }) {
-  const SHEET_EXPANDED_OFFSET = -120;
-  const SHEET_COLLAPSED_OFFSET = 156;
-  const [placeKeyword, setPlaceKeyword] = useState("");
-  const [origin, setOrigin] = useState("마포구 와우산로 94");
-  const [destination, setDestination] = useState("우리집");
-  const sheetTranslateY = useRef(new Animated.Value(0)).current;
-  const lastSheetOffset = useRef(0);
+function ScheduleRouteMapStep({
+  onBackPress,
+  onConfirm,
+}) {
+  const { height } = useWindowDimensions();
+
+  /*
+   * 접혔을 때 핸들만 남기는 높이
+   */
+  const SHEET_COLLAPSED_VISIBLE_HEIGHT = 36;
+
+  /*
+   * 바텀 시트 전체 높이
+   */
+  const sheetHeight = Math.round(
+    (height * 3) / 8,
+  );
+
+  /*
+   * 0 = 완전히 펼쳐짐
+   */
+  const SHEET_EXPANDED_OFFSET = 0;
+
+  /*
+   * 아래로 내려갔을 때
+   * 36px만 남도록 계산
+   */
+  const SHEET_COLLAPSED_OFFSET = Math.max(
+    sheetHeight -
+      SHEET_COLLAPSED_VISIBLE_HEIGHT,
+    0,
+  );
+
+  const [placeKeyword, setPlaceKeyword] =
+    useState("");
+
+  const [origin, setOrigin] = useState(
+    "마포구 와우산로 94",
+  );
+
+  const [destination, setDestination] =
+    useState("우리집");
+
+  /*
+   * 처음 화면 진입 시
+   * 바텀시트가 올라와 있는 상태
+   */
+  const sheetTranslateY = useRef(
+    new Animated.Value(
+      SHEET_EXPANDED_OFFSET,
+    ),
+  ).current;
+
+  const lastSheetOffset = useRef(
+    SHEET_EXPANDED_OFFSET,
+  );
+
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) =>
+      onMoveShouldSetPanResponder: (
+        _,
+        gestureState,
+      ) =>
         Math.abs(gestureState.dy) > 4,
-      onPanResponderMove: (_, gestureState) => {
+
+      onPanResponderMove: (
+        _,
+        gestureState,
+      ) => {
         const nextOffset = Math.min(
           Math.max(
-            lastSheetOffset.current + gestureState.dy,
+            lastSheetOffset.current +
+              gestureState.dy,
             SHEET_EXPANDED_OFFSET,
           ),
           SHEET_COLLAPSED_OFFSET,
         );
-        sheetTranslateY.setValue(nextOffset);
+
+        sheetTranslateY.setValue(
+          nextOffset,
+        );
       },
-      onPanResponderRelease: (_, gestureState) => {
+
+      onPanResponderRelease: (
+        _,
+        gestureState,
+      ) => {
         const releasedOffset = Math.min(
           Math.max(
-            lastSheetOffset.current + gestureState.dy,
+            lastSheetOffset.current +
+              gestureState.dy,
             SHEET_EXPANDED_OFFSET,
           ),
           SHEET_COLLAPSED_OFFSET,
         );
+
+        const snapMiddle =
+          (SHEET_EXPANDED_OFFSET +
+            SHEET_COLLAPSED_OFFSET) /
+          2;
+
         const nextOffset =
-          releasedOffset < SHEET_EXPANDED_OFFSET / 2
+          releasedOffset < snapMiddle
             ? SHEET_EXPANDED_OFFSET
-            : releasedOffset > SHEET_COLLAPSED_OFFSET / 2
-              ? SHEET_COLLAPSED_OFFSET
-              : 0;
-        lastSheetOffset.current = nextOffset;
-        Animated.spring(sheetTranslateY, {
-          toValue: nextOffset,
-          useNativeDriver: true,
-        }).start();
+            : SHEET_COLLAPSED_OFFSET;
+
+        lastSheetOffset.current =
+          nextOffset;
+
+        Animated.spring(
+          sheetTranslateY,
+          {
+            toValue: nextOffset,
+            useNativeDriver: true,
+          },
+        ).start();
+      },
+
+      onPanResponderTerminate: (
+        _,
+        gestureState,
+      ) => {
+        const releasedOffset = Math.min(
+          Math.max(
+            lastSheetOffset.current +
+              gestureState.dy,
+            SHEET_EXPANDED_OFFSET,
+          ),
+          SHEET_COLLAPSED_OFFSET,
+        );
+
+        const snapMiddle =
+          (SHEET_EXPANDED_OFFSET +
+            SHEET_COLLAPSED_OFFSET) /
+          2;
+
+        const nextOffset =
+          releasedOffset < snapMiddle
+            ? SHEET_EXPANDED_OFFSET
+            : SHEET_COLLAPSED_OFFSET;
+
+        lastSheetOffset.current =
+          nextOffset;
+
+        Animated.spring(
+          sheetTranslateY,
+          {
+            toValue: nextOffset,
+            useNativeDriver: true,
+          },
+        ).start();
       },
     }),
   ).current;
 
   return (
     <View style={styles.mapScreen}>
-      {/* TODO: 네이버 지도 API 연동 시 이 placeholder를 NaverMapView로 교체하세요. */}
-      {/* GET /map/search?keyword=, GET /routes?origin=&destination= */}
-      <MapPlaceholder />
+      <NaverMapView />
 
-      <View style={styles.mapHeaderLayer}>
+      <View
+        style={styles.mapHeaderLayer}
+      >
         <Header
           headerStyle={styles.mapHeader}
           onBackPress={onBackPress}
-          title={title}
+          title="알림 추가"
           titleStyle={styles.headerTitle}
           type="back"
         />
-        <View style={styles.placeSearchBox}>
+
+        <View
+          style={styles.placeSearchBox}
+        >
           <SearchIcon />
+
           <TextInput
-            onChangeText={setPlaceKeyword}
+            onChangeText={
+              setPlaceKeyword
+            }
             placeholder="장소 검색"
-            placeholderTextColor={colors.gray06}
-            style={styles.placeSearchInput}
+            placeholderTextColor={
+              colors.gray06
+            }
+            style={
+              styles.placeSearchInput
+            }
             value={placeKeyword}
           />
         </View>
@@ -323,89 +490,197 @@ function ScheduleRouteMapStep({ onBackPress, onConfirm, title = "알림 추가" 
         style={[
           styles.routeSheet,
           {
-            transform: [{ translateY: sheetTranslateY }],
+            height: sheetHeight,
+          },
+          {
+            transform: [
+              {
+                translateY:
+                  sheetTranslateY,
+              },
+            ],
           },
         ]}
       >
-        <View style={styles.routeSheetHandleArea} {...panResponder.panHandlers}>
-          <View style={styles.sheetHandle} />
-        </View>
-        <Text style={styles.routeFieldLabel}>출발지</Text>
-        <View style={styles.routeField}>
-          <TextInput
-            onChangeText={setOrigin}
-            placeholder="출발지 입력"
-            placeholderTextColor={colors.gray06}
-            style={styles.routeFieldInput}
-            value={origin}
+        <View
+          style={
+            styles.routeSheetHandleArea
+          }
+          {...panResponder.panHandlers}
+        >
+          <View
+            style={styles.sheetHandle}
           />
         </View>
-        <Text style={styles.routeFieldLabel}>도착지</Text>
-        <View style={styles.routeField}>
-          <TextInput
-            onChangeText={setDestination}
-            placeholder="도착지 입력"
-            placeholderTextColor={colors.gray06}
-            style={styles.routeFieldInput}
-            value={destination}
-          />
+
+        <View
+          style={
+            styles.routeSheetContent
+          }
+        >
+          <Text
+            style={
+              styles.routeFieldLabel
+            }
+          >
+            출발지
+          </Text>
+
+          <View
+            style={styles.routeField}
+          >
+            <TextInput
+              onChangeText={setOrigin}
+              placeholder="출발지 입력"
+              placeholderTextColor={
+                colors.gray06
+              }
+              style={
+                styles.routeFieldInput
+              }
+              value={origin}
+            />
+          </View>
+
+          <Text
+            style={
+              styles.routeFieldLabel
+            }
+          >
+            도착지
+          </Text>
+
+          <View
+            style={styles.routeField}
+          >
+            <TextInput
+              onChangeText={
+                setDestination
+              }
+              placeholder="도착지 입력"
+              placeholderTextColor={
+                colors.gray06
+              }
+              style={
+                styles.routeFieldInput
+              }
+              value={destination}
+            />
+          </View>
         </View>
+
         <Pressable
           accessibilityRole="button"
-          onPress={() => onConfirm({ origin, destination })}
-          style={styles.mapConfirmButton}
+          onPress={() =>
+            onConfirm({
+              origin,
+              destination,
+            })
+          }
+          style={
+            styles.mapConfirmButton
+          }
         >
-          <Text style={styles.confirmButtonText}>확인</Text>
+          <Text
+            style={
+              styles.mapConfirmButtonText
+            }
+          >
+            확인
+          </Text>
         </Pressable>
       </Animated.View>
     </View>
   );
 }
 
-function ScheduleRouteResultStep({
+export function ScheduleRouteResultStep({
+  actionLabel = "이 경로로 알림 설정",
   initialDestination,
   initialOrigin,
   onBackPress,
   onRouteSelect,
 }) {
-  const [origin, setOrigin] = useState(initialOrigin);
-  const [destination, setDestination] = useState(initialDestination);
-  const [routes, setRoutes] = useState([]);
-  const [isLoadingRoutes, setIsLoadingRoutes] = useState(false);
-  const [routeError, setRouteError] = useState("");
-  const selectedRoute = routes[0];
+  const [origin, setOrigin] =
+    useState(initialOrigin);
+
+  const [
+    destination,
+    setDestination,
+  ] = useState(initialDestination);
+
+  const [routes, setRoutes] =
+    useState([]);
+
+  const [
+    isLoadingRoutes,
+    setIsLoadingRoutes,
+  ] = useState(false);
+
+  const [
+    routeError,
+    setRouteError,
+  ] = useState("");
+
+  const selectedRoute =
+    routes[0] ?? null;
+
   const primarySegment = useMemo(
-    () => getPrimaryTransitSegment(selectedRoute),
+    () =>
+      getPrimaryTransitSegment(
+        selectedRoute,
+      ),
     [selectedRoute],
   );
 
+  const displayDuration =
+    selectedRoute?.realTimeDurationMinutes ??
+    selectedRoute?.totalDurationMinutes ??
+    0;
+
   useEffect(() => {
     let isActive = true;
-    const controller = new AbortController();
+
+    const controller =
+      new AbortController();
 
     async function loadTransitRoutes() {
       setIsLoadingRoutes(true);
       setRouteError("");
 
       try {
-        const nextRoutes = await searchTransitRoutes({
-          originX: DEFAULT_ORIGIN_POINT.x,
-          originY: DEFAULT_ORIGIN_POINT.y,
-          originAddress: origin,
-          destX: DEFAULT_DESTINATION_POINT.x,
-          destY: DEFAULT_DESTINATION_POINT.y,
-          destAddress: destination,
-          signal: controller.signal,
-        });
+        const nextRoutes =
+          await searchTransitRoutes({
+            originX:
+              DEFAULT_ORIGIN_POINT.x,
+            originY:
+              DEFAULT_ORIGIN_POINT.y,
+            originAddress: origin,
+
+            destX:
+              DEFAULT_DESTINATION_POINT.x,
+            destY:
+              DEFAULT_DESTINATION_POINT.y,
+            destAddress: destination,
+
+            signal:
+              controller.signal,
+          });
 
         if (isActive) {
-          setRoutes(nextRoutes);
+          setRoutes(
+            Array.isArray(nextRoutes)
+              ? nextRoutes
+              : [],
+          );
         }
       } catch (error) {
         if (isActive) {
           setRoutes([]);
+
           setRouteError(
-            error?.message ?? "대중교통 경로 검색에 실패했습니다.",
+            error?.message ??
+              "대중교통 경로 검색에 실패했습니다.",
           );
         }
       } finally {
@@ -425,116 +700,260 @@ function ScheduleRouteResultStep({
 
   return (
     <View style={styles.resultScreen}>
-      {/* TODO: API 연동 시 아래 화면의 더미 경로 데이터를 교체하세요. */}
-      {/* GET /home/custom-alarms/schedule/routes?origin=&destination=&arrivalTime= */}
-      {/* POST /home/custom-alarms/schedule */}
       <View style={styles.resultHeader}>
         <Pressable
           accessibilityLabel="뒤로가기"
           accessibilityRole="button"
           hitSlop={12}
           onPress={onBackPress}
-          style={styles.resultBackButton}
+          style={
+            styles.resultBackButton
+          }
         >
           <HeaderBackIcon />
         </Pressable>
-        <View style={styles.routeSummaryPill}>
+
+        <View
+          style={
+            styles.routeSummaryPill
+          }
+        >
           <TextInput
             numberOfLines={1}
             onChangeText={setOrigin}
             placeholder="출발지"
-            placeholderTextColor={colors.gray06}
-            style={styles.routeSummaryInput}
+            placeholderTextColor={
+              colors.gray06
+            }
+            style={
+              styles.routeSummaryInput
+            }
             value={origin}
           />
+
           <ChevronRightIcon />
+
           <TextInput
             numberOfLines={1}
-            onChangeText={setDestination}
+            onChangeText={
+              setDestination
+            }
             placeholder="도착지"
-            placeholderTextColor={colors.gray06}
-            style={styles.routeSummaryInput}
+            placeholderTextColor={
+              colors.gray06
+            }
+            style={
+              styles.routeSummaryInput
+            }
             value={destination}
           />
+
           <CloseIcon />
         </View>
       </View>
 
-      <View style={styles.resultNotice}>
-        <Text style={styles.resultNoticeText}>
-          도로 상황에 따라 실제 도착 시간은 달라질 수 있어요.
+      <View
+        style={styles.resultNotice}
+      >
+        <Text
+          style={
+            styles.resultNoticeText
+          }
+        >
+          도로 상황에 따라 실제 도착 시간은
+          달라질 수 있어요.
         </Text>
       </View>
 
-      <View style={styles.routeResultContent}>
+      <View
+        style={
+          styles.routeResultContent
+        }
+      >
         {isLoadingRoutes ? (
-          <View style={styles.routeStatusBox}>
-            <Text style={styles.routeStatusText}>경로를 검색하는 중입니다.</Text>
+          <View
+            style={
+              styles.routeStatusBox
+            }
+          >
+            <Text
+              style={
+                styles.routeStatusText
+              }
+            >
+              경로를 검색하는 중입니다.
+            </Text>
           </View>
-        ) : routeError || !selectedRoute ? (
-          <View style={styles.routeStatusBox}>
-            <Text style={styles.routeStatusText}>
-              {routeError || "검색된 경로가 없습니다."}
+        ) : routeError ||
+          !selectedRoute ? (
+          <View
+            style={
+              styles.routeStatusBox
+            }
+          >
+            <Text
+              style={
+                styles.routeStatusText
+              }
+            >
+              {routeError ||
+                "검색된 경로가 없습니다."}
             </Text>
           </View>
         ) : (
           <>
-            <View style={styles.optionBadges}>
-              <View style={styles.optionBadge}>
-                <Text style={styles.optionBadgeText}>최적</Text>
+            <View
+              style={
+                styles.optionBadges
+              }
+            >
+              <View
+                style={
+                  styles.optionBadge
+                }
+              >
+                <Text
+                  style={
+                    styles.optionBadgeText
+                  }
+                >
+                  최적
+                </Text>
               </View>
-              <View style={styles.optionBadge}>
-                <Text style={styles.optionBadgeText}>
-                  환승 {selectedRoute.transferCount}회
+
+              <View
+                style={
+                  styles.optionBadge
+                }
+              >
+                <Text
+                  style={
+                    styles.optionBadgeText
+                  }
+                >
+                  환승{" "}
+                  {selectedRoute.transferCount ??
+                    0}
+                  회
                 </Text>
               </View>
             </View>
 
-            <View style={styles.totalTimeRow}>
-              <Text style={styles.totalTimeNumber}>
-                {selectedRoute.realTimeDurationMinutes ??
-                  selectedRoute.totalDurationMinutes}
+            <View
+              style={
+                styles.totalTimeRow
+              }
+            >
+              <Text
+                style={
+                  styles.totalTimeNumber
+                }
+              >
+                {displayDuration}
               </Text>
-              <Text style={styles.totalTimeUnit}>분</Text>
+
+              <Text
+                style={
+                  styles.totalTimeUnit
+                }
+              >
+                분
+              </Text>
             </View>
 
-            <RouteTimeline segments={selectedRoute.segments} />
-            <View style={styles.routeDivider} />
+            <RouteTimeline
+              segments={
+                selectedRoute.segments ??
+                []
+              }
+            />
 
-            <View style={styles.routeBusInfo}>
-              <View style={styles.routeBusBadge}>
+            <View
+              style={
+                styles.routeDivider
+              }
+            />
+
+            <View
+              style={
+                styles.routeBusInfo
+              }
+            >
+              <View
+                style={
+                  styles.routeBusBadge
+                }
+              >
                 <BusIconPlain />
               </View>
-              <Text style={styles.routeBusNumber}>
-                {primarySegment?.transitName || "대중교통"}
+
+              <Text
+                style={
+                  styles.routeBusNumber
+                }
+              >
+                {primarySegment?.transitName ||
+                  "대중교통"}
               </Text>
-              <Text style={styles.routeBusDirection}>
+
+              <Text
+                style={
+                  styles.routeBusDirection
+                }
+              >
                 {primarySegment?.endStation
                   ? ` · ${primarySegment.endStation} 방면`
                   : ""}
               </Text>
             </View>
 
-            <View style={styles.routeStops}>
+            <View
+              style={styles.routeStops}
+            >
               <StopRow
                 active
                 label="승차"
-                name={getSegmentStopName(primarySegment, "start") || origin}
+                name={
+                  getSegmentStopName(
+                    primarySegment,
+                    "start",
+                  ) || origin
+                }
               />
+
               <StopRow
                 label="하차"
                 name={
-                  getSegmentStopName(primarySegment, "end") || destination
+                  getSegmentStopName(
+                    primarySegment,
+                    "end",
+                  ) || destination
                 }
               />
             </View>
 
             <Pressable
               accessibilityRole="button"
-              onPress={() => onRouteSelect(selectedRoute, { origin, destination })}
-              style={styles.routeAlarmButton}
+              onPress={() =>
+                onRouteSelect?.(
+                  selectedRoute,
+                  {
+                    origin,
+                    destination,
+                  },
+                )
+              }
+              style={
+                styles.routeAlarmButton
+              }
             >
-              <Text style={styles.routeAlarmButtonText}>이 경로로 알림 설정</Text>
+              <Text
+                style={
+                  styles.routeAlarmButtonText
+                }
+              >
+                {actionLabel}
+              </Text>
             </Pressable>
           </>
         )}
@@ -551,43 +970,85 @@ function ScheduleAlarmFinalStep({
   route,
   routeName,
 }) {
-  const [selectedDays, setSelectedDays] = useState([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isReminderModalVisible, setIsReminderModalVisible] = useState(false);
-  const [reminders, setReminders] = useState({
-    1: false,
-    3: false,
-    5: true,
-    10: true,
-    15: false,
-    30: true,
-    60: false,
-  });
-  const days = ["월", "화", "수", "목", "금", "토", "일"];
-  const primarySegment = getPrimaryTransitSegment(route);
-  const selectedReminderOffsets = pickReminderOffsets(reminders);
+  const [
+    selectedDays,
+    setSelectedDays,
+  ] = useState([]);
+
+  const [
+    isSubmitting,
+    setIsSubmitting,
+  ] = useState(false);
+
+  const [
+    isReminderModalVisible,
+    setIsReminderModalVisible,
+  ] = useState(false);
+
+  const [reminders, setReminders] =
+    useState({
+      1: false,
+      3: false,
+      5: true,
+      10: true,
+      15: false,
+      30: true,
+      60: false,
+    });
+
+  const days = [
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일",
+  ];
+
+  const primarySegment =
+    getPrimaryTransitSegment(route);
+
+  const selectedReminderOffsets =
+    pickReminderOffsets(reminders);
+
   const selectedRouteName =
     routeName.trim() ||
     [
       route?.originAddress,
       route?.destinationAddress,
-    ].filter(Boolean).join("-") ||
+    ]
+      .filter(Boolean)
+      .join("-") ||
     "경로1";
-  const targetArrivalTime = toTargetArrivalTime(arrivalTime);
-  const formattedArrivalTime = `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
+
+  const targetArrivalTime =
+    toTargetArrivalTime(arrivalTime);
+
+  const formattedArrivalTime =
+    `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
+
   const displayDuration =
-    route?.realTimeDurationMinutes ?? route?.totalDurationMinutes ?? 0;
+    route?.realTimeDurationMinutes ??
+    route?.totalDurationMinutes ??
+    0;
 
   const toggleDay = (day) => {
     setSelectedDays((current) =>
       current.includes(day)
-        ? current.filter((selectedDay) => selectedDay !== day)
+        ? current.filter(
+            (selectedDay) =>
+              selectedDay !== day,
+          )
         : [...current, day],
     );
   };
 
   const toggleReminder = (key) => {
-    setReminders((current) => ({ ...current, [key]: !current[key] }));
+    setReminders((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
   };
 
   const saveAlarm = async () => {
@@ -596,12 +1057,23 @@ function ScheduleAlarmFinalStep({
     }
 
     if (!route) {
-      Alert.alert("알림 등록 실패", "등록할 경로 정보를 찾지 못했습니다.");
+      Alert.alert(
+        "알림 등록 실패",
+        "등록할 경로 정보를 찾지 못했습니다.",
+      );
+
       return;
     }
 
-    if (selectedReminderOffsets.length === 0) {
-      Alert.alert("알림 등록 실패", "출발 전 알림 시간을 선택해주세요.");
+    if (
+      selectedReminderOffsets.length ===
+      0
+    ) {
+      Alert.alert(
+        "알림 등록 실패",
+        "출발 전 알림 시간을 선택해주세요.",
+      );
+
       return;
     }
 
@@ -610,12 +1082,24 @@ function ScheduleAlarmFinalStep({
     try {
       await createArrivalNotification({
         payload: {
-          routeName: selectedRouteName,
+          routeName:
+            selectedRouteName,
+
           scheduleType: "NORMAL",
+
           targetArrivalTime,
-          reminderOffsetMinutes: selectedReminderOffsets,
-          repeatDays: selectedDays.map(mapDayToApiValue).filter(Boolean),
-          routeDetails: JSON.stringify(route.raw ?? route),
+
+          reminderOffsetMinutes:
+            selectedReminderOffsets,
+
+          repeatDays: selectedDays
+            .map(mapDayToApiValue)
+            .filter(Boolean),
+
+          routeDetails:
+            JSON.stringify(
+              route.raw ?? route,
+            ),
         },
       });
 
@@ -623,7 +1107,8 @@ function ScheduleAlarmFinalStep({
     } catch (error) {
       Alert.alert(
         "알림 등록 실패",
-        error?.message ?? "내 일정 알림 등록에 실패했습니다.",
+        error?.message ??
+          "내 일정 알림 등록에 실패했습니다.",
       );
     } finally {
       setIsSubmitting(false);
@@ -640,81 +1125,196 @@ function ScheduleAlarmFinalStep({
         type="back"
       />
 
-      <View style={styles.finalRouteHeader}>
-        <View style={styles.finalBusInfo}>
-          <View style={styles.routeBusBadge}>
+      <View
+        style={styles.finalRouteHeader}
+      >
+        <View
+          style={styles.finalBusInfo}
+        >
+          <View
+            style={styles.routeBusBadge}
+          >
             <BusIconPlain />
           </View>
-          <Text style={styles.routeBusNumber}>
-            {primarySegment?.transitName || "대중교통"}
+
+          <Text
+            style={styles.routeBusNumber}
+          >
+            {primarySegment?.transitName ||
+              "대중교통"}
           </Text>
-          <Text style={styles.routeBusDirection}>
+
+          <Text
+            style={
+              styles.routeBusDirection
+            }
+          >
             {primarySegment?.endStation
               ? `· ${primarySegment.endStation} 방면`
               : ""}
           </Text>
         </View>
-        <View style={styles.finalTotalTime}>
-          <Text style={styles.finalTotalTimeNumber}>{displayDuration}</Text>
-          <Text style={styles.finalTotalTimeUnit}>분</Text>
+
+        <View
+          style={styles.finalTotalTime}
+        >
+          <Text
+            style={
+              styles.finalTotalTimeNumber
+            }
+          >
+            {displayDuration}
+          </Text>
+
+          <Text
+            style={
+              styles.finalTotalTimeUnit
+            }
+          >
+            분
+          </Text>
         </View>
       </View>
 
-      <View style={styles.finalContent}>
-        <View style={styles.timeSummaryRow}>
-          <View style={styles.timeSummaryBlock}>
-            <Text style={styles.finalLabel}>출발 적정 시간</Text>
-            <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>경로 기준 계산</Text>
+      <View
+        style={styles.finalContent}
+      >
+        <View
+          style={styles.timeSummaryRow}
+        >
+          <View
+            style={
+              styles.timeSummaryBlock
+            }
+          >
+            <Text
+              style={styles.finalLabel}
+            >
+              출발 적정 시간
+            </Text>
+
+            <View
+              style={styles.timeCard}
+            >
+              <Text
+                style={
+                  styles.timeCardText
+                }
+              >
+                경로 기준 계산
+              </Text>
             </View>
           </View>
+
           <ChevronRightIcon />
-          <View style={styles.timeSummaryBlock}>
-            <Text style={styles.finalLabel}>도착 예정 시간</Text>
-            <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>{formattedArrivalTime}</Text>
+
+          <View
+            style={
+              styles.timeSummaryBlock
+            }
+          >
+            <Text
+              style={styles.finalLabel}
+            >
+              도착 예정 시간
+            </Text>
+
+            <View
+              style={styles.timeCard}
+            >
+              <Text
+                style={
+                  styles.timeCardText
+                }
+              >
+                {formattedArrivalTime}
+              </Text>
             </View>
           </View>
         </View>
 
-        <Pressable accessibilityRole="button" style={styles.resetRouteButton}>
-          <Text style={styles.resetRouteButtonText}>경로 및 시간 재설정</Text>
+        <Pressable
+          accessibilityRole="button"
+          style={
+            styles.resetRouteButton
+          }
+        >
+          <Text
+            style={
+              styles.resetRouteButtonText
+            }
+          >
+            경로 및 시간 재설정
+          </Text>
         </Pressable>
       </View>
 
-      <View style={styles.finalDivider} />
+      <View
+        style={styles.finalDivider}
+      />
 
-      <View style={styles.finalContent}>
-        <Text style={styles.questionText}>출발 시간 몇 분 전에 알려드릴까요?</Text>
+      <View
+        style={styles.finalContent}
+      >
+        <Text
+          style={styles.questionText}
+        >
+          출발 시간 몇 분 전에 알려드릴까요?
+        </Text>
+
         <Pressable
           accessibilityRole="button"
-          onPress={() => setIsReminderModalVisible(true)}
-          style={styles.reminderSelect}
+          onPress={() =>
+            setIsReminderModalVisible(
+              true,
+            )
+          }
+          style={
+            styles.reminderSelect
+          }
         >
-          <Text style={styles.reminderSelectText}>
-            {selectedReminderOffsets.length > 0
-              ? `${selectedReminderOffsets.join(", ")}분 전 알림`
+          <Text
+            style={
+              styles.reminderSelectText
+            }
+          >
+            {selectedReminderOffsets.length >
+            0
+              ? `${selectedReminderOffsets.join(
+                  ", ",
+                )}분 전 알림`
               : "알림 시간 선택"}
           </Text>
+
           <ChevronDownIcon />
         </Pressable>
 
         <View style={styles.dayRow}>
           {days.map((day) => {
-            const selected = selectedDays.includes(day);
+            const selected =
+              selectedDays.includes(day);
 
             return (
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ selected }}
+                accessibilityState={{
+                  selected,
+                }}
                 key={day}
-                onPress={() => toggleDay(day)}
-                style={[styles.dayButton, selected && styles.dayButtonSelected]}
+                onPress={() =>
+                  toggleDay(day)
+                }
+                style={[
+                  styles.dayButton,
+                  selected &&
+                    styles.dayButtonSelected,
+                ]}
               >
                 <Text
                   style={[
                     styles.dayButtonText,
-                    selected && styles.dayButtonTextSelected,
+                    selected &&
+                      styles.dayButtonTextSelected,
                   ]}
                 >
                   {day}
@@ -725,47 +1325,89 @@ function ScheduleAlarmFinalStep({
         </View>
       </View>
 
-      <View style={styles.finalFooter}>
-        <View style={styles.finalInfoBox}>
-          <Text style={styles.finalInfoText}>
-            {formattedArrivalTime}까지 도착하실 수 있도록,
+      <View
+        style={styles.finalFooter}
+      >
+        <View
+          style={styles.finalInfoBox}
+        >
+          <Text
+            style={styles.finalInfoText}
+          >
+            {formattedArrivalTime}까지
+            도착하실 수 있도록,
           </Text>
-          <Text style={styles.finalInfoText}>
-            선택한 출발 전 알림 시간에 맞춰 알려드릴게요.
+
+          <Text
+            style={styles.finalInfoText}
+          >
+            선택한 출발 전 알림 시간에
+            맞춰 알려드릴게요.
           </Text>
         </View>
-        <View style={styles.finalButtonRow}>
+
+        <View
+          style={styles.finalButtonRow}
+        >
           <Pressable
             accessibilityRole="button"
             onPress={onPrevPress}
             style={styles.prevButton}
           >
-            <Text style={styles.prevButtonText}>이전</Text>
+            <Text
+              style={
+                styles.prevButtonText
+              }
+            >
+              이전
+            </Text>
           </Pressable>
+
           <Pressable
             accessibilityRole="button"
             disabled={isSubmitting}
             onPress={saveAlarm}
-            style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
+            style={[
+              styles.saveButton,
+              isSubmitting &&
+                styles.saveButtonDisabled,
+            ]}
           >
-            <Text style={styles.saveButtonText}>
-              {isSubmitting ? "저장 중" : "저장"}
+            <Text
+              style={
+                styles.saveButtonText
+              }
+            >
+              {isSubmitting
+                ? "저장 중"
+                : "저장"}
             </Text>
           </Pressable>
         </View>
       </View>
 
       <ReminderModal
-        onClose={() => setIsReminderModalVisible(false)}
+        onClose={() =>
+          setIsReminderModalVisible(
+            false,
+          )
+        }
         onToggle={toggleReminder}
         reminders={reminders}
-        visible={isReminderModalVisible}
+        visible={
+          isReminderModalVisible
+        }
       />
     </View>
   );
 }
 
-function ReminderModal({ onClose, onToggle, reminders, visible }) {
+function ReminderModal({
+  onClose,
+  onToggle,
+  reminders,
+  visible,
+}) {
   const options = [
     ["1", "1분 전"],
     ["3", "3분 전"],
@@ -777,38 +1419,87 @@ function ReminderModal({ onClose, onToggle, reminders, visible }) {
   ];
 
   return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
-      <View style={styles.reminderOverlay}>
-        <View style={styles.reminderCard}>
-          <View style={styles.reminderHeader}>
-            <Text style={styles.reminderTitle}>미리 알림 설정</Text>
+    <Modal
+      animationType="fade"
+      onRequestClose={onClose}
+      transparent
+      visible={visible}
+    >
+      <View
+        style={styles.reminderOverlay}
+      >
+        <View
+          style={styles.reminderCard}
+        >
+          <View
+            style={
+              styles.reminderHeader
+            }
+          >
+            <Text
+              style={
+                styles.reminderTitle
+              }
+            >
+              미리 알림 설정
+            </Text>
+
             <Pressable
               accessibilityLabel="미리 알림 설정 닫기"
               accessibilityRole="button"
               hitSlop={10}
               onPress={onClose}
-              style={styles.reminderCloseButton}
+              style={
+                styles.reminderCloseButton
+              }
             >
               <CloseIcon />
             </Pressable>
           </View>
-          <View style={styles.reminderList}>
-            {options.map(([key, label]) => (
-              <View key={key} style={styles.reminderRow}>
-                <Text style={styles.reminderOptionText}>{label}</Text>
-                <Pressable
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: reminders[key] }}
-                  onPress={() => onToggle(key)}
-                  style={[
-                    styles.reminderSwitch,
-                    reminders[key] && styles.reminderSwitchOn,
-                  ]}
+
+          <View
+            style={styles.reminderList}
+          >
+            {options.map(
+              ([key, label]) => (
+                <View
+                  key={key}
+                  style={
+                    styles.reminderRow
+                  }
                 >
-                  <View style={styles.reminderSwitchThumb} />
-                </Pressable>
-              </View>
-            ))}
+                  <Text
+                    style={
+                      styles.reminderOptionText
+                    }
+                  >
+                    {label}
+                  </Text>
+
+                  <Pressable
+                    accessibilityRole="switch"
+                    accessibilityState={{
+                      checked:
+                        reminders[key],
+                    }}
+                    onPress={() =>
+                      onToggle(key)
+                    }
+                    style={[
+                      styles.reminderSwitch,
+                      reminders[key] &&
+                        styles.reminderSwitchOn,
+                    ]}
+                  >
+                    <View
+                      style={
+                        styles.reminderSwitchThumb
+                      }
+                    />
+                  </Pressable>
+                </View>
+              ),
+            )}
           </View>
         </View>
       </View>
@@ -816,138 +1507,279 @@ function ReminderModal({ onClose, onToggle, reminders, visible }) {
   );
 }
 
-function RouteTimeline({ segments = [] }) {
-  const visibleSegments = segments;
-
-  if (visibleSegments.length === 0) {
+function RouteTimeline({
+  segments = [],
+}) {
+  if (segments.length === 0) {
     return null;
   }
 
-  const totalDuration = visibleSegments.reduce(
-    (sum, segment) => sum + Math.max(segment.durationMinutes ?? 0, 1),
-    0,
-  );
+  const totalDuration =
+    segments.reduce(
+      (sum, segment) =>
+        sum +
+        Math.max(
+          segment.durationMinutes ??
+            0,
+          1,
+        ),
+      0,
+    );
 
   return (
-    <View style={styles.routeTimeline}>
-      {visibleSegments.map((segment, index) => {
-        const isTransit = segment.transitType !== "WALK";
-        const duration = Math.max(segment.durationMinutes ?? 0, 1);
+    <View
+      style={styles.routeTimeline}
+    >
+      {segments.map(
+        (segment, index) => {
+          const isTransit =
+            segment.transitType !==
+            "WALK";
 
-        return (
-          <View
-            key={segment.id ?? `${segment.transitType}-${index}`}
-            style={[
-              styles.routeTimelineSegment,
-              isTransit ? styles.routeBusSegment : styles.routeWalkSegment,
-              { flex: duration / totalDuration },
-            ]}
-          >
-            {index === 0 || isTransit ? (
+          const duration = Math.max(
+            segment.durationMinutes ??
+              0,
+            1,
+          );
+
+          return (
+            <View
+              key={
+                segment.id ??
+                `${segment.transitType}-${index}`
+              }
+              style={[
+                styles.routeTimelineSegment,
+                isTransit
+                  ? styles.routeBusSegment
+                  : styles.routeWalkSegment,
+                {
+                  flex:
+                    duration /
+                    totalDuration,
+                },
+              ]}
+            >
+              {index === 0 ||
+              isTransit ? (
+                <View
+                  style={
+                    isTransit
+                      ? styles.routeBusIcon
+                      : styles.routeWalkIcon
+                  }
+                >
+                  {isTransit ? (
+                    <BusIconPlain />
+                  ) : (
+                    <WalkIcon />
+                  )}
+                </View>
+              ) : null}
+
               <View
-                style={isTransit ? styles.routeBusIcon : styles.routeWalkIcon}
-              >
-                {isTransit ? <BusIconPlain /> : <WalkIcon />}
-              </View>
-            ) : null}
-            <View style={styles.routeTimelineTextWrap}>
-              <Text
                 style={
-                  isTransit
-                    ? styles.routeTimelineTextOn
-                    : styles.routeTimelineText
+                  styles.routeTimelineTextWrap
                 }
               >
-                {duration}분
-              </Text>
+                <Text
+                  style={
+                    isTransit
+                      ? styles.routeTimelineTextOn
+                      : styles.routeTimelineText
+                  }
+                >
+                  {duration}분
+                </Text>
+              </View>
             </View>
-          </View>
-        );
-      })}
+          );
+        },
+      )}
     </View>
   );
 }
 
-function StopRow({ active = false, label, name }) {
+function StopRow({
+  active = false,
+  label,
+  name,
+}) {
   return (
     <View style={styles.stopRow}>
-      <View style={[styles.stopOuter, active && styles.stopOuterActive]}>
-        <View style={[styles.stopInner, active && styles.stopInnerActive]} />
+      <View
+        style={[
+          styles.stopOuter,
+          active &&
+            styles.stopOuterActive,
+        ]}
+      >
+        <View
+          style={[
+            styles.stopInner,
+            active &&
+              styles.stopInnerActive,
+          ]}
+        />
       </View>
-      <Text style={styles.stopLabel}>{label}</Text>
-      <Text style={styles.stopName}>{name}</Text>
+
+      <Text style={styles.stopLabel}>
+        {label}
+      </Text>
+
+      <Text style={styles.stopName}>
+        {name}
+      </Text>
     </View>
   );
 }
 
-function MapPlaceholder() {
-  return (
-    <View style={styles.mapPlaceholder}>
-      <View style={[styles.mapBlock, styles.mapPark]} />
-      <View style={[styles.mapBlock, styles.mapCampus]} />
-      <View style={[styles.mapRoad, styles.mapRoadA]} />
-      <View style={[styles.mapRoad, styles.mapRoadB]} />
-      <View style={[styles.mapRoad, styles.mapRoadC]} />
-      <View style={[styles.mapRoad, styles.mapRoadD]} />
-      <Text style={[styles.mapLabel, styles.mapLabelTop]}>제이에스갤러리</Text>
-      <Text style={[styles.mapLabel, styles.mapLabelSchool]}>서교초등학교</Text>
-      <Text style={[styles.mapLabel, styles.mapLabelCampus]}>홍익대학교{"\n"}서울캠퍼스</Text>
-      <Text style={[styles.mapLabel, styles.mapLabelPark]}>와우산{"\n"}(101.8m)</Text>
-    </View>
-  );
-}
-
-function TimePickerSheet({ onClose, onConfirm, value, visible }) {
-  const [draftTime, setDraftTime] = useState(value);
+function TimePickerSheet({
+  onClose,
+  onConfirm,
+  value,
+  visible,
+}) {
+  const [draftTime, setDraftTime] =
+    useState(value);
 
   const selectTime = (patch) => {
-    setDraftTime((current) => ({ ...current, ...patch }));
+    setDraftTime((current) => ({
+      ...current,
+      ...patch,
+    }));
   };
 
   return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
-      <View style={styles.sheetOverlay}>
-        <Pressable style={styles.sheetDim} onPress={onClose} />
+    <Modal
+      animationType="fade"
+      onRequestClose={onClose}
+      transparent
+      visible={visible}
+    >
+      <View
+        style={styles.sheetOverlay}
+      >
+        <Pressable
+          style={styles.sheetDim}
+          onPress={onClose}
+        />
+
         <View style={styles.sheet}>
-          <View style={styles.sheetHandle} />
-          <View style={styles.pickerRows}>
-            <View style={styles.pickerRow}>
-              <Text style={styles.pickerMutedText}>오후</Text>
-              <Text style={styles.pickerMutedText}>08:00</Text>
+          <View
+            style={styles.sheetHandle}
+          />
+
+          <View
+            style={styles.pickerRows}
+          >
+            <View
+              style={styles.pickerRow}
+            >
+              <Text
+                style={
+                  styles.pickerMutedText
+                }
+              >
+                오후
+              </Text>
+
+              <Text
+                style={
+                  styles.pickerMutedText
+                }
+              >
+                08:00
+              </Text>
             </View>
-            <View style={styles.pickerRow}>
+
+            <View
+              style={styles.pickerRow}
+            >
               <Pressable
                 accessibilityRole="button"
-                onPress={() => selectTime({ period: "오전" })}
-                style={styles.pickerSelectedPeriodCell}
+                onPress={() =>
+                  selectTime({
+                    period: "오전",
+                  })
+                }
+                style={
+                  styles.pickerSelectedPeriodCell
+                }
               >
-                <Text style={styles.pickerSelectedText}>{draftTime.period}</Text>
+                <Text
+                  style={
+                    styles.pickerSelectedText
+                  }
+                >
+                  {draftTime.period}
+                </Text>
               </Pressable>
+
               <Pressable
                 accessibilityRole="button"
-                onPress={() => selectTime({ hour: "09", minute: "00" })}
-                style={styles.pickerSelectedTimeCell}
+                onPress={() =>
+                  selectTime({
+                    hour: "09",
+                    minute: "00",
+                  })
+                }
+                style={
+                  styles.pickerSelectedTimeCell
+                }
               >
-                <Text style={styles.pickerSelectedText}>09:00</Text>
+                <Text
+                  style={
+                    styles.pickerSelectedText
+                  }
+                >
+                  09:00
+                </Text>
               </Pressable>
             </View>
-            <View style={styles.pickerRow}>
-              <Text style={styles.pickerMutedText}>오후</Text>
-              <Text style={styles.pickerMutedText}>10:00</Text>
+
+            <View
+              style={styles.pickerRow}
+            >
+              <Text
+                style={
+                  styles.pickerMutedText
+                }
+              >
+                오후
+              </Text>
+
+              <Text
+                style={
+                  styles.pickerMutedText
+                }
+              >
+                10:00
+              </Text>
             </View>
           </View>
+
           <Pressable
             accessibilityRole="button"
             onPress={() =>
               onConfirm({
-                period: draftTime.period,
+                period:
+                  draftTime.period,
                 hour: "09",
                 minute: "00",
               })
             }
-            style={styles.confirmButton}
+            style={
+              styles.confirmButton
+            }
           >
-            <Text style={styles.confirmButtonText}>확인</Text>
+            <Text
+              style={
+                styles.confirmButtonText
+              }
+            >
+              확인
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -957,7 +1789,11 @@ function TimePickerSheet({ onClose, onConfirm, value, visible }) {
 
 function ChevronDownIcon() {
   return (
-    <Svg height={20} viewBox="0 0 20 20" width={20}>
+    <Svg
+      height={20}
+      viewBox="0 0 20 20"
+      width={20}
+    >
       <Path
         d="M5.5 7.5 10 12l4.5-4.5"
         fill="none"
@@ -972,7 +1808,11 @@ function ChevronDownIcon() {
 
 function HeaderBackIcon() {
   return (
-    <Svg height={24} viewBox="0 0 24 24" width={24}>
+    <Svg
+      height={24}
+      viewBox="0 0 24 24"
+      width={24}
+    >
       <Path
         d="M15 5 8 12l7 7"
         fill="none"
@@ -987,7 +1827,11 @@ function HeaderBackIcon() {
 
 function ChevronRightIcon() {
   return (
-    <Svg height={20} viewBox="0 0 20 20" width={20}>
+    <Svg
+      height={20}
+      viewBox="0 0 20 20"
+      width={20}
+    >
       <Path
         d="m8 5 5 5-5 5"
         fill="none"
@@ -1002,7 +1846,11 @@ function ChevronRightIcon() {
 
 function CloseIcon() {
   return (
-    <Svg height={20} viewBox="0 0 20 20" width={20}>
+    <Svg
+      height={20}
+      viewBox="0 0 20 20"
+      width={20}
+    >
       <Path
         d="m5.5 5.5 9 9M14.5 5.5l-9 9"
         fill="none"
@@ -1016,7 +1864,11 @@ function CloseIcon() {
 
 function SearchIcon() {
   return (
-    <Svg height={18} viewBox="0 0 18 18" width={18}>
+    <Svg
+      height={18}
+      viewBox="0 0 18 18"
+      width={18}
+    >
       <Path
         d="M12.1 12.1 15 15M8 13.5A5.5 5.5 0 1 0 8 2.5a5.5 5.5 0 0 0 0 11Z"
         fill="none"
@@ -1030,7 +1882,11 @@ function SearchIcon() {
 
 function WalkIcon() {
   return (
-    <Svg height={11} viewBox="0 0 12 12" width={11}>
+    <Svg
+      height={11}
+      viewBox="0 0 12 12"
+      width={11}
+    >
       <Path
         d="M6 3.5a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8Zm-.6.6L3.7 6.1c-.2.2-.2.6.1.8.2.2.6.2.8-.1l.9-1.1.8 1.1-1.3 3c-.1.3 0 .7.3.8.3.1.7 0 .8-.3l1.1-2.5 1.2 1.5c.2.3.6.3.8.1.3-.2.3-.6.1-.8L7.8 6.7 7 4.8l.9.6c.3.2.6.1.8-.1.2-.3.1-.6-.1-.8L7 3.4c-.5-.3-1.1-.1-1.6.7Z"
         fill={colors.white}
@@ -1041,7 +1897,11 @@ function WalkIcon() {
 
 function BusIconPlain() {
   return (
-    <Svg height={13} viewBox="0 0 16 16" width={13}>
+    <Svg
+      height={13}
+      viewBox="0 0 16 16"
+      width={13}
+    >
       <Path
         d="M4.2 1.5h7.6c1.1 0 2 .9 2 2v7.4c0 .9-.6 1.7-1.4 1.9v1.1c0 .3-.3.6-.6.6h-.7c-.3 0-.6-.3-.6-.6v-1H5.5v1c0 .3-.3.6-.6.6h-.7c-.3 0-.6-.3-.6-.6v-1.1c-.8-.3-1.4-1-1.4-1.9V3.5c0-1.1.9-2 2-2Zm.4 2.2v3.7h6.8V3.7H4.6Zm1 7.4a1.1 1.1 0 1 0 0-2.2 1.1 1.1 0 0 0 0 2.2Zm4.8-1.1a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 0 0-2.2 0Z"
         fill={colors.white}
@@ -1055,14 +1915,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.white,
   },
+
   mapScreen: {
     flex: 1,
     overflow: "hidden",
     backgroundColor: colors.gray03,
   },
+
   header: {
     borderBottomColor: colors.gray04,
   },
+
   mapHeaderLayer: {
     position: "absolute",
     top: 0,
@@ -1070,19 +1933,23 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 2,
   },
+
   mapHeader: {
     borderBottomWidth: 0,
     backgroundColor: "transparent",
   },
+
   headerTitle: {
     ...typography.head01Sb,
     color: colors.black,
   },
+
   content: {
     flex: 1,
     paddingTop: 28,
     paddingHorizontal: 20,
   },
+
   heading: {
     fontFamily: "SUIT",
     fontSize: 20,
@@ -1090,6 +1957,7 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     color: colors.gray09,
   },
+
   label: {
     marginTop: 32,
     fontFamily: "SUIT",
@@ -1098,9 +1966,11 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: colors.gray08,
   },
+
   timeLabel: {
     marginTop: 32,
   },
+
   textInput: {
     height: 64,
     marginTop: 12,
@@ -1114,6 +1984,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.gray09,
   },
+
   timeInput: {
     height: 64,
     marginTop: 12,
@@ -1126,6 +1997,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.white,
   },
+
   timeInputText: {
     fontFamily: "SUIT",
     fontSize: 16,
@@ -1133,6 +2005,7 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.gray09,
   },
+
   footer: {
     paddingHorizontal: 20,
     paddingBottom: 30,
@@ -1140,6 +2013,7 @@ const styles = StyleSheet.create({
     gap: 14,
     backgroundColor: colors.white,
   },
+
   cancelButton: {
     flex: 1,
     height: 64,
@@ -1150,6 +2024,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.white,
   },
+
   cancelButtonText: {
     fontFamily: "SUIT",
     fontSize: 16,
@@ -1157,6 +2032,7 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.gray08,
   },
+
   nextButton: {
     flex: 1,
     height: 64,
@@ -1165,6 +2041,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.main,
   },
+
   nextButtonText: {
     fontFamily: "SUIT",
     fontSize: 16,
@@ -1172,14 +2049,18 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.white,
   },
+
   sheetOverlay: {
     flex: 1,
     justifyContent: "flex-end",
   },
+
   sheetDim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(52, 56, 59, 0.32)",
+    backgroundColor:
+      "rgba(52, 56, 59, 0.32)",
   },
+
   sheet: {
     paddingTop: 18,
     paddingHorizontal: 20,
@@ -1188,6 +2069,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     backgroundColor: colors.white,
   },
+
   sheetHandle: {
     alignSelf: "center",
     width: 62,
@@ -1195,15 +2077,18 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.gray05,
   },
+
   pickerRows: {
     marginTop: 28,
     gap: 14,
   },
+
   pickerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
   },
+
   pickerMutedText: {
     flex: 1,
     height: 40,
@@ -1214,6 +2099,7 @@ const styles = StyleSheet.create({
     lineHeight: 40,
     color: colors.gray05,
   },
+
   pickerSelectedPeriodCell: {
     flex: 1,
     height: 58,
@@ -1222,6 +2108,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.gray03,
   },
+
   pickerSelectedTimeCell: {
     flex: 1,
     height: 58,
@@ -1230,6 +2117,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.gray03,
   },
+
   pickerSelectedText: {
     fontFamily: "SUIT",
     fontSize: 20,
@@ -1237,6 +2125,7 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     color: colors.gray09,
   },
+
   confirmButton: {
     height: 64,
     marginTop: 30,
@@ -1245,6 +2134,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.main,
   },
+
   confirmButtonText: {
     fontFamily: "SUIT",
     fontSize: 16,
@@ -1252,95 +2142,7 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.white,
   },
-  mapPlaceholder: {
-    flex: 1,
-    position: "relative",
-    overflow: "hidden",
-    backgroundColor: "#E8E2D6",
-  },
-  mapBlock: {
-    position: "absolute",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.7)",
-  },
-  mapPark: {
-    right: -44,
-    bottom: 260,
-    width: 210,
-    height: 190,
-    borderRadius: 40,
-    backgroundColor: "#CFE7BC",
-    transform: [{ rotate: "-16deg" }],
-  },
-  mapCampus: {
-    left: -24,
-    bottom: 245,
-    width: 220,
-    height: 150,
-    borderRadius: 28,
-    backgroundColor: "#D8E5EF",
-    transform: [{ rotate: "-14deg" }],
-  },
-  mapRoad: {
-    position: "absolute",
-    height: 22,
-    borderRadius: 12,
-    backgroundColor: "#F8F8F5",
-    borderWidth: 2,
-    borderColor: "#D8D1C8",
-  },
-  mapRoadA: {
-    top: 96,
-    left: -40,
-    width: 520,
-    transform: [{ rotate: "-31deg" }],
-  },
-  mapRoadB: {
-    top: 178,
-    left: -60,
-    width: 560,
-    transform: [{ rotate: "23deg" }],
-  },
-  mapRoadC: {
-    top: 286,
-    left: -80,
-    width: 560,
-    transform: [{ rotate: "-22deg" }],
-  },
-  mapRoadD: {
-    top: 392,
-    left: -70,
-    width: 540,
-    transform: [{ rotate: "18deg" }],
-  },
-  mapLabel: {
-    position: "absolute",
-    textAlign: "center",
-    fontFamily: "SUIT",
-    fontSize: 15,
-    fontWeight: "800",
-    lineHeight: 21,
-    color: "rgba(80, 87, 93, 0.58)",
-  },
-  mapLabelTop: {
-    top: 118,
-    left: 186,
-  },
-  mapLabelSchool: {
-    top: 184,
-    left: 34,
-    color: "rgba(66, 113, 183, 0.7)",
-  },
-  mapLabelCampus: {
-    bottom: 320,
-    left: 86,
-    color: "rgba(66, 113, 183, 0.78)",
-  },
-  mapLabelPark: {
-    bottom: 350,
-    right: 78,
-    color: "rgba(48, 126, 54, 0.78)",
-  },
+
   placeSearchBox: {
     height: 46,
     marginTop: 8,
@@ -1351,11 +2153,15 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.white,
     shadowColor: "#3D445E",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 2,
   },
+
   placeSearchInput: {
     flex: 1,
     height: "100%",
@@ -1366,60 +2172,95 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.gray09,
   },
+
+  /*
+   * 중요:
+   * overflow hidden으로 접혔을 때
+   * 출발지 / 도착지 내용이 밖으로 나오지 않게 함
+   */
   routeSheet: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    height: "52%",
+
     paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingBottom: 16,
+
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
+
     backgroundColor: colors.white,
+
+    overflow: "hidden",
   },
+
+  /*
+   * 접힌 상태에서 이 36px만 보임
+   */
   routeSheetHandleArea: {
-    height: 34,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
   },
+
+  routeSheetContent: {
+    flex: 1,
+    minHeight: 0,
+  },
+
   routeFieldLabel: {
     marginTop: 0,
-    marginBottom: 8,
+    marginBottom: 4,
     fontFamily: "SUIT",
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "700",
-    lineHeight: 18.2,
+    lineHeight: 15.4,
     color: colors.gray07,
   },
+
   routeField: {
-    height: 64,
+    height: 46,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.white,
   },
+
   routeFieldInput: {
     height: "100%",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 0,
     fontFamily: "SUIT",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
+    lineHeight: 19.6,
     color: colors.gray09,
   },
+
   mapConfirmButton: {
-    height: 56,
-    marginTop: 22,
+    height: 46,
+    marginTop: 8,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: colors.main,
   },
+
+  mapConfirmButtonText: {
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 19.6,
+    color: colors.white,
+  },
+
   resultScreen: {
     flex: 1,
     backgroundColor: colors.gray01,
   },
+
   resultHeader: {
     height: 80,
     paddingTop: 16,
@@ -1428,6 +2269,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: colors.gray01,
   },
+
   resultBackButton: {
     width: 30,
     height: 44,
@@ -1435,6 +2277,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   routeSummaryPill: {
     flex: 1,
     height: 52,
@@ -1446,6 +2289,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.white,
   },
+
   routeSummaryInput: {
     flex: 1,
     height: "100%",
@@ -1458,12 +2302,14 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.gray09,
   },
+
   resultNotice: {
     height: 48,
     paddingHorizontal: 20,
     justifyContent: "center",
     backgroundColor: colors.gray02,
   },
+
   resultNoticeText: {
     fontFamily: "SUIT",
     fontSize: 12,
@@ -1471,17 +2317,20 @@ const styles = StyleSheet.create({
     lineHeight: 16.8,
     color: colors.gray07,
   },
+
   routeResultContent: {
     flex: 1,
     paddingTop: 18,
     paddingHorizontal: 20,
     backgroundColor: colors.white,
   },
+
   routeStatusBox: {
     minHeight: 180,
     alignItems: "center",
     justifyContent: "center",
   },
+
   routeStatusText: {
     textAlign: "center",
     fontFamily: "SUIT",
@@ -1490,16 +2339,19 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: colors.gray06,
   },
+
   optionBadges: {
     flexDirection: "row",
     gap: 8,
   },
+
   optionBadge: {
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 12,
     backgroundColor: "#D9E7FF",
   },
+
   optionBadgeText: {
     fontFamily: "SUIT",
     fontSize: 12,
@@ -1507,11 +2359,13 @@ const styles = StyleSheet.create({
     lineHeight: 16.8,
     color: "#3478F6",
   },
+
   totalTimeRow: {
     marginTop: 12,
     flexDirection: "row",
     alignItems: "flex-end",
   },
+
   totalTimeNumber: {
     fontFamily: "SUIT",
     fontSize: 28,
@@ -1519,6 +2373,7 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     color: colors.gray09,
   },
+
   totalTimeUnit: {
     marginBottom: 3,
     marginLeft: 4,
@@ -1528,6 +2383,7 @@ const styles = StyleSheet.create({
     lineHeight: 19.6,
     color: colors.gray09,
   },
+
   routeTimeline: {
     height: 18,
     marginTop: 14,
@@ -1537,23 +2393,24 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.gray04,
   },
+
   routeTimelineSegment: {
     height: "100%",
     flexDirection: "row",
     alignItems: "center",
     minWidth: 0,
   },
+
   routeWalkSegment: {
     flex: 1.1,
   },
+
   routeBusSegment: {
     flex: 1.05,
     borderRadius: 10,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
-  routeAfterWalkSegment: {
-    flex: 1.9,
-  },
+
   routeWalkIcon: {
     width: 18,
     height: 18,
@@ -1562,20 +2419,23 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: colors.gray06,
   },
+
   routeBusIcon: {
     width: 18,
     height: 18,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 9,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
+
   routeTimelineTextWrap: {
     flex: 1,
     minWidth: 0,
     alignItems: "center",
     justifyContent: "center",
   },
+
   routeTimelineText: {
     fontFamily: "SUIT",
     fontSize: 13,
@@ -1583,6 +2443,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.gray07,
   },
+
   routeTimelineTextOn: {
     fontFamily: "SUIT",
     fontSize: 13,
@@ -1590,16 +2451,19 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.white,
   },
+
   routeDivider: {
     height: 1,
     marginTop: 14,
     marginBottom: 14,
     backgroundColor: colors.gray03,
   },
+
   routeBusInfo: {
     flexDirection: "row",
     alignItems: "center",
   },
+
   routeBusBadge: {
     width: 22,
     height: 22,
@@ -1607,8 +2471,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 11,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
+
   routeBusNumber: {
     fontFamily: "SUIT",
     fontSize: 18,
@@ -1616,6 +2481,7 @@ const styles = StyleSheet.create({
     lineHeight: 25.2,
     color: colors.gray09,
   },
+
   routeBusDirection: {
     fontFamily: "SUIT",
     fontSize: 14,
@@ -1623,15 +2489,18 @@ const styles = StyleSheet.create({
     lineHeight: 19.6,
     color: colors.gray06,
   },
+
   routeStops: {
     marginTop: 12,
     gap: 11,
   },
+
   stopRow: {
     height: 23,
     flexDirection: "row",
     alignItems: "center",
   },
+
   stopOuter: {
     width: 23,
     height: 23,
@@ -1641,18 +2510,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: colors.gray04,
   },
+
   stopOuterActive: {
     backgroundColor: colors.sub,
   },
+
   stopInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: colors.gray06,
   },
+
   stopInnerActive: {
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
+
   stopLabel: {
     width: 42,
     fontFamily: "SUIT",
@@ -1661,6 +2534,7 @@ const styles = StyleSheet.create({
     lineHeight: 19.6,
     color: colors.gray07,
   },
+
   stopName: {
     flex: 1,
     fontFamily: "SUIT",
@@ -1669,6 +2543,7 @@ const styles = StyleSheet.create({
     lineHeight: 19.6,
     color: colors.gray08,
   },
+
   routeAlarmButton: {
     height: 46,
     marginTop: 22,
@@ -1679,6 +2554,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.white,
   },
+
   routeAlarmButtonText: {
     fontFamily: "SUIT",
     fontSize: 14,
@@ -1686,10 +2562,12 @@ const styles = StyleSheet.create({
     lineHeight: 19.6,
     color: colors.gray08,
   },
+
   finalScreen: {
     flex: 1,
     backgroundColor: colors.gray01,
   },
+
   finalRouteHeader: {
     height: 64,
     paddingHorizontal: 20,
@@ -1698,14 +2576,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: colors.gray02,
   },
+
   finalBusInfo: {
     flexDirection: "row",
     alignItems: "center",
   },
+
   finalTotalTime: {
     flexDirection: "row",
     alignItems: "flex-end",
   },
+
   finalTotalTimeNumber: {
     fontFamily: "SUIT",
     fontSize: 24,
@@ -1713,6 +2594,7 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     color: colors.gray09,
   },
+
   finalTotalTimeUnit: {
     marginBottom: 2,
     marginLeft: 3,
@@ -1722,19 +2604,23 @@ const styles = StyleSheet.create({
     lineHeight: 19.6,
     color: colors.gray09,
   },
+
   finalContent: {
     paddingHorizontal: 20,
     paddingTop: 22,
     backgroundColor: colors.white,
   },
+
   timeSummaryRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 12,
   },
+
   timeSummaryBlock: {
     flex: 1,
   },
+
   finalLabel: {
     marginBottom: 8,
     fontFamily: "SUIT",
@@ -1743,6 +2629,7 @@ const styles = StyleSheet.create({
     lineHeight: 18.2,
     color: colors.gray07,
   },
+
   timeCard: {
     height: 64,
     alignItems: "center",
@@ -1752,6 +2639,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.white,
   },
+
   timeCardText: {
     fontFamily: "SUIT",
     fontSize: 18,
@@ -1759,6 +2647,7 @@ const styles = StyleSheet.create({
     lineHeight: 25.2,
     color: colors.gray07,
   },
+
   resetRouteButton: {
     height: 46,
     marginTop: 16,
@@ -1769,6 +2658,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.white,
   },
+
   resetRouteButtonText: {
     fontFamily: "SUIT",
     fontSize: 14,
@@ -1776,10 +2666,12 @@ const styles = StyleSheet.create({
     lineHeight: 19.6,
     color: colors.gray08,
   },
+
   finalDivider: {
     height: 16,
     backgroundColor: colors.gray02,
   },
+
   questionText: {
     fontFamily: "SUIT",
     fontSize: 16,
@@ -1787,6 +2679,7 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.gray09,
   },
+
   reminderSelect: {
     height: 64,
     marginTop: 16,
@@ -1799,6 +2692,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.white,
   },
+
   reminderSelectText: {
     fontFamily: "SUIT",
     fontSize: 16,
@@ -1806,12 +2700,14 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.gray08,
   },
+
   dayRow: {
     marginTop: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 8,
   },
+
   dayButton: {
     flex: 1,
     height: 46,
@@ -1822,10 +2718,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.white,
   },
+
   dayButtonSelected: {
     borderColor: colors.main,
     backgroundColor: colors.sub,
   },
+
   dayButtonText: {
     fontFamily: "SUIT",
     fontSize: 14,
@@ -1833,21 +2731,25 @@ const styles = StyleSheet.create({
     lineHeight: 19.6,
     color: colors.gray07,
   },
+
   dayButtonTextSelected: {
     color: colors.main,
   },
+
   finalFooter: {
     marginTop: "auto",
     paddingHorizontal: 20,
     paddingBottom: 28,
     backgroundColor: colors.white,
   },
+
   finalInfoBox: {
     paddingVertical: 14,
     paddingHorizontal: 12,
     borderRadius: 4,
     backgroundColor: colors.gray02,
   },
+
   finalInfoText: {
     fontFamily: "SUIT",
     fontSize: 12,
@@ -1855,11 +2757,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.gray07,
   },
+
   finalButtonRow: {
     marginTop: 14,
     flexDirection: "row",
     gap: 14,
   },
+
   prevButton: {
     flex: 1,
     height: 64,
@@ -1870,6 +2774,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.white,
   },
+
   prevButtonText: {
     fontFamily: "SUIT",
     fontSize: 16,
@@ -1877,6 +2782,7 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.gray08,
   },
+
   saveButton: {
     flex: 1,
     height: 64,
@@ -1885,9 +2791,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.main,
   },
+
   saveButtonDisabled: {
     backgroundColor: colors.gray05,
   },
+
   saveButtonText: {
     fontFamily: "SUIT",
     fontSize: 16,
@@ -1895,12 +2803,15 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.white,
   },
+
   reminderOverlay: {
     flex: 1,
     paddingHorizontal: 20,
     justifyContent: "center",
-    backgroundColor: "rgba(52, 56, 59, 0.32)",
+    backgroundColor:
+      "rgba(52, 56, 59, 0.32)",
   },
+
   reminderCard: {
     paddingTop: 24,
     paddingHorizontal: 24,
@@ -1908,11 +2819,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: colors.white,
   },
+
   reminderHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+
   reminderTitle: {
     fontFamily: "SUIT",
     fontSize: 16,
@@ -1920,22 +2833,26 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.gray07,
   },
+
   reminderCloseButton: {
     width: 30,
     height: 30,
     alignItems: "center",
     justifyContent: "center",
   },
+
   reminderList: {
     marginTop: 22,
     gap: 21,
   },
+
   reminderRow: {
     minHeight: 35,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+
   reminderOptionText: {
     fontFamily: "SUIT",
     fontSize: 20,
@@ -1943,6 +2860,7 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     color: colors.gray08,
   },
+
   reminderSwitch: {
     width: 44,
     height: 26,
@@ -1951,10 +2869,12 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: colors.gray05,
   },
+
   reminderSwitchOn: {
     alignItems: "flex-end",
     backgroundColor: colors.main,
   },
+
   reminderSwitchThumb: {
     width: 20,
     height: 20,

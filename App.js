@@ -42,9 +42,12 @@ function goBackOrReset(navigation, fallbackRoute = routes.home, params) {
   resetTo(navigation, fallbackRoute, params);
 }
 
-function LoginRoute({ navigation }) {
+function LoginRoute({ navigation, route }) {
   return (
     <LoginScreen
+      initialEmail={route.params?.email}
+      initialPassword={route.params?.password}
+      initialRemember={route.params?.remember}
       onFindPasswordPress={() => navigation.navigate(routes.findPassword)}
       onLoginPress={() => resetTo(navigation, routes.home)}
       onSignupPress={() => navigation.navigate(routes.signup)}
@@ -56,8 +59,12 @@ function SignupRoute({ navigation }) {
   return (
     <SignupScreen
       onBackPress={() => goBackOrReset(navigation, routes.login)}
-      onNextPress={({ signupTokens }) =>
-        navigation.navigate(routes.termsAgreement, { signupTokens })
+      onNextPress={({ email, password, signupTokens }) =>
+        navigation.navigate(routes.termsAgreement, {
+          email,
+          password,
+          signupTokens,
+        })
       }
     />
   );
@@ -67,17 +74,27 @@ function TermsAgreementRoute({ navigation, route }) {
   return (
     <TermsAgreementScreen
       onBackPress={() => goBackOrReset(navigation, routes.signup)}
-      onConfirmPress={() => resetTo(navigation, routes.home)}
+      onConfirmPress={() =>
+        resetTo(navigation, routes.signupComplete, {
+          email: route.params?.email,
+          password: route.params?.password,
+        })
+      }
       signupTokens={route.params?.signupTokens}
     />
   );
 }
 
-function SignupCompleteRoute({ navigation }) {
+function SignupCompleteRoute({ navigation, route }) {
   return (
     <SignupCompleteScreen
-      onHomePress={() => resetTo(navigation, routes.home)}
-      onLoginPress={() => resetTo(navigation, routes.login)}
+      onLoginPress={() =>
+        resetTo(navigation, routes.login, {
+          email: route.params?.email,
+          password: route.params?.password,
+          remember: true,
+        })
+      }
     />
   );
 }
@@ -232,7 +249,14 @@ function FindPasswordRoute({ navigation }) {
   return (
     <FindEmailPasswordScreen
       onBackPress={() => goBackOrReset(navigation, routes.login)}
-      onConfirmPress={() => resetTo(navigation, routes.home)}
+      onConfirmPress={({ authenticated, email, password, remember }) => {
+        if (authenticated) {
+          resetTo(navigation, routes.home);
+          return;
+        }
+
+        resetTo(navigation, routes.login, { email, password, remember });
+      }}
     />
   );
 }

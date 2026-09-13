@@ -7,8 +7,6 @@ import CheckboxIcon from "../../assets/images/Checkbox.svg";
 import DownIcon from "../../assets/images/Down.svg";
 import UpIcon from "../../assets/images/Up.svg";
 import { agreeToSignupTerms } from "../api/auth/consent";
-import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
-import { registerSavedDeviceToken } from "../notifications/deviceTokenRegistration";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import { colors, layout, typography } from "../theme";
 
@@ -90,21 +88,11 @@ export function TermsAgreementScreen({
     setIsSubmitting(true);
 
     try {
-      const consentResponse = await agreeToSignupTerms({
+      await agreeToSignupTerms({
         serviceTermsAgreement: checkedMap.service,
-        serviceInfoAgreement: checkedMap.privacy,
+        personalInfoAgreement: checkedMap.privacy,
         accessToken: signupTokens.accessToken,
       });
-      const consentTokens = extractAuthTokens(consentResponse);
-      const authTokens = {
-        accessToken: consentTokens.accessToken ?? signupTokens.accessToken,
-        refreshToken: consentTokens.refreshToken ?? signupTokens.refreshToken,
-      };
-
-      setAuthTokens(authTokens);
-      registerSavedDeviceToken({
-        accessToken: authTokens.accessToken,
-      }).catch(() => {});
 
       onConfirmPress?.();
     } catch (error) {

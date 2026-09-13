@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -249,16 +249,10 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
         </View>
       ) : null}
       <View style={styles.routeHeader}>
-        <View style={styles.busInfo}>
-          <BusIcon />
-          <Text style={styles.busNumber}>
-            {primarySegment?.transitName || "대중교통"}
-          </Text>
-          <Text style={styles.busDirection}>
-            {primarySegment?.endStation
-              ? `· ${primarySegment.endStation} 방면`
-              : ""}
-          </Text>
+        <View style={styles.routeClockGroup}>
+          <Text style={styles.routeClockText}>23:42</Text>
+          <ChevronRightIcon />
+          <Text style={styles.routeClockText}>00:04</Text>
         </View>
         <View style={styles.totalTime}>
           <Text style={styles.totalTimeNumber}>{totalDuration}</Text>
@@ -528,6 +522,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+  routeClockGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  routeClockText: {
+    fontFamily: "SUIT",
+    fontSize: 28,
+    fontWeight: "700",
+    lineHeight: 34,
+    color: colors.gray09,
+  },
   busIconCircle: {
     width: 22,
     height: 22,
@@ -535,7 +541,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 11,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   busNumber: {
     fontFamily: "SUIT",

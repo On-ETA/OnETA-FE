@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   timelineBusSegment: {
     flex: 1,
     borderRadius: 10,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   timelineIcon: {
     width: 18,
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray06,
   },
   timelineBusIcon: {
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   timelineTextWrap: {
     flex: 1,
@@ -453,12 +453,12 @@ const styles = StyleSheet.create({
     width: 9,
     height: 9,
     borderRadius: 5,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   railLine: {
     width: 2,
     flex: 1,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   stopCircleOff: {
     width: 20,
@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 4,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   busBadgeText: {
     marginLeft: 4,
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 18.2,
-    color: colors.main,
+    color: colors.bus,
   },
   busDottedLine: {
     flex: 1,
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     lineHeight: 18.2,
-    color: colors.main,
+    color: colors.bus,
   },
   viaStops: {
     marginTop: 10,

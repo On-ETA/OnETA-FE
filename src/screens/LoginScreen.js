@@ -27,6 +27,9 @@ import VisibleIcon from "../../assets/images/icon_visible.svg";
 import { colors, layout, typography } from "../theme";
 
 export function LoginScreen({
+  initialEmail = "",
+  initialPassword = "",
+  initialRemember = false,
   onLoginPress,
   onSignupPress,
   onFindPasswordPress,
@@ -35,9 +38,9 @@ export function LoginScreen({
   const frameWidth = Math.min(width, layout.mobileFrameWidth);
   const insets = useSafeAreaInsets();
   const availableHeight = Math.max(height - insets.top - insets.bottom, 1);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
+  const [email, setEmail] = useState(initialEmail);
+  const [password, setPassword] = useState(initialPassword);
+  const [remember, setRemember] = useState(initialRemember);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -32,6 +32,8 @@ const EMAIL_AUTH_STATUS = {
   failed: "failed",
 };
 
+const MAX_EMAIL_VERIFY_ATTEMPTS = 5;
+
 function getApiErrorMessage(error, fallbackMessage) {
   const fieldErrors = error?.data?.data ?? error?.details?.data;
 
@@ -59,6 +61,7 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
+  const [emailVerifyAttempts, setEmailVerifyAttempts] = useState(0);
   const [resetErrorMessage, setResetErrorMessage] = useState("");
   const [emailAuthStatus, setEmailAuthStatus] = useState(
     EMAIL_AUTH_STATUS.idle,
@@ -79,7 +82,9 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
     !isEmailVerified;
   const canVerifyEmailCode =
     isVerificationCodeEntered &&
-    emailAuthStatus === EMAIL_AUTH_STATUS.sent &&
+    (emailAuthStatus === EMAIL_AUTH_STATUS.sent ||
+      emailAuthStatus === EMAIL_AUTH_STATUS.failed) &&
+    emailVerifyAttempts < MAX_EMAIL_VERIFY_ATTEMPTS &&
     !isSendingEmail &&
     !isVerifyingEmail &&
     !isEmailVerified;
@@ -100,6 +105,7 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
     setEmailStatus(null);
     setResetErrorMessage("");
     setEmailAuthStatus(EMAIL_AUTH_STATUS.idle);
+    setEmailVerifyAttempts(0);
 
     if (verifiedEmail && value.trim() !== verifiedEmail) {
       setVerifiedEmail("");
@@ -127,6 +133,7 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
     try {
       await sendEmailVerificationCode({ email: trimmedEmail });
       setVerifiedEmail("");
+      setEmailVerifyAttempts(0);
       setEmailAuthStatus(EMAIL_AUTH_STATUS.sent);
       setEmailStatus({
         type: "success",
@@ -158,7 +165,6 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
         type: "error",
         message: errorMessage,
       });
-      setResetErrorMessage(errorMessage);
       return;
     }
 
@@ -170,29 +176,39 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
     setIsVerifyingEmail(true);
 
     try {
+      const nextAttempt = emailVerifyAttempts + 1;
+
       await verifyEmailCode({
         email: trimmedEmail,
         code: trimmedVerificationCode,
       });
       setVerifiedEmail(trimmedEmail);
+      setEmailVerifyAttempts(nextAttempt);
       setEmailAuthStatus(EMAIL_AUTH_STATUS.verified);
       setEmailStatus({
         type: "success",
         message: "이메일 인증이 완료되었습니다.",
       });
     } catch (error) {
+      const nextAttempt = emailVerifyAttempts + 1;
+      const hasRemainingAttempts = nextAttempt < MAX_EMAIL_VERIFY_ATTEMPTS;
       const errorMessage = getApiErrorMessage(
         error,
         "인증번호 확인에 실패했습니다. 다시 시도해 주세요.",
       );
+      const retryMessage = hasRemainingAttempts
+        ? `${errorMessage} (${MAX_EMAIL_VERIFY_ATTEMPTS - nextAttempt}회 남음)`
+        : "이메일 인증 시도 횟수를 초과했습니다. 인증번호를 다시 요청해 주세요.";
 
       setVerifiedEmail("");
-      setEmailAuthStatus(EMAIL_AUTH_STATUS.failed);
+      setEmailVerifyAttempts(nextAttempt);
+      setEmailAuthStatus(
+        hasRemainingAttempts ? EMAIL_AUTH_STATUS.failed : EMAIL_AUTH_STATUS.idle,
+      );
       setEmailStatus({
         type: "error",
-        message: errorMessage,
+        message: retryMessage,
       });
-      setResetErrorMessage(errorMessage);
     } finally {
       setIsVerifyingEmail(false);
     }
@@ -224,7 +240,6 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
         newPassword,
         newPasswordConfirm,
       });
-
       const loginResponse = await login({
         email: trimmedEmail,
         password: newPassword,
@@ -235,7 +250,13 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
       registerSavedDeviceToken({
         accessToken: authTokens.accessToken,
       }).catch(() => {});
-      onConfirmPress?.();
+
+      onConfirmPress?.({
+        email: trimmedEmail,
+        password: newPassword,
+        remember: true,
+        authenticated: true,
+      });
     } catch (error) {
       setResetErrorMessage(
         getApiErrorMessage(
@@ -309,7 +330,7 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
                   {isEmailVerified ? "완료" : isSendingEmail ? "전송" : "인증"}
                 </SideButton>
               </View>
-              {shouldShowInputPreview && trimmedEmail && (
+              {shouldShowInputPreview && Boolean(trimmedEmail) && (
                 <Text style={styles.inputPreview}>이메일 : {trimmedEmail}</Text>
               )}
               <View style={styles.row}>
@@ -331,7 +352,7 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
                   {isEmailVerified ? "완료" : isVerifyingEmail ? "확인" : "확인"}
                 </SideButton>
               </View>
-              {shouldShowInputPreview && trimmedVerificationCode && (
+              {shouldShowInputPreview && Boolean(trimmedVerificationCode) && (
                 <Text style={styles.inputPreview}>
                   인증번호: {trimmedVerificationCode}
                 </Text>
