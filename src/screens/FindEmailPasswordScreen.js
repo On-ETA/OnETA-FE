@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,8 +12,11 @@ import {
 } from "react-native";
 
 import { sendEmailVerificationCode } from "../api/auth/email/send";
+import { login } from "../api/auth/login";
+import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
 import { verifyEmailCode } from "../api/auth/email/verify";
 import { resetPassword } from "../api/reset";
+import { registerSavedDeviceToken } from "../notifications/deviceTokenRegistration";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";
 import VisibleIcon from "../../assets/images/icon_visible.svg";
 import BackIcon from "../../assets/images/L.svg";
@@ -162,7 +165,6 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
         type: "error",
         message: errorMessage,
       });
-      setResetErrorMessage(errorMessage);
       return;
     }
 
@@ -207,7 +209,6 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
         type: "error",
         message: retryMessage,
       });
-      setResetErrorMessage(retryMessage);
     } finally {
       setIsVerifyingEmail(false);
     }
@@ -239,11 +240,22 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
         newPassword,
         newPasswordConfirm,
       });
+      const loginResponse = await login({
+        email: trimmedEmail,
+        password: newPassword,
+      });
+      const authTokens = extractAuthTokens(loginResponse);
+
+      setAuthTokens(authTokens);
+      registerSavedDeviceToken({
+        accessToken: authTokens.accessToken,
+      }).catch(() => {});
 
       onConfirmPress?.({
         email: trimmedEmail,
         password: newPassword,
         remember: true,
+        authenticated: true,
       });
     } catch (error) {
       setResetErrorMessage(

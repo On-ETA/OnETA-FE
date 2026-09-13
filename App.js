@@ -249,9 +249,14 @@ function FindPasswordRoute({ navigation }) {
   return (
     <FindEmailPasswordScreen
       onBackPress={() => goBackOrReset(navigation, routes.login)}
-      onConfirmPress={({ email, password, remember }) =>
-        resetTo(navigation, routes.login, { email, password, remember })
-      }
+      onConfirmPress={({ authenticated, email, password, remember }) => {
+        if (authenticated) {
+          resetTo(navigation, routes.home);
+          return;
+        }
+
+        resetTo(navigation, routes.login, { email, password, remember });
+      }}
     />
   );
 }
