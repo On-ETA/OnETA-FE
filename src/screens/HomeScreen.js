@@ -373,14 +373,9 @@ export function HomeScreen({
                 onHomeTabPress={setActiveHomeTab}
                 onMyPagePress={() => handleTabPress("myPage")}
                 onRouteDetailPress={() => setIsRouteDetailVisible(true)}
-                firstLastRouteSummary={firstLastRouteSummary}
-                onFirstLastRouteSetupPress={() =>
-                  setFirstLastRouteSetupStep("map")
+                onScheduleAlarmAddPress={() =>
+                  setIsScheduleAlarmAddVisible(true)
                 }
-                onScheduleAlarmAddPress={() => {
-                  setScheduleAlarmInitialStep("form");
-                  setIsScheduleAlarmAddVisible(true);
-                }}
                 onGarageAlarmEditPress={(alarm) =>
                   setEditingCustomAlarm({ type: "garage", alarm })
                 }
@@ -433,11 +428,7 @@ function HomeDashboard({
           onScheduleAlarmEditPress={onScheduleAlarmEditPress}
         />
       ) : (
-        <FirstLastRouteScreen
-          onRouteDetailPress={onRouteDetailPress}
-          onRouteSetupPress={onFirstLastRouteSetupPress}
-          routeSummary={firstLastRouteSummary}
-        />
+        <FirstLastRouteScreen onRouteDetailPress={onRouteDetailPress} />
       )}
     </>
   );
