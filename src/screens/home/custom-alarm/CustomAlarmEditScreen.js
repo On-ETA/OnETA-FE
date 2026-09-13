@@ -200,8 +200,7 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
       reminderOffsetMinutes,
       repeatDays: selectedDays
         .map((day) => koreanDayToApiDay[day])
-        .filter(Boolean)
-        .join(","),
+        .filter(Boolean),
       routeDetails: getRouteDetails(arrivalAlarm),
       scheduleType: arrivalAlarm?.scheduleType,
     };

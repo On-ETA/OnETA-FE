@@ -99,15 +99,19 @@ export function FirstLastRouteScreen({
                   <Text style={styles.summaryLabel}>남은 시간</Text>
                   <View style={styles.remainingGroup}>
                     <Text style={styles.remainingNumber}>
-                      {routeSummary.remainingMinutes}
+                      {Number.isFinite(routeSummary.remainingMinutes)
+                        ? routeSummary.remainingMinutes
+                        : ""}
                     </Text>
-                    <Text style={styles.remainingUnit}>분</Text>
+                    {Number.isFinite(routeSummary.remainingMinutes) ? (
+                      <Text style={styles.remainingUnit}>분</Text>
+                    ) : null}
                   </View>
                 </View>
                 <View style={[styles.summaryBlock, styles.summaryBlockRight]}>
                   <Text style={styles.summaryLabel}>출발 적정 시간</Text>
                   <Text style={styles.departureTime}>
-                    {routeSummary.departureTime}
+                    {routeSummary.departureTime ?? ""}
                   </Text>
                 </View>
               </View>

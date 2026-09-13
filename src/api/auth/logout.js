@@ -13,6 +13,15 @@ import { clearAuthTokens, getAccessToken } from "./tokens";
 
 const LOGOUT_ENDPOINT = "/api/auth/logout";
 
+function isAuthError(error) {
+  return (
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.code === "C007" ||
+    error?.code === "C005"
+  );
+}
+
 export async function logout({ accessToken = getAccessToken(), signal } = {}) {
   try {
     const response = await requestJson({
@@ -27,7 +36,7 @@ export async function logout({ accessToken = getAccessToken(), signal } = {}) {
 
     return response;
   } catch (error) {
-    if (error?.status === 403 || error?.code === "C005") {
+    if (isAuthError(error)) {
       clearAuthTokens();
     }
 

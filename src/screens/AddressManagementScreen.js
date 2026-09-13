@@ -55,6 +55,7 @@ export function AddressManagementScreen({
   const [addressLoadError, setAddressLoadError] = useState("");
   const [selectedResult, setSelectedResult] = useState(null);
   const [editingAddress, setEditingAddress] = useState(null);
+  const [isRegisteringAddress, setIsRegisteringAddress] = useState(false);
   const [isDeletingAddress, setIsDeletingAddress] = useState(false);
   const [settingCurrentAddressId, setSettingCurrentAddressId] = useState(null);
 
@@ -116,10 +117,16 @@ export function AddressManagementScreen({
   };
 
   const registerAddress = async (alias) => {
-    if (!selectedResult || addresses.length >= MAX_ADDRESS_COUNT) {
+    if (
+      isRegisteringAddress ||
+      !selectedResult ||
+      addresses.length >= MAX_ADDRESS_COUNT
+    ) {
       setScreenMode("list");
       return;
     }
+
+    setIsRegisteringAddress(true);
 
     try {
       const response = await createAddress({
@@ -130,17 +137,18 @@ export function AddressManagementScreen({
           y: selectedResult.y,
         },
       });
-      const createdAddress = response?.data
-        ? normalizeAddress(response.data)
-        : {
-            id: `${selectedResult.id}-${Date.now()}`,
-            name: alias || selectedResult.name || "주소 이름",
-            detail: selectedResult.address ?? selectedResult.roadAddress,
-            placeName: selectedResult.name,
-            x: selectedResult.x,
-            y: selectedResult.y,
-            isCurrent: false,
-          };
+      const responseAddress = response?.data ?? response;
+      const createdAddress = normalizeAddress(responseAddress);
+      const createdAddressId = createdAddress.addressId ?? createdAddress.id;
+
+      if (createdAddressId === undefined || createdAddressId === null) {
+        const nextAddresses = await getAddresses();
+
+        setAddresses(nextAddresses);
+        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+        setScreenMode("list");
+        return;
+      }
 
       setAddresses((current) => {
         const nextAddresses = [...current, createdAddress];
@@ -152,6 +160,8 @@ export function AddressManagementScreen({
       setScreenMode("list");
     } catch (error) {
       Alert.alert("주소 등록 실패", error?.message ?? "주소 등록에 실패했습니다.");
+    } finally {
+      setIsRegisteringAddress(false);
     }
   };
 
@@ -222,7 +232,7 @@ export function AddressManagementScreen({
   const handleCurrentAddressPress = async (address) => {
     const addressId = address.addressId ?? address.id;
 
-    if (!addressId || address.isCurrent || settingCurrentAddressId === addressId) {
+    if (!addressId || address.isCurrent || settingCurrentAddressId !== null) {
       return;
     }
 
@@ -290,6 +300,7 @@ export function AddressManagementScreen({
         }}
         buttonLabel="주소 등록"
         initialAlias=""
+        isSubmitting={isRegisteringAddress}
         onBackPress={handleBackPress}
         onChangeAddress={() => setScreenMode("search")}
         onSubmit={registerAddress}
@@ -337,9 +348,7 @@ export function AddressManagementScreen({
         {addresses.map((address) => (
           <AddressCard
             address={address}
-            isSettingCurrent={
-              settingCurrentAddressId === (address.addressId ?? address.id)
-            }
+            isSettingCurrent={settingCurrentAddressId !== null}
             key={address.id ?? address.addressId}
             onCurrentPress={() => handleCurrentAddressPress(address)}
             onEditPress={() => {
@@ -467,6 +476,7 @@ function AddressFormScreen({
   buttonLabel,
   initialAlias,
   isDeleting = false,
+  isSubmitting = false,
   onBackPress,
   onChangeAddress,
   onDelete,
@@ -509,10 +519,13 @@ function AddressFormScreen({
       <View style={styles.detailFooter}>
         <Pressable
           accessibilityRole="button"
+          disabled={isSubmitting}
           onPress={() => onSubmit(alias.trim())}
-          style={styles.submitButton}
+          style={[styles.submitButton, isSubmitting && styles.disabledButton]}
         >
-          <Text style={styles.submitButtonText}>{buttonLabel}</Text>
+          <Text style={styles.submitButtonText}>
+            {isSubmitting ? "등록중" : buttonLabel}
+          </Text>
         </Pressable>
         {onDelete ? (
           <Pressable

@@ -691,7 +691,11 @@ function ScheduleAlarmFinalStep({
           onPress={() => setIsReminderModalVisible(true)}
           style={styles.reminderSelect}
         >
-          <Text style={styles.reminderSelectText}>10분 전 알림</Text>
+          <Text style={styles.reminderSelectText}>
+            {selectedReminderOffsets.length > 0
+              ? `${selectedReminderOffsets.join(", ")}분 전 알림`
+              : "알림 시간 선택"}
+          </Text>
           <ChevronDownIcon />
         </Pressable>
 
@@ -813,13 +817,12 @@ function ReminderModal({ onClose, onToggle, reminders, visible }) {
 }
 
 function RouteTimeline({ segments = [] }) {
-  const visibleSegments = segments.length > 0
-    ? segments
-    : [
-        { id: "walk-before", transitType: "WALK", durationMinutes: 5 },
-        { id: "transit", transitType: "BUS", durationMinutes: 4 },
-        { id: "walk-after", transitType: "WALK", durationMinutes: 8 },
-      ];
+  const visibleSegments = segments;
+
+  if (visibleSegments.length === 0) {
+    return null;
+  }
+
   const totalDuration = visibleSegments.reduce(
     (sum, segment) => sum + Math.max(segment.durationMinutes ?? 0, 1),
     0,

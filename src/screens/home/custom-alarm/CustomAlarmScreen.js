@@ -221,36 +221,57 @@ export function CustomAlarmScreen({
       return;
     }
 
-    const garageTargetIds = garageAlarms
-      .filter((alarm) => deleteTargetIds.includes(alarm.id))
-      .map((alarm) => alarm.userBusId ?? alarm.id);
-    const scheduleTargetIds = scheduleAlarms
-      .filter((alarm) => deleteTargetIds.includes(alarm.id))
+    const garageTargets = garageAlarms.filter((alarm) =>
+      deleteTargetIds.includes(alarm.id),
+    );
+    const scheduleTargets = scheduleAlarms.filter((alarm) =>
+      deleteTargetIds.includes(alarm.id),
+    );
+    const scheduleTargetIds = scheduleTargets
       .map(getArrivalNotificationId)
       .filter((id) => id !== undefined && id !== null && id !== "");
 
     setIsDeletingAlarms(true);
 
     try {
-      await Promise.all([
-        ...garageTargetIds.map((userBusId) =>
-          deleteDepotNotification({ userBusId }),
+      const garageResults = await Promise.allSettled(
+        garageTargets.map((alarm) =>
+          deleteDepotNotification({ userBusId: alarm.userBusId ?? alarm.id }),
         ),
+      );
+      const scheduleResult =
         scheduleTargetIds.length > 0
-          ? deleteArrivalNotifications({ ids: scheduleTargetIds })
-          : Promise.resolve(),
-      ]);
+          ? await deleteArrivalNotifications({ ids: scheduleTargetIds }).then(
+              () => ({ status: "fulfilled" }),
+              () => ({ status: "rejected" }),
+            )
+          : { status: "fulfilled" };
+      const deletedGarageIds = garageTargets
+        .filter((_, index) => garageResults[index]?.status === "fulfilled")
+        .map((alarm) => alarm.id);
+      const deletedScheduleIds =
+        scheduleResult.status === "fulfilled"
+          ? scheduleTargets.map((alarm) => alarm.id)
+          : [];
+      const deletedIds = [...deletedGarageIds, ...deletedScheduleIds];
 
       setGarageAlarms((current) =>
-        current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
+        current.filter((alarm) => !deletedIds.includes(alarm.id)),
       );
       setScheduleAlarms((current) =>
-        current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
+        current.filter((alarm) => !deletedIds.includes(alarm.id)),
       );
       setSelectedIds((current) =>
-        current.filter((alarmId) => !deleteTargetIds.includes(alarmId)),
+        current.filter((alarmId) => !deletedIds.includes(alarmId)),
       );
       setDeleteTargetIds([]);
+
+      if (
+        garageResults.some((result) => result.status === "rejected") ||
+        scheduleResult.status === "rejected"
+      ) {
+        Alert.alert("알림 삭제 실패", "일부 알림을 삭제하지 못했습니다.");
+      }
     } catch (error) {
       Alert.alert(
         "알림 삭제 실패",

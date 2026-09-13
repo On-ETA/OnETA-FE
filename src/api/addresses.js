@@ -44,21 +44,51 @@ function isAuthError(error) {
   );
 }
 
+function createBusinessError(response, fallbackMessage) {
+  if (!response?.code || response.code === "SUCCESS") {
+    return null;
+  }
+
+  const error = new Error(response.message ?? fallbackMessage);
+
+  error.code = response.code;
+  error.data = response;
+
+  return error;
+}
+
 async function requestAddressJson(options) {
+  const fallbackMessage = options.errorMessage ?? "주소 요청에 실패했습니다.";
+
   try {
-    return await requestJson(options);
+    const response = await requestJson(options);
+    const businessError = createBusinessError(response, fallbackMessage);
+
+    if (businessError) {
+      throw businessError;
+    }
+
+    return response;
   } catch (error) {
     if (!isAuthError(error)) {
       throw error;
     }
 
     try {
-      const { accessToken } = await reissueAuthTokens();
-
-      return await requestJson({
+      const { accessToken } = await reissueAuthTokens({
+        signal: options.signal,
+      });
+      const response = await requestJson({
         ...options,
         accessToken,
       });
+      const businessError = createBusinessError(response, fallbackMessage);
+
+      if (businessError) {
+        throw businessError;
+      }
+
+      return response;
     } catch {
       throw error;
     }

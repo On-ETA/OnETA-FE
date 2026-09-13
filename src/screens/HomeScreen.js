@@ -43,6 +43,98 @@ function getSegmentStopName(segment, edge) {
   );
 }
 
+function getRouteValue(source, key) {
+  return source?.[key] ?? source?.raw?.[key];
+}
+
+function getNumericRouteValue(source, key) {
+  const value = getRouteValue(source, key);
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function formatClockTime(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return `${String(date.getHours()).padStart(2, "0")}:${String(
+    date.getMinutes(),
+  ).padStart(2, "0")}`;
+}
+
+function formatRouteTime(value) {
+  if (!value) {
+    return undefined;
+  }
+
+  if (typeof value === "string") {
+    const [hour, minute] = value.split(":");
+
+    return hour && minute
+      ? `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`
+      : value;
+  }
+
+  if (typeof value === "object") {
+    const hour = Number(value.hour);
+    const minute = Number(value.minute);
+
+    return Number.isFinite(hour) && Number.isFinite(minute)
+      ? `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
+      : undefined;
+  }
+
+  return undefined;
+}
+
+function getFirstLastRouteTimes({ firstWalk, primarySegment, route }) {
+  const now = new Date();
+  const realTimeArrivalSeconds = getNumericRouteValue(
+    primarySegment,
+    "realTimeArrivalSeconds",
+  );
+  const busMinutes = getNumericRouteValue(primarySegment, "durationMinutes");
+  const walkMinutes = getNumericRouteValue(firstWalk, "durationMinutes") ?? 0;
+  const boardingDate = Number.isFinite(realTimeArrivalSeconds)
+    ? new Date(now.getTime() + realTimeArrivalSeconds * 1000)
+    : null;
+  const departureDate = boardingDate
+    ? new Date(boardingDate.getTime() - walkMinutes * 60 * 1000)
+    : null;
+  const arrivalDate =
+    boardingDate && Number.isFinite(busMinutes)
+      ? new Date(boardingDate.getTime() + busMinutes * 60 * 1000)
+      : null;
+  const derivedRemainingMinutes = departureDate
+    ? Math.max(
+        0,
+        Math.ceil((departureDate.getTime() - now.getTime()) / 60000),
+      )
+    : undefined;
+
+  return {
+    remainingMinutes:
+      getNumericRouteValue(route, "remainingMinutes") ??
+      getNumericRouteValue(route, "remainingTimeMinutes") ??
+      derivedRemainingMinutes,
+    departureTime:
+      formatRouteTime(getRouteValue(route, "departureTime")) ??
+      formatRouteTime(getRouteValue(route, "startTime")) ??
+      formatClockTime(departureDate),
+    boardingTime:
+      formatRouteTime(getRouteValue(primarySegment, "boardingTime")) ??
+      formatRouteTime(getRouteValue(primarySegment, "startTime")) ??
+      formatClockTime(boardingDate),
+    arrivalTime:
+      formatRouteTime(getRouteValue(route, "arrivalTime")) ??
+      formatRouteTime(getRouteValue(primarySegment, "arrivalTime")) ??
+      formatRouteTime(getRouteValue(primarySegment, "endTime")) ??
+      formatClockTime(arrivalDate),
+  };
+}
+
 function createFirstLastRouteSummary(route, places = {}) {
   const primarySegment = getPrimaryTransitSegment(route);
   const walkSegments = getWalkSegments(route);
@@ -50,10 +142,15 @@ function createFirstLastRouteSummary(route, places = {}) {
   const lastWalk = walkSegments[walkSegments.length - 1];
   const totalDuration =
     route?.realTimeDurationMinutes ?? route?.totalDurationMinutes ?? 0;
+  const routeTimes = getFirstLastRouteTimes({
+    firstWalk,
+    primarySegment,
+    route,
+  });
 
   return {
-    remainingMinutes: 12,
-    departureTime: "23:42",
+    remainingMinutes: routeTimes.remainingMinutes,
+    departureTime: routeTimes.departureTime,
     routeNumber: primarySegment?.transitName || "대중교통",
     routeDirection: primarySegment?.endStation
       ? `${primarySegment.endStation} 방면`
@@ -66,13 +163,13 @@ function createFirstLastRouteSummary(route, places = {}) {
       places.origin ||
       route?.originAddress ||
       "출발정류장",
-    boardingTime: "23:47",
+    boardingTime: routeTimes.boardingTime,
     arrivalStopName:
       getSegmentStopName(primarySegment, "end") ||
       places.destination ||
       route?.destinationAddress ||
       "도착정류장",
-    arrivalTime: "23:51",
+    arrivalTime: routeTimes.arrivalTime,
     preDepartureAlarmMinutes: 10,
     route,
   };

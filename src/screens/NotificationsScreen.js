@@ -55,6 +55,8 @@ export function NotificationsScreen({
   onSettingsPress,
 }) {
   const [serverNotifications, setServerNotifications] = useState([]);
+  const [notificationsErrorMessage, setNotificationsErrorMessage] =
+    useState("");
   const [deviceToken, setDeviceToken] = useState(() => getSavedDeviceToken() ?? "");
   const [testTitle, setTestTitle] = useState(DEFAULT_TEST_FCM_TITLE);
   const [testBody, setTestBody] = useState(DEFAULT_TEST_FCM_BODY);
@@ -71,15 +73,20 @@ export function NotificationsScreen({
     let isActive = true;
 
     async function loadNotifications() {
+      setNotificationsErrorMessage("");
+
       try {
         const nextNotifications = await getArrivalNotifications();
 
         if (isActive) {
           setServerNotifications(nextNotifications);
         }
-      } catch {
+      } catch (error) {
         if (isActive) {
-          setServerNotifications(DEFAULT_NOTIFICATIONS);
+          setServerNotifications([]);
+          setNotificationsErrorMessage(
+            error?.message ?? "알림을 불러오지 못했습니다.",
+          );
         }
       }
     }
@@ -92,6 +99,8 @@ export function NotificationsScreen({
   }, [notifications]);
 
   const notificationItems = notifications ?? serverNotifications;
+  const shouldShowNotificationsError =
+    !notifications && notificationsErrorMessage;
 
   const handleRegisterDeviceToken = async () => {
     if (isRegisteringDeviceToken) {
@@ -260,6 +269,14 @@ export function NotificationsScreen({
             </Pressable>
           </View>
 
+          {shouldShowNotificationsError ? (
+            <View style={styles.notificationStatusBox}>
+              <Text style={styles.notificationStatusText}>
+                {notificationsErrorMessage}
+              </Text>
+            </View>
+          ) : null}
+
           {notificationItems.map((item) => {
             const isDanger = item.type === "danger";
 
@@ -398,6 +415,20 @@ const styles = StyleSheet.create({
   syncBusButtonText: {
     ...typography.body03Sb,
     color: colors.gray09,
+  },
+  notificationStatusBox: {
+    width: "100%",
+    borderWidth: 1,
+    borderRadius: 8,
+    borderColor: colors.gray03,
+    backgroundColor: colors.gray01,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  notificationStatusText: {
+    ...typography.body03M,
+    color: colors.gray07,
+    textAlign: "center",
   },
   card: {
     width: "100%",

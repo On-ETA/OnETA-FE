@@ -430,12 +430,6 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
                 </Pressable>
               ))}
             </ScrollView>
-          ) : !isSearching && !searchErrorMessage && hasSearchText ? (
-            <View style={styles.resultStatus}>
-              <Text style={styles.resultStatusText}>
-                검색 결과가 없습니다.
-              </Text>
-            </View>
           ) : null}
         </View>
       )}

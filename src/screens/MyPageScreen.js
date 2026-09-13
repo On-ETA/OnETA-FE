@@ -147,7 +147,7 @@ export function MyPageScreen({
       await logout();
       onLogoutComplete?.();
     } catch (error) {
-      if (error?.status === 403 || error?.code === "C005") {
+      if (isAuthError(error)) {
         onLogoutComplete?.();
         return;
       }
@@ -298,7 +298,14 @@ export function MyPageScreen({
       {screen}
       <Modal
         animationType="fade"
-        onRequestClose={closeWithdrawModal}
+        onRequestClose={() => {
+          if (withdrawStep === "complete") {
+            handleWithdrawCompletePress();
+            return;
+          }
+
+          closeWithdrawModal();
+        }}
         transparent
         visible={withdrawStep !== null}
       >
