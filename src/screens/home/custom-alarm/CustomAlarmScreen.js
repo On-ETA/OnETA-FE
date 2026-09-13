@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   bulkDeleteButton: {
     position: "absolute",

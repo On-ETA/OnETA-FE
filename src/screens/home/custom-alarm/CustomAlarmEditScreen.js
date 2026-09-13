@@ -39,10 +39,10 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
         type="back"
       />
       <View style={styles.routeHeader}>
-        <View style={styles.busInfo}>
-          <BusIcon />
-          <Text style={styles.busNumber}>147</Text>
-          <Text style={styles.busDirection}>· 강남역 방면</Text>
+        <View style={styles.routeClockGroup}>
+          <Text style={styles.routeClockText}>23:42</Text>
+          <ChevronRightIcon />
+          <Text style={styles.routeClockText}>00:04</Text>
         </View>
         <View style={styles.totalTime}>
           <Text style={styles.totalTimeNumber}>21</Text>
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 11,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   busNumber: {
     fontFamily: "SUIT",
@@ -315,6 +315,18 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 18.2,
     color: colors.gray06,
+  },
+  routeClockGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  routeClockText: {
+    fontFamily: "SUIT",
+    fontSize: 26,
+    fontWeight: "700",
+    lineHeight: 32,
+    color: colors.gray09,
   },
   totalTime: {
     flexDirection: "row",

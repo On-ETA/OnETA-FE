@@ -31,6 +31,8 @@ const EMAIL_AUTH_STATUS = {
   failed: "failed",
 };
 
+const MAX_EMAIL_VERIFY_ATTEMPTS = 5;
+
 function getSignupErrorReason(error) {
   const detailMessage = error?.details?.data;
 
@@ -65,6 +67,7 @@ export function SignupScreen({ onBackPress, onNextPress }) {
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
+  const [emailVerifyAttempts, setEmailVerifyAttempts] = useState(0);
   const [signupErrorMessage, setSignupErrorMessage] = useState("");
   const [emailAuthStatus, setEmailAuthStatus] = useState(
     EMAIL_AUTH_STATUS.idle,
@@ -84,7 +87,9 @@ export function SignupScreen({ onBackPress, onNextPress }) {
     !isEmailVerified;
   const canVerifyEmailCode =
     isVerificationCodeEntered &&
-    emailAuthStatus === EMAIL_AUTH_STATUS.sent &&
+    (emailAuthStatus === EMAIL_AUTH_STATUS.sent ||
+      emailAuthStatus === EMAIL_AUTH_STATUS.failed) &&
+    emailVerifyAttempts < MAX_EMAIL_VERIFY_ATTEMPTS &&
     !isSendingEmail &&
     !isVerifyingEmail &&
     !isEmailVerified;
@@ -102,6 +107,7 @@ export function SignupScreen({ onBackPress, onNextPress }) {
     setEmailStatus(null);
     setSignupErrorMessage("");
     setEmailAuthStatus(EMAIL_AUTH_STATUS.idle);
+    setEmailVerifyAttempts(0);
 
     if (verifiedEmail && value.trim() !== verifiedEmail) {
       setVerifiedEmail("");
@@ -130,6 +136,7 @@ export function SignupScreen({ onBackPress, onNextPress }) {
     try {
       await sendEmailVerificationCode({ email: trimmedEmail });
       setVerifiedEmail("");
+      setEmailVerifyAttempts(0);
       setEmailAuthStatus(EMAIL_AUTH_STATUS.sent);
       setEmailStatus({
         type: "success",
@@ -174,11 +181,14 @@ export function SignupScreen({ onBackPress, onNextPress }) {
     setIsVerifyingEmail(true);
 
     try {
+      const nextAttempt = emailVerifyAttempts + 1;
+
       await verifyEmailCode({
         email: trimmedEmail,
         code: trimmedVerificationCode,
       });
       setVerifiedEmail(trimmedEmail);
+      setEmailVerifyAttempts(nextAttempt);
       setEmailAuthStatus(EMAIL_AUTH_STATUS.verified);
       setEmailStatus({
         type: "success",
@@ -186,18 +196,26 @@ export function SignupScreen({ onBackPress, onNextPress }) {
       });
       Alert.alert("회원가입", "이메일 인증이 완료되었습니다.");
     } catch (error) {
+      const nextAttempt = emailVerifyAttempts + 1;
+      const hasRemainingAttempts = nextAttempt < MAX_EMAIL_VERIFY_ATTEMPTS;
       const errorMessage =
         error?.message ?? "인증번호 확인에 실패했습니다. 다시 시도해 주세요.";
+      const retryMessage = hasRemainingAttempts
+        ? `${errorMessage} (${MAX_EMAIL_VERIFY_ATTEMPTS - nextAttempt}회 남음)`
+        : "이메일 인증 시도 횟수를 초과했습니다. 인증번호를 다시 요청해 주세요.";
 
       setVerifiedEmail("");
-      setEmailAuthStatus(EMAIL_AUTH_STATUS.failed);
+      setEmailVerifyAttempts(nextAttempt);
+      setEmailAuthStatus(
+        hasRemainingAttempts ? EMAIL_AUTH_STATUS.failed : EMAIL_AUTH_STATUS.idle,
+      );
       setEmailStatus({
         type: "error",
-        message: errorMessage,
+        message: retryMessage,
       });
       Alert.alert(
         "회원가입",
-        errorMessage,
+        retryMessage,
       );
     } finally {
       setIsVerifyingEmail(false);
@@ -243,7 +261,11 @@ export function SignupScreen({ onBackPress, onNextPress }) {
         throw new Error("회원가입 인증 토큰을 받을 수 없습니다.");
       }
 
-      onNextPress?.({ signupTokens });
+      onNextPress?.({
+        email: trimmedEmail,
+        password,
+        signupTokens,
+      });
     } catch (error) {
       setSignupErrorMessage(getSignupErrorReason(error));
     } finally {
@@ -310,7 +332,7 @@ export function SignupScreen({ onBackPress, onNextPress }) {
                   {isEmailVerified ? "완료" : isSendingEmail ? "전송" : "인증"}
                 </SideButton>
               </View>
-              {shouldShowInputPreview && trimmedEmail && (
+              {shouldShowInputPreview && Boolean(trimmedEmail) && (
                 <Text style={styles.inputPreview}>
                   이메일 : {trimmedEmail}
                 </Text>
@@ -334,7 +356,7 @@ export function SignupScreen({ onBackPress, onNextPress }) {
                   {isEmailVerified ? "완료" : isVerifyingEmail ? "확인" : "확인"}
                 </SideButton>
               </View>
-              {shouldShowInputPreview && trimmedVerificationCode && (
+              {shouldShowInputPreview && Boolean(trimmedVerificationCode) && (
                 <Text style={styles.inputPreview}>
                   인증번호: {trimmedVerificationCode}
                 </Text>

@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 16,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   busBody: {
     width: 16,
@@ -494,14 +494,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 5,
     borderRadius: 1,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   busFront: {
     width: 10,
     height: 3,
     marginTop: 2,
     borderRadius: 1.5,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   busWheelRow: {
     position: "absolute",
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   resultTextGroup: {
     flex: 1,

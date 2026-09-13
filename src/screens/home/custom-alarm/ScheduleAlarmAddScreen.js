@@ -7,11 +7,13 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 import { Header } from "../../../components";
+import { NaverMapView } from "../../../components/NaverMapView";
 import { colors, typography } from "../../../theme";
 
 const DEFAULT_TIME = {
@@ -156,14 +158,23 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
   );
 }
 
-function ScheduleRouteMapStep({ onBackPress, onConfirm }) {
-  const SHEET_EXPANDED_OFFSET = -120;
-  const SHEET_COLLAPSED_OFFSET = 156;
+export function ScheduleRouteMapStep({
+  headerTitle = "알림 추가",
+  onBackPress,
+  onConfirm,
+}) {
+  const { height } = useWindowDimensions();
+  const SHEET_COLLAPSED_VISIBLE_HEIGHT = 36;
+  const sheetHeight = Math.round((height * 3) / 8);
+  const SHEET_EXPANDED_OFFSET = 0;
+  const SHEET_COLLAPSED_OFFSET = sheetHeight - SHEET_COLLAPSED_VISIBLE_HEIGHT;
   const [placeKeyword, setPlaceKeyword] = useState("");
   const [origin, setOrigin] = useState("마포구 와우산로 94");
   const [destination, setDestination] = useState("우리집");
-  const sheetTranslateY = useRef(new Animated.Value(0)).current;
-  const lastSheetOffset = useRef(0);
+  const sheetTranslateY = useRef(
+    new Animated.Value(SHEET_EXPANDED_OFFSET),
+  ).current;
+  const lastSheetOffset = useRef(SHEET_EXPANDED_OFFSET);
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) =>
@@ -186,12 +197,12 @@ function ScheduleRouteMapStep({ onBackPress, onConfirm }) {
           ),
           SHEET_COLLAPSED_OFFSET,
         );
+        const snapMiddle =
+          (SHEET_EXPANDED_OFFSET + SHEET_COLLAPSED_OFFSET) / 2;
         const nextOffset =
-          releasedOffset < SHEET_EXPANDED_OFFSET / 2
+          releasedOffset < snapMiddle
             ? SHEET_EXPANDED_OFFSET
-            : releasedOffset > SHEET_COLLAPSED_OFFSET / 2
-              ? SHEET_COLLAPSED_OFFSET
-              : 0;
+            : SHEET_COLLAPSED_OFFSET;
         lastSheetOffset.current = nextOffset;
         Animated.spring(sheetTranslateY, {
           toValue: nextOffset,
@@ -203,15 +214,14 @@ function ScheduleRouteMapStep({ onBackPress, onConfirm }) {
 
   return (
     <View style={styles.mapScreen}>
-      {/* TODO: 네이버 지도 API 연동 시 이 placeholder를 NaverMapView로 교체하세요. */}
       {/* GET /map/search?keyword=, GET /routes?origin=&destination= */}
-      <MapPlaceholder />
+      <NaverMapView />
 
       <View style={styles.mapHeaderLayer}>
         <Header
           headerStyle={styles.mapHeader}
           onBackPress={onBackPress}
-          title="알림 추가"
+          title={headerTitle}
           titleStyle={styles.headerTitle}
           type="back"
         />
@@ -230,6 +240,7 @@ function ScheduleRouteMapStep({ onBackPress, onConfirm }) {
       <Animated.View
         style={[
           styles.routeSheet,
+          { height: sheetHeight },
           {
             transform: [{ translateY: sheetTranslateY }],
           },
@@ -238,39 +249,42 @@ function ScheduleRouteMapStep({ onBackPress, onConfirm }) {
         <View style={styles.routeSheetHandleArea} {...panResponder.panHandlers}>
           <View style={styles.sheetHandle} />
         </View>
-        <Text style={styles.routeFieldLabel}>출발지</Text>
-        <View style={styles.routeField}>
-          <TextInput
-            onChangeText={setOrigin}
-            placeholder="출발지 입력"
-            placeholderTextColor={colors.gray06}
-            style={styles.routeFieldInput}
-            value={origin}
-          />
-        </View>
-        <Text style={styles.routeFieldLabel}>도착지</Text>
-        <View style={styles.routeField}>
-          <TextInput
-            onChangeText={setDestination}
-            placeholder="도착지 입력"
-            placeholderTextColor={colors.gray06}
-            style={styles.routeFieldInput}
-            value={destination}
-          />
+        <View style={styles.routeSheetContent}>
+          <Text style={styles.routeFieldLabel}>출발지</Text>
+          <View style={styles.routeField}>
+            <TextInput
+              onChangeText={setOrigin}
+              placeholder="출발지 입력"
+              placeholderTextColor={colors.gray06}
+              style={styles.routeFieldInput}
+              value={origin}
+            />
+          </View>
+          <Text style={styles.routeFieldLabel}>도착지</Text>
+          <View style={styles.routeField}>
+            <TextInput
+              onChangeText={setDestination}
+              placeholder="도착지 입력"
+              placeholderTextColor={colors.gray06}
+              style={styles.routeFieldInput}
+              value={destination}
+            />
+          </View>
         </View>
         <Pressable
           accessibilityRole="button"
           onPress={() => onConfirm({ origin, destination })}
           style={styles.mapConfirmButton}
         >
-          <Text style={styles.confirmButtonText}>확인</Text>
+          <Text style={styles.mapConfirmButtonText}>확인</Text>
         </Pressable>
       </Animated.View>
     </View>
   );
 }
 
-function ScheduleRouteResultStep({
+export function ScheduleRouteResultStep({
+  actionLabel = "이 경로로 알림 설정",
   initialDestination,
   initialOrigin,
   onBackPress,
@@ -332,9 +346,16 @@ function ScheduleRouteResultStep({
           </View>
         </View>
 
-        <View style={styles.totalTimeRow}>
-          <Text style={styles.totalTimeNumber}>21</Text>
-          <Text style={styles.totalTimeUnit}>분</Text>
+        <View style={styles.routeTimeSummaryRow}>
+          <View style={styles.routeClockGroup}>
+            <Text style={styles.routeClockText}>23:42</Text>
+            <ChevronRightIcon />
+            <Text style={styles.routeClockText}>00:04</Text>
+          </View>
+          <View style={styles.totalTimeRow}>
+            <Text style={styles.totalTimeNumber}>21</Text>
+            <Text style={styles.totalTimeUnit}>분</Text>
+          </View>
         </View>
 
         <RouteTimeline />
@@ -358,7 +379,7 @@ function ScheduleRouteResultStep({
           onPress={onRouteSelect}
           style={styles.routeAlarmButton}
         >
-          <Text style={styles.routeAlarmButtonText}>이 경로로 알림 설정</Text>
+          <Text style={styles.routeAlarmButtonText}>{actionLabel}</Text>
         </Pressable>
       </View>
     </View>
@@ -1101,29 +1122,34 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: "52%",
     paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingBottom: 16,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     backgroundColor: colors.white,
+    overflow: "hidden",
   },
   routeSheetHandleArea: {
-    height: 34,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
   },
+  routeSheetContent: {
+    flex: 1,
+    minHeight: 0,
+  },
   routeFieldLabel: {
     marginTop: 0,
-    marginBottom: 8,
+    marginBottom: 4,
     fontFamily: "SUIT",
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "700",
-    lineHeight: 18.2,
+    lineHeight: 15.4,
     color: colors.gray07,
   },
   routeField: {
-    height: 64,
+    height: 46,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: colors.gray04,
     borderRadius: 8,
@@ -1131,20 +1157,28 @@ const styles = StyleSheet.create({
   },
   routeFieldInput: {
     height: "100%",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 0,
     fontFamily: "SUIT",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
+    lineHeight: 19.6,
     color: colors.gray09,
   },
   mapConfirmButton: {
-    height: 56,
-    marginTop: 22,
+    height: 46,
+    marginTop: 8,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: colors.main,
+  },
+  mapConfirmButtonText: {
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 19.6,
+    color: colors.white,
   },
   resultScreen: {
     flex: 1,
@@ -1223,8 +1257,25 @@ const styles = StyleSheet.create({
     lineHeight: 16.8,
     color: "#3478F6",
   },
-  totalTimeRow: {
+  routeTimeSummaryRow: {
     marginTop: 12,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  routeClockGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  routeClockText: {
+    fontFamily: "SUIT",
+    fontSize: 28,
+    fontWeight: "700",
+    lineHeight: 34,
+    color: colors.gray09,
+  },
+  totalTimeRow: {
     flexDirection: "row",
     alignItems: "flex-end",
   },
@@ -1265,7 +1316,7 @@ const styles = StyleSheet.create({
   routeBusSegment: {
     flex: 1.05,
     borderRadius: 10,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   routeAfterWalkSegment: {
     flex: 1.9,
@@ -1284,7 +1335,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 9,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   routeTimelineTextWrap: {
     flex: 1,
@@ -1323,7 +1374,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 11,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   routeBusNumber: {
     fontFamily: "SUIT",
@@ -1367,7 +1418,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray06,
   },
   stopInnerActive: {
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   stopLabel: {
     width: 42,

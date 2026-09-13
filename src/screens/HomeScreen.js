@@ -10,7 +10,11 @@ import {
   ScheduleAlarmEditScreen,
 } from "./home/custom-alarm/CustomAlarmEditScreen";
 import { GarageDepartureAlarmAddScreen } from "./home/custom-alarm/GarageDepartureAlarmAddScreen";
-import { ScheduleAlarmAddScreen } from "./home/custom-alarm/ScheduleAlarmAddScreen";
+import {
+  ScheduleAlarmAddScreen,
+  ScheduleRouteMapStep,
+  ScheduleRouteResultStep,
+} from "./home/custom-alarm/ScheduleAlarmAddScreen";
 import { FirstLastRouteDetailScreen } from "./home/first-last/FirstLastRouteDetailScreen";
 import { FirstLastRouteScreen } from "./home/first-last/FirstLastRouteScreen";
 import { MyPageScreen } from "./MyPageScreen";
@@ -35,6 +39,11 @@ export function HomeScreen({
   const [activeHomeTab, setActiveHomeTab] = useState("firstLast");
   const [isAddressManagerVisible, setIsAddressManagerVisible] = useState(false);
   const [isRouteDetailVisible, setIsRouteDetailVisible] = useState(false);
+  const [firstLastRouteSetupStep, setFirstLastRouteSetupStep] = useState(null);
+  const [firstLastRoutePlaces, setFirstLastRoutePlaces] = useState({
+    origin: "마포구 와우산로 94",
+    destination: "우리집",
+  });
   const [isScheduleAlarmAddVisible, setIsScheduleAlarmAddVisible] =
     useState(false);
   const [isGarageDepartureAddVisible, setIsGarageDepartureAddVisible] =
@@ -44,6 +53,7 @@ export function HomeScreen({
   const handleTabPress = (tabKey) => {
     setIsAddressManagerVisible(false);
     setIsRouteDetailVisible(false);
+    setFirstLastRouteSetupStep(null);
     setIsScheduleAlarmAddVisible(false);
     setIsGarageDepartureAddVisible(false);
     setEditingCustomAlarm(null);
@@ -87,6 +97,23 @@ export function HomeScreen({
               <ScheduleAlarmAddScreen
                 onBackPress={() => setIsScheduleAlarmAddVisible(false)}
               />
+            ) : firstLastRouteSetupStep === "map" ? (
+              <ScheduleRouteMapStep
+                headerTitle="경로 재설정"
+                onBackPress={() => setFirstLastRouteSetupStep(null)}
+                onConfirm={(places) => {
+                  setFirstLastRoutePlaces(places);
+                  setFirstLastRouteSetupStep("result");
+                }}
+              />
+            ) : firstLastRouteSetupStep === "result" ? (
+              <ScheduleRouteResultStep
+                actionLabel="이 경로로 설정"
+                initialDestination={firstLastRoutePlaces.destination}
+                initialOrigin={firstLastRoutePlaces.origin}
+                onBackPress={() => setFirstLastRouteSetupStep("map")}
+                onRouteSelect={() => setFirstLastRouteSetupStep(null)}
+              />
             ) : editingCustomAlarm?.type === "schedule" ? (
               <ScheduleAlarmEditScreen
                 alarm={editingCustomAlarm.alarm}
@@ -119,6 +146,7 @@ export function HomeScreen({
                 onHomeTabPress={setActiveHomeTab}
                 onMyPagePress={() => handleTabPress("myPage")}
                 onRouteDetailPress={() => setIsRouteDetailVisible(true)}
+                onRouteSetupPress={() => setFirstLastRouteSetupStep("map")}
                 onScheduleAlarmAddPress={() =>
                   setIsScheduleAlarmAddVisible(true)
                 }
@@ -147,6 +175,7 @@ function HomeDashboard({
   onHomeTabPress,
   onMyPagePress,
   onRouteDetailPress,
+  onRouteSetupPress,
   onScheduleAlarmAddPress,
   onScheduleAlarmEditPress,
 }) {
@@ -172,7 +201,10 @@ function HomeDashboard({
           onScheduleAlarmEditPress={onScheduleAlarmEditPress}
         />
       ) : (
-        <FirstLastRouteScreen onRouteDetailPress={onRouteDetailPress} />
+        <FirstLastRouteScreen
+          onRouteDetailPress={onRouteDetailPress}
+          onRouteSetupPress={onRouteSetupPress}
+        />
       )}
     </>
   );

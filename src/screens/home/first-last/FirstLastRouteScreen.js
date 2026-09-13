@@ -51,7 +51,7 @@ const routeSummary = null;
 //   preDepartureAlarmMinutes: 10,
 // };
 
-export function FirstLastRouteScreen({ onRouteDetailPress }) {
+export function FirstLastRouteScreen({ onRouteDetailPress, onRouteSetupPress }) {
   const [isLastRouteFirst, setIsLastRouteFirst] = useState(false);
   const [isAlarmModalVisible, setIsAlarmModalVisible] = useState(false);
   const [alarmSettings, setAlarmSettings] = useState({
@@ -108,7 +108,11 @@ export function FirstLastRouteScreen({ onRouteDetailPress }) {
                 막차
               </Text>
             </View>
-            <Pressable accessibilityRole="button" style={styles.resetButton}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onRouteSetupPress}
+              style={styles.resetButton}
+            >
               <LoadIcon height={17} width={17} />
               <Text style={styles.resetText}>경로 재설정</Text>
             </Pressable>
@@ -203,7 +207,7 @@ export function FirstLastRouteScreen({ onRouteDetailPress }) {
 
         <Pressable
           accessibilityRole="button"
-          onPress={hasConfiguredRoute ? onRouteDetailPress : undefined}
+          onPress={hasConfiguredRoute ? onRouteDetailPress : onRouteSetupPress}
           style={styles.routeAction}
         >
           <Text style={styles.routeActionText}>
@@ -486,7 +490,7 @@ const styles = StyleSheet.create({
   busSegment: {
     flex: 1.05,
     borderRadius: 10,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   afterWalkSegment: {
     flex: 1.9,
@@ -506,7 +510,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
     zIndex: 1,
   },
   timelineLabelWrap: {
@@ -552,7 +556,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   busNumber: {
     fontFamily: "SUIT",
@@ -595,7 +599,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray06,
   },
   stopInnerActive: {
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   stopLabel: {
     width: 42,
