@@ -1,9 +1,25 @@
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 import BackIcon from "../../assets/images/L.svg";
 import SettingIcon from "../../assets/images/setting.svg";
+import { getArrivalNotifications } from "../api/notifications/arrival";
+import { registerDeviceToken } from "../api/notifications/deviceTokens";
+import {
+  DEFAULT_TEST_FCM_BODY,
+  DEFAULT_TEST_FCM_TITLE,
+  sendTestFcm,
+} from "../api/test/fcm";
+import { syncBus } from "../api/test/syncBus";
 import { AppScreen, Header } from "../components";
+import { getSavedDeviceToken } from "../notifications/deviceTokenRegistration";
 import { colors, typography } from "../theme";
 
 const DEFAULT_NOTIFICATIONS = [
@@ -33,11 +49,134 @@ const DEFAULT_NOTIFICATIONS = [
  * - onNotificationPress: 카드 클릭 시 routeKey/payload를 기반으로 상세 화면 이동에 사용
  */
 export function NotificationsScreen({
-  notifications = DEFAULT_NOTIFICATIONS,
+  notifications,
   onBackPress,
   onNotificationPress,
   onSettingsPress,
 }) {
+  const [serverNotifications, setServerNotifications] = useState([]);
+  const [notificationsErrorMessage, setNotificationsErrorMessage] =
+    useState("");
+  const [deviceToken, setDeviceToken] = useState(() => getSavedDeviceToken() ?? "");
+  const [testTitle, setTestTitle] = useState(DEFAULT_TEST_FCM_TITLE);
+  const [testBody, setTestBody] = useState(DEFAULT_TEST_FCM_BODY);
+  const [isRegisteringDeviceToken, setIsRegisteringDeviceToken] =
+    useState(false);
+  const [isSendingTestFcm, setIsSendingTestFcm] = useState(false);
+  const [isSyncingBus, setIsSyncingBus] = useState(false);
+
+  useEffect(() => {
+    if (notifications) {
+      return undefined;
+    }
+
+    let isActive = true;
+
+    async function loadNotifications() {
+      setNotificationsErrorMessage("");
+
+      try {
+        const nextNotifications = await getArrivalNotifications();
+
+        if (isActive) {
+          setServerNotifications(nextNotifications);
+        }
+      } catch (error) {
+        if (isActive) {
+          setServerNotifications([]);
+          setNotificationsErrorMessage(
+            error?.message ?? "알림을 불러오지 못했습니다.",
+          );
+        }
+      }
+    }
+
+    loadNotifications();
+
+    return () => {
+      isActive = false;
+    };
+  }, [notifications]);
+
+  const notificationItems = notifications ?? serverNotifications;
+  const shouldShowNotificationsError =
+    !notifications && notificationsErrorMessage;
+
+  const handleRegisterDeviceToken = async () => {
+    if (isRegisteringDeviceToken) {
+      return;
+    }
+
+    const trimmedDeviceToken = deviceToken.trim();
+
+    if (!trimmedDeviceToken) {
+      Alert.alert("디바이스 토큰", "등록할 디바이스 토큰을 입력해 주세요.");
+      return;
+    }
+
+    setIsRegisteringDeviceToken(true);
+
+    try {
+      await registerDeviceToken({ deviceToken: trimmedDeviceToken });
+      Alert.alert("디바이스 토큰", "디바이스 토큰을 등록했습니다.");
+    } catch (error) {
+      Alert.alert(
+        "디바이스 토큰 등록 실패",
+        error?.message ?? "디바이스 토큰 등록에 실패했습니다.",
+      );
+    } finally {
+      setIsRegisteringDeviceToken(false);
+    }
+  };
+
+  const handleSendTestFcm = async () => {
+    if (isSendingTestFcm) {
+      return;
+    }
+
+    setIsSendingTestFcm(true);
+
+    try {
+      await sendTestFcm({
+        title: testTitle,
+        body: testBody,
+      });
+      Alert.alert("테스트 알림", "테스트 푸시를 발송했습니다.");
+    } catch (error) {
+      Alert.alert(
+        "테스트 알림 실패",
+        error?.message ?? "테스트 푸시 발송에 실패했습니다.",
+      );
+    } finally {
+      setIsSendingTestFcm(false);
+    }
+  };
+
+  const handleSyncBus = async () => {
+    if (isSyncingBus) {
+      return;
+    }
+
+    setIsSyncingBus(true);
+
+    try {
+      const response = await syncBus();
+      Alert.alert(
+        "버스 동기화",
+        typeof response === "string"
+          ? response
+          : response?.message ?? "버스 동기화를 실행했습니다.",
+      );
+    } catch (error) {
+      Alert.alert(
+        "버스 동기화 실패",
+        error?.message ?? "버스 동기화 테스트에 실패했습니다.",
+      );
+    } finally {
+      setIsSyncingBus(false);
+    }
+  };
+
   return (
     <AppScreen>
       <View style={styles.container}>
@@ -64,7 +203,81 @@ export function NotificationsScreen({
         />
 
         <View style={styles.list}>
-          {notifications.map((item) => {
+          <View style={styles.testFcmPanel}>
+            <TextInput
+              multiline
+              onChangeText={setDeviceToken}
+              placeholder="디바이스 토큰"
+              placeholderTextColor={colors.gray05}
+              style={[styles.testInput, styles.deviceTokenInput]}
+              value={deviceToken}
+            />
+            <Pressable
+              accessibilityRole="button"
+              disabled={isRegisteringDeviceToken}
+              onPress={handleRegisterDeviceToken}
+              style={[
+                styles.syncBusButton,
+                isRegisteringDeviceToken && styles.testSendButtonDisabled,
+              ]}
+            >
+              <Text style={styles.syncBusButtonText}>
+                {isRegisteringDeviceToken ? "등록 중" : "디바이스 토큰 등록"}
+              </Text>
+            </Pressable>
+            <TextInput
+              onChangeText={setTestTitle}
+              placeholder="테스트 알림"
+              placeholderTextColor={colors.gray05}
+              returnKeyType="next"
+              style={styles.testInput}
+              value={testTitle}
+            />
+            <TextInput
+              multiline
+              onChangeText={setTestBody}
+              placeholder="이것은 OnETA 테스트 푸시입니다!"
+              placeholderTextColor={colors.gray05}
+              style={[styles.testInput, styles.testBodyInput]}
+              value={testBody}
+            />
+            <Pressable
+              accessibilityRole="button"
+              disabled={isSendingTestFcm}
+              onPress={handleSendTestFcm}
+              style={[
+                styles.testSendButton,
+                isSendingTestFcm && styles.testSendButtonDisabled,
+              ]}
+            >
+              <Text style={styles.testSendButtonText}>
+                {isSendingTestFcm ? "발송 중" : "테스트 알림 보내기"}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isSyncingBus}
+              onPress={handleSyncBus}
+              style={[
+                styles.syncBusButton,
+                isSyncingBus && styles.testSendButtonDisabled,
+              ]}
+            >
+              <Text style={styles.syncBusButtonText}>
+                {isSyncingBus ? "동기화 중" : "버스 동기화 테스트"}
+              </Text>
+            </Pressable>
+          </View>
+
+          {shouldShowNotificationsError ? (
+            <View style={styles.notificationStatusBox}>
+              <Text style={styles.notificationStatusText}>
+                {notificationsErrorMessage}
+              </Text>
+            </View>
+          ) : null}
+
+          {notificationItems.map((item) => {
             const isDanger = item.type === "danger";
 
             return (
@@ -146,6 +359,76 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     gap: 14,
+  },
+  testFcmPanel: {
+    alignSelf: "stretch",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gray03,
+    backgroundColor: colors.white,
+    padding: 14,
+    gap: 10,
+  },
+  testInput: {
+    minHeight: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gray03,
+    backgroundColor: colors.gray01,
+    paddingHorizontal: 12,
+    ...typography.body03M,
+    color: colors.gray09,
+  },
+  testBodyInput: {
+    minHeight: 74,
+    paddingTop: 12,
+    textAlignVertical: "top",
+  },
+  deviceTokenInput: {
+    minHeight: 88,
+    paddingTop: 12,
+    textAlignVertical: "top",
+  },
+  testSendButton: {
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.main,
+  },
+  testSendButtonDisabled: {
+    opacity: 0.6,
+  },
+  testSendButtonText: {
+    ...typography.body03Sb,
+    color: colors.white,
+  },
+  syncBusButton: {
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gray03,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.white,
+  },
+  syncBusButtonText: {
+    ...typography.body03Sb,
+    color: colors.gray09,
+  },
+  notificationStatusBox: {
+    width: "100%",
+    borderWidth: 1,
+    borderRadius: 8,
+    borderColor: colors.gray03,
+    backgroundColor: colors.gray01,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  notificationStatusText: {
+    ...typography.body03M,
+    color: colors.gray07,
+    textAlign: "center",
   },
   card: {
     width: "100%",

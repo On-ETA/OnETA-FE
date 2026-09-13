@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,47 +13,94 @@ import Svg, { Circle, Line, Path } from "react-native-svg";
 import ArrowLeftIcon from "../../assets/images/L.svg";
 import MemoIcon from "../../public/images/memo.svg";
 import PlusIcon from "../../public/images/plus.svg";
+import {
+  createAddress,
+  deleteAddress as deleteAddressRequest,
+  getAddresses,
+  normalizeAddress,
+  searchAddresses,
+  setCurrentAddress,
+  updateAddress as updateAddressRequest,
+} from "../api/addresses";
 import { Header } from "../components";
 import { colors, typography } from "../theme";
 
 const MAX_ADDRESS_COUNT = 5;
 const DEFAULT_ADDRESS_DETAIL = "마포구 와우산로94 홍익대학교 제2기숙사";
 
-// TODO: API 연동 시 아래 더미 데이터를 교체하세요.
-// GET /mypage/addresses
-// GET /addresses/search?keyword=
-// POST /mypage/addresses
-// PATCH /mypage/addresses/{addressId}
-// DELETE /mypage/addresses/{addressId}
-// PATCH /mypage/addresses/{addressId}/current
-const initialAddresses = [
-  {
-    id: "home",
-    name: "우리집",
-    detail: DEFAULT_ADDRESS_DETAIL,
-    placeName: "홍익대학교 제2기숙사",
-    isCurrent: true,
-  },
-];
+function isAuthError(error) {
+  return (
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.code === "C007" ||
+    error?.code === "C005"
+  );
+}
 
-const searchResults = [
-  {
-    id: "hongik-dorm-1",
-    name: "홍익대학교 제2기숙사",
-    roadAddress: DEFAULT_ADDRESS_DETAIL,
-  },
-  {
-    id: "hongik-dorm-2",
-    name: "홍익대학교 제2기숙사",
-    roadAddress: DEFAULT_ADDRESS_DETAIL,
-  },
-];
+function getCurrentAddressLabel(addresses) {
+  const currentAddress = addresses.find((address) => address.isCurrent);
+  const displayAddress = currentAddress ?? addresses[0];
 
-export function AddressManagementScreen({ onBackPress }) {
+  return displayAddress?.name ?? "";
+}
+
+export function AddressManagementScreen({
+  onAuthRequired,
+  onBackPress,
+  onCurrentAddressChange,
+}) {
   const [screenMode, setScreenMode] = useState("list");
-  const [addresses, setAddresses] = useState(initialAddresses);
+  const [addresses, setAddresses] = useState([]);
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
+  const [addressLoadError, setAddressLoadError] = useState("");
   const [selectedResult, setSelectedResult] = useState(null);
   const [editingAddress, setEditingAddress] = useState(null);
+  const [isRegisteringAddress, setIsRegisteringAddress] = useState(false);
+  const [isDeletingAddress, setIsDeletingAddress] = useState(false);
+  const [settingCurrentAddressId, setSettingCurrentAddressId] = useState(null);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadAddresses() {
+      setIsLoadingAddresses(true);
+      setAddressLoadError("");
+
+      try {
+        const nextAddresses = await getAddresses();
+
+        if (isActive) {
+          setAddresses(nextAddresses);
+          onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+        }
+      } catch (error) {
+        if (isActive) {
+          setAddresses([]);
+          if (isAuthError(error)) {
+            setAddressLoadError("로그인이 필요합니다.");
+            Alert.alert("로그인이 필요합니다", "다시 로그인해 주세요.", [
+              {
+                text: "확인",
+                onPress: onAuthRequired,
+              },
+            ]);
+          } else {
+            setAddressLoadError("주소를 불러오지 못했습니다.");
+          }
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingAddresses(false);
+        }
+      }
+    }
+
+    loadAddresses();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const handleBackPress = () => {
     if (screenMode === "detail") {
@@ -68,49 +116,167 @@ export function AddressManagementScreen({ onBackPress }) {
     onBackPress?.();
   };
 
-  const registerAddress = (alias) => {
-    if (!selectedResult || addresses.length >= MAX_ADDRESS_COUNT) {
+  const registerAddress = async (alias) => {
+    if (
+      isRegisteringAddress ||
+      !selectedResult ||
+      addresses.length >= MAX_ADDRESS_COUNT
+    ) {
       setScreenMode("list");
       return;
     }
 
-    setAddresses((current) => [
-      ...current,
-      {
-        id: `${selectedResult.id}-${Date.now()}`,
-        name: alias || "주소 이름",
-        detail: selectedResult.roadAddress,
-        placeName: selectedResult.name,
-        isCurrent: false,
-      },
-    ]);
-    setScreenMode("list");
+    setIsRegisteringAddress(true);
+
+    try {
+      const response = await createAddress({
+        payload: {
+          name: alias || selectedResult.name || "주소 이름",
+          address: selectedResult.address ?? selectedResult.roadAddress,
+          x: selectedResult.x,
+          y: selectedResult.y,
+        },
+      });
+      const responseAddress = response?.data ?? response;
+      const createdAddress = normalizeAddress(responseAddress);
+      const createdAddressId = createdAddress.addressId ?? createdAddress.id;
+
+      if (createdAddressId === undefined || createdAddressId === null) {
+        const nextAddresses = await getAddresses();
+
+        setAddresses(nextAddresses);
+        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+        setScreenMode("list");
+        return;
+      }
+
+      setAddresses((current) => {
+        const nextAddresses = [...current, createdAddress];
+
+        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+
+        return nextAddresses;
+      });
+      setScreenMode("list");
+    } catch (error) {
+      Alert.alert("주소 등록 실패", error?.message ?? "주소 등록에 실패했습니다.");
+    } finally {
+      setIsRegisteringAddress(false);
+    }
   };
 
-  const updateAddress = (alias) => {
+  const updateAddress = async (alias) => {
     if (!editingAddress) {
       setScreenMode("list");
       return;
     }
 
-    setAddresses((current) =>
-      current.map((address) =>
-        address.id === editingAddress.id
-          ? { ...address, name: alias || address.name }
-          : address
-      )
-    );
-    setScreenMode("list");
+    const addressId = editingAddress.addressId ?? editingAddress.id;
+
+    try {
+      const response = await updateAddressRequest({
+        addressId,
+        name: alias || editingAddress.name,
+      });
+      const updatedAddress = response?.data
+        ? normalizeAddress(response.data)
+        : null;
+
+      setAddresses((current) => {
+        const nextAddresses = current.map((address) =>
+          (address.addressId ?? address.id) === addressId
+            ? updatedAddress ?? { ...address, name: alias || address.name }
+            : address,
+        );
+
+        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+
+        return nextAddresses;
+      });
+      setScreenMode("list");
+    } catch (error) {
+      Alert.alert("주소 수정 실패", error?.message ?? "주소 수정에 실패했습니다.");
+    }
   };
 
-  const deleteAddress = () => {
-    if (!editingAddress) {
+  const deleteAddress = async () => {
+    if (!editingAddress || isDeletingAddress) {
       setScreenMode("list");
       return;
     }
 
-    setAddresses((current) => current.filter((item) => item.id !== editingAddress.id));
-    setScreenMode("list");
+    const addressId = editingAddress.addressId ?? editingAddress.id;
+
+    setIsDeletingAddress(true);
+
+    try {
+      await deleteAddressRequest({ addressId });
+      setAddresses((current) => {
+        const nextAddresses = current.filter(
+          (item) => (item.addressId ?? item.id) !== addressId,
+        );
+
+        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+
+        return nextAddresses;
+      });
+      setEditingAddress(null);
+      setScreenMode("list");
+    } catch (error) {
+      Alert.alert("주소 삭제 실패", error?.message ?? "주소 삭제에 실패했습니다.");
+    } finally {
+      setIsDeletingAddress(false);
+    }
+  };
+
+  const handleCurrentAddressPress = async (address) => {
+    const addressId = address.addressId ?? address.id;
+
+    if (!addressId || address.isCurrent || settingCurrentAddressId !== null) {
+      return;
+    }
+
+    setSettingCurrentAddressId(addressId);
+
+    try {
+      const response = await setCurrentAddress({ addressId });
+      const changedAddress = response?.data
+        ? normalizeAddress(response.data)
+        : null;
+
+      setAddresses((current) => {
+        const nextAddresses = current.map((item) => {
+          const itemAddressId = item.addressId ?? item.id;
+          const isSelectedAddress = itemAddressId === addressId;
+
+          if (!isSelectedAddress) {
+            return {
+              ...item,
+              current: false,
+              isCurrent: false,
+            };
+          }
+
+          return {
+            ...item,
+            ...(changedAddress ?? {}),
+            current: true,
+            isCurrent: true,
+          };
+        });
+
+        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+
+        return nextAddresses;
+      });
+    } catch (error) {
+      Alert.alert(
+        "현재 주소 설정 실패",
+        error?.message ?? "현재 주소 설정에 실패했습니다.",
+      );
+    } finally {
+      setSettingCurrentAddressId(null);
+    }
   };
 
   if (screenMode === "search") {
@@ -130,10 +296,11 @@ export function AddressManagementScreen({ onBackPress }) {
       <AddressFormScreen
         address={{
           name: selectedResult?.name,
-          detail: selectedResult?.roadAddress,
+          detail: selectedResult?.address ?? selectedResult?.roadAddress,
         }}
         buttonLabel="주소 등록"
         initialAlias=""
+        isSubmitting={isRegisteringAddress}
         onBackPress={handleBackPress}
         onChangeAddress={() => setScreenMode("search")}
         onSubmit={registerAddress}
@@ -151,6 +318,7 @@ export function AddressManagementScreen({ onBackPress }) {
         }}
         buttonLabel="저장"
         initialAlias={editingAddress?.name ?? ""}
+        isDeleting={isDeletingAddress}
         onBackPress={handleBackPress}
         onChangeAddress={() => setScreenMode("search")}
         onDelete={deleteAddress}
@@ -163,11 +331,26 @@ export function AddressManagementScreen({ onBackPress }) {
   return (
     <View style={styles.screen}>
       <ScreenHeader onBackPress={handleBackPress} title="주소 관리" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {isLoadingAddresses ? (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>주소를 불러오는 중입니다.</Text>
+          </View>
+        ) : null}
+        {!isLoadingAddresses && addressLoadError ? (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>{addressLoadError}</Text>
+          </View>
+        ) : null}
         {addresses.map((address) => (
           <AddressCard
             address={address}
-            key={address.id}
+            isSettingCurrent={settingCurrentAddressId !== null}
+            key={address.id ?? address.addressId}
+            onCurrentPress={() => handleCurrentAddressPress(address)}
             onEditPress={() => {
               setEditingAddress(address);
               setScreenMode("edit");
@@ -190,7 +373,54 @@ export function AddressManagementScreen({ onBackPress }) {
 }
 
 function AddressSearchScreen({ onBackPress, onResultPress }) {
-  const [keyword, setKeyword] = useState("와우산로94");
+  const [keyword, setKeyword] = useState("홍익대");
+  const [results, setResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const trimmedKeyword = keyword.trim();
+  const hasKeyword = trimmedKeyword.length > 0;
+
+  useEffect(() => {
+    if (!hasKeyword) {
+      setResults([]);
+      setSearchError("");
+      setIsSearching(false);
+      return undefined;
+    }
+
+    let isActive = true;
+    const controller = new AbortController();
+    const debounceId = setTimeout(async () => {
+      setIsSearching(true);
+      setSearchError("");
+
+      try {
+        const nextResults = await searchAddresses({
+          keyword: trimmedKeyword,
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setResults(nextResults);
+        }
+      } catch (error) {
+        if (isActive && error?.name !== "AbortError") {
+          setResults([]);
+          setSearchError(error?.message ?? "주소 검색에 실패했습니다.");
+        }
+      } finally {
+        if (isActive) {
+          setIsSearching(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      isActive = false;
+      clearTimeout(debounceId);
+      controller.abort();
+    };
+  }, [hasKeyword, trimmedKeyword]);
 
   return (
     <View style={styles.screen}>
@@ -217,7 +447,14 @@ function AddressSearchScreen({ onBackPress, onResultPress }) {
           </Pressable>
         </View>
         <View style={styles.resultList}>
-          {searchResults.map((result) => (
+          {isSearching ? (
+            <Text style={styles.searchStatusText}>주소를 검색하는 중입니다.</Text>
+          ) : searchError ? (
+            <Text style={styles.searchStatusText}>{searchError}</Text>
+          ) : hasKeyword && results.length === 0 ? (
+            <Text style={styles.searchStatusText}>검색 결과가 없습니다.</Text>
+          ) : null}
+          {results.map((result) => (
             <Pressable
               accessibilityRole="button"
               key={result.id}
@@ -238,6 +475,8 @@ function AddressFormScreen({
   address,
   buttonLabel,
   initialAlias,
+  isDeleting = false,
+  isSubmitting = false,
   onBackPress,
   onChangeAddress,
   onDelete,
@@ -257,9 +496,15 @@ function AddressFormScreen({
         <View style={styles.selectedAddressHeader}>
           <View style={styles.selectedAddressTextGroup}>
             <Text style={styles.selectedAddressName}>{selectedAddress.name}</Text>
-            <Text style={styles.selectedAddressDetail}>{selectedAddress.detail}</Text>
+            <Text style={styles.selectedAddressDetail}>
+              {selectedAddress.detail}
+            </Text>
           </View>
-          <Pressable accessibilityRole="button" onPress={onChangeAddress} style={styles.changeAddressButton}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onChangeAddress}
+            style={styles.changeAddressButton}
+          >
             <Text style={styles.changeAddressButtonText}>변경</Text>
           </Pressable>
         </View>
@@ -272,12 +517,26 @@ function AddressFormScreen({
         />
       </View>
       <View style={styles.detailFooter}>
-        <Pressable accessibilityRole="button" onPress={() => onSubmit(alias.trim())} style={styles.submitButton}>
-          <Text style={styles.submitButtonText}>{buttonLabel}</Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={isSubmitting}
+          onPress={() => onSubmit(alias.trim())}
+          style={[styles.submitButton, isSubmitting && styles.disabledButton]}
+        >
+          <Text style={styles.submitButtonText}>
+            {isSubmitting ? "등록중" : buttonLabel}
+          </Text>
         </Pressable>
         {onDelete ? (
-          <Pressable accessibilityRole="button" onPress={onDelete} style={styles.deleteButton}>
-            <Text style={styles.deleteButtonText}>주소 삭제</Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isDeleting}
+            onPress={onDelete}
+            style={[styles.deleteButton, isDeleting && styles.disabledButton]}
+          >
+            <Text style={styles.deleteButtonText}>
+              {isDeleting ? "삭제중" : "주소 삭제"}
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -300,20 +559,37 @@ function ScreenHeader({ onBackPress, title }) {
   );
 }
 
-function AddressCard({ address, onEditPress }) {
+function AddressCard({
+  address,
+  isSettingCurrent = false,
+  onCurrentPress,
+  onEditPress,
+}) {
   return (
-    <View style={styles.addressCard}>
+    <Pressable
+      accessibilityLabel={`${address.name} 현재 주소로 설정`}
+      accessibilityRole="button"
+      disabled={isSettingCurrent}
+      onPress={onCurrentPress}
+      style={[styles.addressCard, isSettingCurrent && styles.disabledButton]}
+    >
       <View style={styles.addressCardTextGroup}>
         <View style={styles.addressCardTitleRow}>
           <MapPinIcon active={address.isCurrent} />
-          <Text numberOfLines={1} style={styles.addressCardTitle}>{address.name}</Text>
+          <Text numberOfLines={1} style={styles.addressCardTitle}>
+            {address.name}
+          </Text>
           {address.isCurrent ? (
             <View style={styles.currentAddressBadge}>
-              <Text style={styles.currentAddressBadgeText}>현재 설정된 주소</Text>
+              <Text style={styles.currentAddressBadgeText}>
+                현재 설정된 주소
+              </Text>
             </View>
           ) : null}
         </View>
-        <Text numberOfLines={1} style={styles.addressCardDetail}>{address.detail}</Text>
+        <Text numberOfLines={1} style={styles.addressCardDetail}>
+          {address.detail}
+        </Text>
       </View>
       <Pressable
         accessibilityLabel={`${address.name} 수정`}
@@ -324,7 +600,7 @@ function AddressCard({ address, onEditPress }) {
       >
         <MemoIcon height={26} style={styles.addressMemoIcon} width={26} />
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
@@ -343,8 +619,23 @@ function MapPinIcon({ active = false }) {
 function SearchIcon() {
   return (
     <Svg height={18} viewBox="0 0 18 18" width={18}>
-      <Circle cx={8} cy={8} fill="none" r={5.5} stroke={colors.gray05} strokeWidth={1.6} />
-      <Line stroke={colors.gray05} strokeLinecap="round" strokeWidth={1.6} x1={12.1} x2={15} y1={12.1} y2={15} />
+      <Circle
+        cx={8}
+        cy={8}
+        fill="none"
+        r={5.5}
+        stroke={colors.gray05}
+        strokeWidth={1.6}
+      />
+      <Line
+        stroke={colors.gray05}
+        strokeLinecap="round"
+        strokeWidth={1.6}
+        x1={12.1}
+        x2={15}
+        y1={12.1}
+        y2={15}
+      />
     </Svg>
   );
 }
@@ -352,8 +643,24 @@ function SearchIcon() {
 function CloseIcon() {
   return (
     <Svg height={20} viewBox="0 0 20 20" width={20}>
-      <Line stroke={colors.gray05} strokeLinecap="round" strokeWidth={1.8} x1={5} x2={15} y1={5} y2={15} />
-      <Line stroke={colors.gray05} strokeLinecap="round" strokeWidth={1.8} x1={15} x2={5} y1={5} y2={15} />
+      <Line
+        stroke={colors.gray05}
+        strokeLinecap="round"
+        strokeWidth={1.8}
+        x1={5}
+        x2={15}
+        y1={5}
+        y2={15}
+      />
+      <Line
+        stroke={colors.gray05}
+        strokeLinecap="round"
+        strokeWidth={1.8}
+        x1={15}
+        x2={5}
+        y1={5}
+        y2={15}
+      />
     </Svg>
   );
 }
@@ -371,7 +678,12 @@ const styles = StyleSheet.create({
   headerTitle: { ...typography.head01Sb, color: colors.gray08 },
   backButton: { width: 24, height: 24 },
   backIcon: { width: 24, height: 24, aspectRatio: 1 },
-  content: { paddingTop: 32, paddingHorizontal: 20, paddingBottom: 40, gap: 12 },
+  content: {
+    paddingTop: 32,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    gap: 12,
+  },
   addressCard: {
     width: "100%",
     minHeight: 76,
@@ -388,7 +700,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   addressCardTextGroup: { flex: 1, minWidth: 0, paddingRight: 16, gap: 4 },
-  addressCardTitleRow: { minHeight: 24, flexDirection: "row", alignItems: "center" },
+  addressCardTitleRow: {
+    minHeight: 24,
+    flexDirection: "row",
+    alignItems: "center",
+  },
   addressCardTitle: {
     marginLeft: 5,
     fontFamily: "SUIT",
@@ -419,7 +735,12 @@ const styles = StyleSheet.create({
     lineHeight: 15.4,
     color: colors.gray07,
   },
-  addressEditButton: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
+  addressEditButton: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   addressMemoIcon: { width: 26, height: 26, aspectRatio: 1 },
   addressAddCard: {
     width: "100%",
@@ -430,6 +751,20 @@ const styles = StyleSheet.create({
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.gray02,
+  },
+  statusCard: {
+    width: "100%",
+    height: 76,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.gray04,
+    borderRadius: 8,
+    backgroundColor: colors.white,
+  },
+  statusText: {
+    ...typography.caption01M,
+    color: colors.gray06,
   },
   searchContent: { paddingTop: 29, paddingHorizontal: 24 },
   searchTitle: {
@@ -460,9 +795,26 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.gray09,
   },
-  clearButton: { width: 24, height: 24, alignItems: "center", justifyContent: "center" },
+  clearButton: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   resultList: { marginTop: 16 },
-  resultRow: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.gray03 },
+  searchStatusText: {
+    paddingVertical: 16,
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 19.6,
+    color: colors.gray06,
+  },
+  resultRow: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray03,
+  },
   resultName: {
     fontFamily: "SUIT",
     fontSize: 16,
@@ -558,6 +910,9 @@ const styles = StyleSheet.create({
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.white,
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
   deleteButtonText: {
     fontFamily: "SUIT",

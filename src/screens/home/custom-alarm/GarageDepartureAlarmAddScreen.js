@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -10,8 +11,13 @@ import {
 } from "react-native";
 
 import { Header } from "../../../components";
+import {
+  getBusRouteDirections,
+  getBusRouteLocations,
+  searchBusRoutes,
+} from "../../../api/busRoutes";
+import { createDepotNotification } from "../../../api/notifications/depot";
 import { colors, typography } from "../../../theme";
-import { searchBusRoutes } from "../../../../api/bus-routes/search";
 
 function createDirection({ id, title, departurePoint }) {
   return {
@@ -48,6 +54,87 @@ function normalizeGarageBusResult(route) {
   };
 }
 
+function formatBusInterval(interval) {
+  if (interval === undefined || interval === null || interval === "") {
+    return "배차 간격 정보 없음";
+  }
+
+  return interval === "-" ? "배차 간격 정보 없음" : `배차 간격 ${interval}분`;
+}
+
+function getDirectionDepartureInfo(direction, locations) {
+  if (!locations) {
+    return "";
+  }
+
+  const directionType = direction?.type ?? direction?.id;
+  const isDepotDirection = directionType === "DEPOT";
+  const departed = isDepotDirection
+    ? locations.depotDeparted
+    : locations.turnaroundDeparted;
+  const busNo = isDepotDirection
+    ? locations.depotDepartedBusNo
+    : locations.turnaroundDepartedBusNo;
+
+  if (!departed) {
+    return "아직 출발 정보가 없습니다.";
+  }
+
+  return busNo ? `최근 출발 차량 ${busNo}` : "최근 출발 차량이 있습니다.";
+}
+
+function getLocationSummary(locations) {
+  if (!locations) {
+    return "";
+  }
+
+  const activeBusCount = locations.activeBuses.length;
+  const atStopCount = locations.activeBuses.filter((bus) => bus.atStop).length;
+
+  return `현재 운행 중 ${activeBusCount}대 · 정류장 정차 ${atStopCount}대`;
+}
+
+function getBusNumber(bus) {
+  return String(bus?.busNumber ?? bus?.routeNumber ?? bus?.name ?? "")
+    .replace(/번$/, "")
+    .trim();
+}
+
+function getDirectionType(direction) {
+  return direction?.type ?? direction?.direction ?? direction?.id ?? "";
+}
+
+function getDirectionTitleName(direction) {
+  return String(direction?.title ?? "")
+    .replace(/\s*방면$/, "")
+    .trim();
+}
+
+function getDirectionName(bus, direction) {
+  const directionType = getDirectionType(direction);
+  const titleName = getDirectionTitleName(direction);
+
+  if (directionType === "DEPOT") {
+    return (
+      bus?.depotName ||
+      direction?.name ||
+      direction?.directionName ||
+      titleName
+    );
+  }
+
+  if (directionType === "TURNAROUND") {
+    return (
+      bus?.turnaroundName ||
+      direction?.name ||
+      direction?.directionName ||
+      titleName
+    );
+  }
+
+  return direction?.name || direction?.directionName || titleName;
+}
+
 export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [selectedBus, setSelectedBus] = useState(null);
   const [selectedDirectionId, setSelectedDirectionId] = useState(null);
@@ -55,6 +142,11 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [busResults, setBusResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchErrorMessage, setSearchErrorMessage] = useState("");
+  const [loadingDirectionRouteId, setLoadingDirectionRouteId] = useState(null);
+  const [busLocations, setBusLocations] = useState(null);
+  const [isLoadingBusLocations, setIsLoadingBusLocations] = useState(false);
+  const [busLocationError, setBusLocationError] = useState("");
+  const [isSubmittingAlarm, setIsSubmittingAlarm] = useState(false);
   const isDirectionStep = Boolean(selectedBus);
   const trimmedSearchText = searchText.trim();
   const hasSearchText = trimmedSearchText.length > 0;
@@ -86,7 +178,7 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
           return;
         }
 
-        setBusResults(response.data.map(normalizeGarageBusResult));
+        setBusResults(Array.isArray(response) ? response : []);
       } catch (error) {
         if (!isActive || error?.name === "AbortError") {
           return;
@@ -120,13 +212,126 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
     onBackPress?.();
   };
 
-  const handleAlarmSubmit = () => {
-    // TODO: POST /home/custom-alarm/garage-departure
-    // body: { busId: selectedBus.id, directionId: selectedDirection.id }
-    if (selectedBus && selectedDirection) {
+  const handleAlarmSubmit = async () => {
+    if (!selectedBus || !selectedDirection || isSubmittingAlarm) {
+      return;
+    }
+
+    const routeId = selectedBus.routeId ?? selectedBus.id;
+    const busNumber = getBusNumber(selectedBus);
+    const direction = getDirectionType(selectedDirection);
+    const directionName = getDirectionName(selectedBus, selectedDirection);
+
+    if (!routeId || !busNumber || !direction || !directionName) {
+      Alert.alert(
+        "알림 등록 실패",
+        "버스 알림 등록에 필요한 정보를 확인하지 못했습니다.",
+      );
+      return;
+    }
+
+    setIsSubmittingAlarm(true);
+
+    try {
+      await createDepotNotification({
+        payload: {
+          routeId,
+          busNumber,
+          direction,
+          directionName,
+        },
+      });
+
       onBackPress?.();
+    } catch (error) {
+      Alert.alert(
+        "알림 등록 실패",
+        error?.message ?? "차고지 출발 알림 등록에 실패했습니다.",
+      );
+    } finally {
+      setIsSubmittingAlarm(false);
     }
   };
+
+  const handleBusPress = async (bus) => {
+    const routeId = bus.routeId ?? bus.id;
+
+    if (!routeId || loadingDirectionRouteId === routeId) {
+      return;
+    }
+
+    setLoadingDirectionRouteId(routeId);
+
+    try {
+      const busWithDirections = await getBusRouteDirections({ routeId });
+
+      setSelectedBus({
+        ...bus,
+        ...busWithDirections,
+        id: bus.id,
+        routeId,
+        name: busWithDirections.name || bus.name,
+        interval: busWithDirections.interval || bus.interval,
+        route: busWithDirections.route || bus.route,
+      });
+      setSelectedDirectionId(null);
+    } catch (error) {
+      Alert.alert(
+        "버스 방향 조회 실패",
+        error?.message ?? "버스 방향 정보를 불러오지 못했습니다.",
+      );
+    } finally {
+      setLoadingDirectionRouteId(null);
+    }
+  };
+
+  useEffect(() => {
+    const routeId = selectedBus?.routeId ?? selectedBus?.id;
+
+    if (!routeId) {
+      setBusLocations(null);
+      setBusLocationError("");
+      setIsLoadingBusLocations(false);
+      return undefined;
+    }
+
+    let isActive = true;
+    const controller = new AbortController();
+
+    async function loadBusLocations() {
+      setIsLoadingBusLocations(true);
+      setBusLocationError("");
+
+      try {
+        const locations = await getBusRouteLocations({
+          routeId,
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setBusLocations(locations);
+        }
+      } catch (error) {
+        if (isActive) {
+          setBusLocations(null);
+          setBusLocationError(
+            error?.message ?? "버스 위치 정보를 불러오지 못했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingBusLocations(false);
+        }
+      }
+    }
+
+    loadBusLocations();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [selectedBus?.id, selectedBus?.routeId]);
 
   return (
     <View style={styles.screen}>
@@ -141,6 +346,10 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
       {isDirectionStep ? (
         <BusDirectionStep
           bus={selectedBus}
+          busLocationError={busLocationError}
+          busLocations={busLocations}
+          isLoadingBusLocations={isLoadingBusLocations}
+          isSubmitting={isSubmittingAlarm}
           onChangeBus={() => {
             setSelectedBus(null);
             setSelectedDirectionId(null);
@@ -195,22 +404,28 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
               {busResults.map((bus, index) => (
                 <Pressable
                   accessibilityRole="button"
+                  disabled={loadingDirectionRouteId === (bus.routeId ?? bus.id)}
                   key={bus.id}
-                  onPress={() => {
-                    setSelectedBus(bus);
-                    setSelectedDirectionId(null);
-                  }}
+                  onPress={() => handleBusPress(bus)}
                   style={[
                     styles.resultItem,
                     index < busResults.length - 1 && styles.resultItemDivider,
+                    loadingDirectionRouteId === (bus.routeId ?? bus.id) &&
+                      styles.resultItemDisabled,
                   ]}
                 >
                   <BusIcon />
                   <View style={styles.resultTextGroup}>
                     <Text style={styles.resultTitle}>{bus.name}</Text>
                     <Text style={styles.resultDescription}>
-                      배차 간격 {bus.interval} · {bus.route}
+                      {formatBusInterval(bus.interval)}
+                      {bus.route ? ` · ${bus.route}` : ""}
                     </Text>
+                    {loadingDirectionRouteId === (bus.routeId ?? bus.id) ? (
+                      <Text style={styles.resultLoadingText}>
+                        방향 정보를 불러오는 중입니다.
+                      </Text>
+                    ) : null}
                   </View>
                 </Pressable>
               ))}
@@ -224,12 +439,17 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
 
 function BusDirectionStep({
   bus,
+  busLocationError,
+  busLocations,
+  isLoadingBusLocations,
+  isSubmitting,
   onChangeBus,
   onDirectionPress,
   onSubmit,
   selectedDirectionId,
 }) {
-  const canSubmit = Boolean(selectedDirectionId);
+  const canSubmit = Boolean(selectedDirectionId) && !isSubmitting;
+  const locationSummary = getLocationSummary(busLocations);
 
   return (
     <View style={styles.directionStep}>
@@ -240,7 +460,8 @@ function BusDirectionStep({
             <View style={styles.selectedBusTextGroup}>
               <Text style={styles.selectedBusName}>{bus.name}</Text>
               <Text style={styles.selectedBusDescription}>
-                배차 간격 {bus.interval} · {bus.route}
+                {formatBusInterval(bus.interval)}
+                {bus.route ? ` · ${bus.route}` : ""}
               </Text>
             </View>
           </View>
@@ -275,6 +496,19 @@ function BusDirectionStep({
                 <Text style={styles.directionDescription}>
                   {direction.description}
                 </Text>
+                {isLoadingBusLocations ? (
+                  <Text style={styles.directionMeta}>
+                    실시간 위치를 불러오는 중입니다.
+                  </Text>
+                ) : null}
+                {!isLoadingBusLocations && getDirectionDepartureInfo(
+                  direction,
+                  busLocations,
+                ) ? (
+                  <Text style={styles.directionMeta}>
+                    {getDirectionDepartureInfo(direction, busLocations)}
+                  </Text>
+                ) : null}
               </Pressable>
             );
           })}
@@ -287,7 +521,10 @@ function BusDirectionStep({
             버스가 차고지에서 출발할 때 알려드릴게요.
           </Text>
           <Text style={styles.infoText}>
-            알림은 1회 발송 후 자동으로 꺼지니 필요할 때 다시 켜주세요.
+            {isLoadingBusLocations
+              ? "실시간 버스 위치를 확인하고 있습니다."
+              : busLocationError || locationSummary ||
+                "알림은 1회 발송 후 자동으로 꺼지니 필요할 때 다시 켜주세요."}
           </Text>
         </View>
         <Pressable
@@ -302,7 +539,7 @@ function BusDirectionStep({
               canSubmit && styles.alarmButtonTextActive,
             ]}
           >
-            알림 설정
+            {isSubmitting ? "등록 중" : "알림 설정"}
           </Text>
         </Pressable>
       </View>
@@ -468,6 +705,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.gray03,
   },
+  resultItemDisabled: {
+    opacity: 0.6,
+  },
   busIconCircle: {
     width: 32,
     height: 32,
@@ -533,6 +773,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
     ...typography.body03M,
     color: colors.gray07,
+  },
+  resultLoadingText: {
+    marginTop: 4,
+    ...typography.caption01M,
+    color: colors.gray06,
+  },
+  resultStatus: {
+    minHeight: 96,
+    marginTop: 24,
+    justifyContent: "center",
+  },
+  resultStatusText: {
+    ...typography.body03M,
+    color: colors.gray06,
   },
   directionStep: {
     flex: 1,
@@ -621,6 +875,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 19.6,
     color: colors.gray06,
+  },
+  directionMeta: {
+    marginTop: 8,
+    ...typography.caption01M,
+    color: colors.gray07,
   },
   directionFooter: {
     paddingHorizontal: 20,

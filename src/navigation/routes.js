@@ -12,6 +12,7 @@ export const routes = {
   accountInfo: "AccountInfo",
   notices: "Notices",
   noticeDetail: "NoticeDetail",
+  faqs: "Faqs",
   privacyPolicy: "PrivacyPolicy",
   termsOfService: "TermsOfService",
   inquiry: "Inquiry",

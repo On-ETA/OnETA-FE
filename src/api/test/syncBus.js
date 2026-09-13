@@ -1,25 +1,8 @@
-/*
-  마이페이지 화면 정보 조회, GET
-  /api/mypage
+import { getAccessToken } from "../auth/tokens";
+import { reissueAuthTokens } from "../auth/reissue";
+import { requestJson } from "../client";
 
-  성공 응답:
-  {
-    "appVersion": "1.0.1",
-    "email": "string",
-    "nickname": "홍길동644"
-  }
-
-  실패 응답:
-  401 {
-    "code": "C007",
-    "message": "인증이 필요합니다"
-  }
-*/
-import { getAccessToken } from "./auth/tokens";
-import { reissueAuthTokens } from "./auth/reissue";
-import { requestJson } from "./client";
-
-const MYPAGE_ENDPOINT = "/api/mypage";
+const TEST_SYNC_BUS_ENDPOINT = "/api/test/sync-bus";
 
 function isAuthError(error) {
   return (
@@ -43,9 +26,9 @@ function createBusinessError(response, fallbackMessage) {
   return error;
 }
 
-async function requestMyPageJson(options) {
+async function requestTestSyncBusJson(options) {
   const fallbackMessage =
-    options.errorMessage ?? "마이페이지 정보를 불러오지 못했습니다.";
+    options.errorMessage ?? "버스 동기화 테스트에 실패했습니다.";
 
   try {
     const response = await requestJson(options);
@@ -82,20 +65,12 @@ async function requestMyPageJson(options) {
   }
 }
 
-export async function getMyPage({ accessToken = getAccessToken(), signal } = {}) {
-  const data = await requestMyPageJson({
-    path: MYPAGE_ENDPOINT,
+export async function syncBus({ accessToken = getAccessToken(), signal } = {}) {
+  return requestTestSyncBusJson({
+    path: TEST_SYNC_BUS_ENDPOINT,
     method: "GET",
     accessToken,
     signal,
-    errorMessage: "마이페이지 정보를 불러오지 못했습니다.",
+    errorMessage: "버스 동기화 테스트에 실패했습니다.",
   });
-
-  const myPageData = data?.data ?? data;
-
-  return {
-    appVersion: myPageData?.appVersion,
-    email: myPageData?.email,
-    nickname: myPageData?.nickname,
-  };
 }

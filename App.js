@@ -7,6 +7,7 @@ import {
   AccountInfoScreen,
   ChangePasswordScreen,
   CustomAlarmScreen,
+  FaqsScreen,
   FindEmailPasswordScreen,
   HomeScreen,
   InquiryScreen,
@@ -87,11 +88,13 @@ function HomeRoute({ navigation, route }) {
       initialTab={route.params?.initialTab ?? "home"}
       onOpenAccountInfo={() => navigation.navigate(routes.accountInfo)}
       onOpenContact={() => navigation.navigate(routes.inquiry)}
+      onOpenFaqs={() => navigation.navigate(routes.faqs)}
       onOpenNotices={() => navigation.navigate(routes.notices)}
       onOpenNotifications={() => navigation.navigate(routes.notifications)}
       onOpenPassword={() => navigation.navigate(routes.changePassword)}
       onOpenPrivacy={() => navigation.navigate(routes.privacyPolicy)}
       onOpenTerms={() => navigation.navigate(routes.termsOfService)}
+      onLogoutComplete={() => resetTo(navigation, routes.login)}
       onWithdrawComplete={() => resetTo(navigation, routes.login)}
       onTabPress={(tabKey) => {
         if (tabKey === "home") {
@@ -122,11 +125,13 @@ function MyPageRoute({ navigation }) {
       initialTab="myPage"
       onOpenAccountInfo={() => navigation.navigate(routes.accountInfo)}
       onOpenContact={() => navigation.navigate(routes.inquiry)}
+      onOpenFaqs={() => navigation.navigate(routes.faqs)}
       onOpenNotices={() => navigation.navigate(routes.notices)}
       onOpenNotifications={() => navigation.navigate(routes.notifications)}
       onOpenPassword={() => navigation.navigate(routes.changePassword)}
       onOpenPrivacy={() => navigation.navigate(routes.privacyPolicy)}
       onOpenTerms={() => navigation.navigate(routes.termsOfService)}
+      onLogoutComplete={() => resetTo(navigation, routes.login)}
       onWithdrawComplete={() => resetTo(navigation, routes.login)}
       onTabPress={(tabKey) => {
         if (tabKey === "home") {
@@ -160,6 +165,14 @@ function NoticesRoute({ navigation }) {
       onNoticePress={(notice) =>
         navigation.navigate(routes.noticeDetail, { notice })
       }
+    />
+  );
+}
+
+function FaqsRoute({ navigation }) {
+  return (
+    <FaqsScreen
+      onBackPress={() => goBackOrReset(navigation, routes.myPage)}
     />
   );
 }
@@ -249,6 +262,7 @@ export default function App() {
           <Stack.Screen component={MyPageRoute} name={routes.myPage} />
           <Stack.Screen component={InquiryRoute} name={routes.inquiry} />
           <Stack.Screen component={NoticesRoute} name={routes.notices} />
+          <Stack.Screen component={FaqsRoute} name={routes.faqs} />
           <Stack.Screen
             component={NoticeDetailRoute}
             name={routes.noticeDetail}

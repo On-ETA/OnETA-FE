@@ -17,6 +17,7 @@ export const linking = {
       [routes.inquiry]: "home/mypage/inquiry",
       [routes.notices]: "home/mypage/notices",
       [routes.noticeDetail]: "home/mypage/notices/detail",
+      [routes.faqs]: "home/mypage/faqs",
       [routes.notifications]: "home/mypage/notifications",
       [routes.privacyPolicy]: "home/mypage/privacy",
       [routes.termsOfService]: "home/mypage/terms",

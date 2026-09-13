@@ -8,6 +8,7 @@ import DownIcon from "../../assets/images/Down.svg";
 import UpIcon from "../../assets/images/Up.svg";
 import { agreeToSignupTerms } from "../api/auth/consent";
 import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
+import { registerSavedDeviceToken } from "../notifications/deviceTokenRegistration";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import { colors, layout, typography } from "../theme";
 
@@ -95,11 +96,15 @@ export function TermsAgreementScreen({
         accessToken: signupTokens.accessToken,
       });
       const consentTokens = extractAuthTokens(consentResponse);
-
-      setAuthTokens({
+      const authTokens = {
         accessToken: consentTokens.accessToken ?? signupTokens.accessToken,
         refreshToken: consentTokens.refreshToken ?? signupTokens.refreshToken,
-      });
+      };
+
+      setAuthTokens(authTokens);
+      registerSavedDeviceToken({
+        accessToken: authTokens.accessToken,
+      }).catch(() => {});
 
       onConfirmPress?.();
     } catch (error) {
