@@ -1,6 +1,7 @@
-import React, { useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
+  Alert,
   Modal,
   PanResponder,
   Pressable,
@@ -12,6 +13,8 @@ import {
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import { createArrivalNotification } from "../../../api/notifications/arrival";
+import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { NaverMapView } from "../../../components/NaverMapView";
 import { colors, typography } from "../../../theme";
@@ -22,11 +25,83 @@ const DEFAULT_TIME = {
   minute: "30",
 };
 
-export function ScheduleAlarmAddScreen({ onBackPress }) {
+const DEFAULT_ORIGIN_POINT = {
+  x: 126.9256,
+  y: 37.5515,
+};
+
+const DEFAULT_DESTINATION_POINT = {
+  x: 126.9368,
+  y: 37.5552,
+};
+
+function getPrimaryTransitSegment(route) {
+  return route?.segments.find((segment) => segment.transitType !== "WALK");
+}
+
+function getSegmentStopName(segment, edge) {
+  if (!segment) {
+    return "";
+  }
+
+  if (edge === "start") {
+    return segment.startStation || segment.stations[0]?.name || "";
+  }
+
+  return (
+    segment.endStation ||
+    segment.stations[segment.stations.length - 1]?.name ||
+    ""
+  );
+}
+
+function toTargetArrivalTime(time) {
+  const hourNumber = Number(time.hour);
+  const minuteNumber = Number(time.minute);
+  const normalizedHour =
+    time.period === "오후" && hourNumber < 12
+      ? hourNumber + 12
+      : time.period === "오전" && hourNumber === 12
+        ? 0
+        : hourNumber;
+
+  return `${String(normalizedHour).padStart(2, "0")}:${String(
+    minuteNumber,
+  ).padStart(2, "0")}:00`;
+}
+
+function mapDayToApiValue(day) {
+  const dayMap = {
+    월: "MON",
+    화: "TUE",
+    수: "WED",
+    목: "THU",
+    금: "FRI",
+    토: "SAT",
+    일: "SUN",
+  };
+
+  return dayMap[day];
+}
+
+function pickReminderOffsets(reminders) {
+  return Object.entries(reminders)
+    .filter(([, selected]) => selected)
+    .map(([minute]) => Number(minute))
+    .sort((a, b) => a - b);
+}
+
+export function ScheduleAlarmAddScreen({
+  initialStep = "form",
+  mapTitle = "알림 추가",
+  onBackPress,
+  onRouteConfigured,
+}) {
   const [routeName, setRouteName] = useState("");
   const [arrivalTime, setArrivalTime] = useState(DEFAULT_TIME);
   const [isTimePickerVisible, setIsTimePickerVisible] = useState(false);
-  const [step, setStep] = useState("form");
+  const [step, setStep] = useState(initialStep);
+  const [selectedRoute, setSelectedRoute] = useState(null);
   const [routePlaces, setRoutePlaces] = useState({
     origin: "마포구 와우산로 94",
     destination: "우리집",
@@ -53,6 +128,11 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
     }
 
     if (step === "route") {
+      if (initialStep === "route") {
+        onBackPress?.();
+        return;
+      }
+
       setStep("form");
       return;
     }
@@ -63,6 +143,7 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
   if (step === "route") {
     return (
       <ScheduleRouteMapStep
+        headerTitle={mapTitle}
         onBackPress={handleBackPress}
         onConfirm={(places) => {
           setRoutePlaces(places);
@@ -78,7 +159,15 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
         initialDestination={routePlaces.destination}
         initialOrigin={routePlaces.origin}
         onBackPress={handleBackPress}
-        onRouteSelect={() => setStep("alarmFinal")}
+        onRouteSelect={(route, places) => {
+          if (onRouteConfigured) {
+            onRouteConfigured(route, places);
+            return;
+          }
+
+          setSelectedRoute(route);
+          setStep("alarmFinal");
+        }}
       />
     );
   }
@@ -86,9 +175,12 @@ export function ScheduleAlarmAddScreen({ onBackPress }) {
   if (step === "alarmFinal") {
     return (
       <ScheduleAlarmFinalStep
+        arrivalTime={arrivalTime}
         onBackPress={handleBackPress}
         onPrevPress={() => setStep("routeResult")}
         onSavePress={onBackPress}
+        route={selectedRoute}
+        routeName={routeName}
       />
     );
   }
@@ -171,10 +263,8 @@ export function ScheduleRouteMapStep({
   const [placeKeyword, setPlaceKeyword] = useState("");
   const [origin, setOrigin] = useState("마포구 와우산로 94");
   const [destination, setDestination] = useState("우리집");
-  const sheetTranslateY = useRef(
-    new Animated.Value(SHEET_EXPANDED_OFFSET),
-  ).current;
-  const lastSheetOffset = useRef(SHEET_EXPANDED_OFFSET);
+  const sheetTranslateY = useRef(new Animated.Value(0)).current;
+  const lastSheetOffset = useRef(0);
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) =>
@@ -292,6 +382,58 @@ export function ScheduleRouteResultStep({
 }) {
   const [origin, setOrigin] = useState(initialOrigin);
   const [destination, setDestination] = useState(initialDestination);
+  const [routes, setRoutes] = useState([]);
+  const [isLoadingRoutes, setIsLoadingRoutes] = useState(false);
+  const [routeError, setRouteError] = useState("");
+  const selectedRoute = routes[0];
+  const primarySegment = useMemo(
+    () => getPrimaryTransitSegment(selectedRoute),
+    [selectedRoute],
+  );
+
+  useEffect(() => {
+    let isActive = true;
+    const controller = new AbortController();
+
+    async function loadTransitRoutes() {
+      setIsLoadingRoutes(true);
+      setRouteError("");
+
+      try {
+        const nextRoutes = await searchTransitRoutes({
+          originX: DEFAULT_ORIGIN_POINT.x,
+          originY: DEFAULT_ORIGIN_POINT.y,
+          originAddress: origin,
+          destX: DEFAULT_DESTINATION_POINT.x,
+          destY: DEFAULT_DESTINATION_POINT.y,
+          destAddress: destination,
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setRoutes(nextRoutes);
+        }
+      } catch (error) {
+        if (isActive) {
+          setRoutes([]);
+          setRouteError(
+            error?.message ?? "대중교통 경로 검색에 실패했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingRoutes(false);
+        }
+      }
+    }
+
+    loadTransitRoutes();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [destination, origin]);
 
   return (
     <View style={styles.resultScreen}>
@@ -337,57 +479,99 @@ export function ScheduleRouteResultStep({
       </View>
 
       <View style={styles.routeResultContent}>
-        <View style={styles.optionBadges}>
-          <View style={styles.optionBadge}>
-            <Text style={styles.optionBadgeText}>최적</Text>
+        {isLoadingRoutes ? (
+          <View style={styles.routeStatusBox}>
+            <Text style={styles.routeStatusText}>경로를 검색하는 중입니다.</Text>
           </View>
-          <View style={styles.optionBadge}>
-            <Text style={styles.optionBadgeText}>최소 시간</Text>
+        ) : routeError || !selectedRoute ? (
+          <View style={styles.routeStatusBox}>
+            <Text style={styles.routeStatusText}>
+              {routeError || "검색된 경로가 없습니다."}
+            </Text>
           </View>
-        </View>
+        ) : (
+          <>
+            <View style={styles.optionBadges}>
+              <View style={styles.optionBadge}>
+                <Text style={styles.optionBadgeText}>최적</Text>
+              </View>
+              <View style={styles.optionBadge}>
+                <Text style={styles.optionBadgeText}>
+                  환승 {selectedRoute.transferCount}회
+                </Text>
+              </View>
+            </View>
 
-        <View style={styles.routeTimeSummaryRow}>
-          <View style={styles.routeClockGroup}>
-            <Text style={styles.routeClockText}>23:42</Text>
-            <ChevronRightIcon />
-            <Text style={styles.routeClockText}>00:04</Text>
-          </View>
-          <View style={styles.totalTimeRow}>
-            <Text style={styles.totalTimeNumber}>21</Text>
-            <Text style={styles.totalTimeUnit}>분</Text>
-          </View>
-        </View>
+            <View style={styles.routeTimeSummaryRow}>
+              <View style={styles.routeClockGroup}>
+                <Text style={styles.routeClockText}>23:42</Text>
+                <ChevronRightIcon />
+                <Text style={styles.routeClockText}>00:04</Text>
+              </View>
+              <View style={styles.totalTimeRow}>
+                <Text style={styles.totalTimeNumber}>
+                  {selectedRoute.realTimeDurationMinutes ??
+                    selectedRoute.totalDurationMinutes}
+                </Text>
+                <Text style={styles.totalTimeUnit}>분</Text>
+              </View>
+            </View>
 
-        <RouteTimeline />
-        <View style={styles.routeDivider} />
+            <RouteTimeline segments={selectedRoute.segments} />
+            <View style={styles.routeDivider} />
 
-        <View style={styles.routeBusInfo}>
-          <View style={styles.routeBusBadge}>
-            <BusIconPlain />
-          </View>
-          <Text style={styles.routeBusNumber}>147</Text>
-          <Text style={styles.routeBusDirection}>· 강남역 방면</Text>
-        </View>
+            <View style={styles.routeBusInfo}>
+              <View style={styles.routeBusBadge}>
+                <BusIconPlain />
+              </View>
+              <Text style={styles.routeBusNumber}>
+                {primarySegment?.transitName || "대중교통"}
+              </Text>
+              <Text style={styles.routeBusDirection}>
+                {primarySegment?.endStation
+                  ? ` · ${primarySegment.endStation} 방면`
+                  : ""}
+              </Text>
+            </View>
 
-        <View style={styles.routeStops}>
-          <StopRow active label="승차" name="홍대정문" />
-          <StopRow label="하차" name="도착정류장" />
-        </View>
+            <View style={styles.routeStops}>
+              <StopRow
+                active
+                label="승차"
+                name={getSegmentStopName(primarySegment, "start") || origin}
+              />
+              <StopRow
+                label="하차"
+                name={
+                  getSegmentStopName(primarySegment, "end") || destination
+                }
+              />
+            </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={onRouteSelect}
-          style={styles.routeAlarmButton}
-        >
-          <Text style={styles.routeAlarmButtonText}>{actionLabel}</Text>
-        </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onRouteSelect(selectedRoute, { origin, destination })}
+              style={styles.routeAlarmButton}
+            >
+              <Text style={styles.routeAlarmButtonText}>{actionLabel}</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </View>
   );
 }
 
-function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
+function ScheduleAlarmFinalStep({
+  arrivalTime,
+  onBackPress,
+  onPrevPress,
+  onSavePress,
+  route,
+  routeName,
+}) {
   const [selectedDays, setSelectedDays] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReminderModalVisible, setIsReminderModalVisible] = useState(false);
   const [reminders, setReminders] = useState({
     1: false,
@@ -399,6 +583,19 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
     60: false,
   });
   const days = ["월", "화", "수", "목", "금", "토", "일"];
+  const primarySegment = getPrimaryTransitSegment(route);
+  const selectedReminderOffsets = pickReminderOffsets(reminders);
+  const selectedRouteName =
+    routeName.trim() ||
+    [
+      route?.originAddress,
+      route?.destinationAddress,
+    ].filter(Boolean).join("-") ||
+    "경로1";
+  const targetArrivalTime = toTargetArrivalTime(arrivalTime);
+  const formattedArrivalTime = `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
+  const displayDuration =
+    route?.realTimeDurationMinutes ?? route?.totalDurationMinutes ?? 0;
 
   const toggleDay = (day) => {
     setSelectedDays((current) =>
@@ -412,10 +609,44 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
     setReminders((current) => ({ ...current, [key]: !current[key] }));
   };
 
-  const saveAlarm = () => {
-    // TODO: POST /home/custom-alarms/schedule
-    // body: { routeId, selectedDays, reminders }
-    onSavePress?.();
+  const saveAlarm = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    if (!route) {
+      Alert.alert("알림 등록 실패", "등록할 경로 정보를 찾지 못했습니다.");
+      return;
+    }
+
+    if (selectedReminderOffsets.length === 0) {
+      Alert.alert("알림 등록 실패", "출발 전 알림 시간을 선택해주세요.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await createArrivalNotification({
+        payload: {
+          routeName: selectedRouteName,
+          scheduleType: "NORMAL",
+          targetArrivalTime,
+          reminderOffsetMinutes: selectedReminderOffsets,
+          repeatDays: selectedDays.map(mapDayToApiValue).filter(Boolean),
+          routeDetails: JSON.stringify(route.raw ?? route),
+        },
+      });
+
+      onSavePress?.();
+    } catch (error) {
+      Alert.alert(
+        "알림 등록 실패",
+        error?.message ?? "내 일정 알림 등록에 실패했습니다.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -433,11 +664,17 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
           <View style={styles.routeBusBadge}>
             <BusIconPlain />
           </View>
-          <Text style={styles.routeBusNumber}>147</Text>
-          <Text style={styles.routeBusDirection}>· 강남역 방면</Text>
+          <Text style={styles.routeBusNumber}>
+            {primarySegment?.transitName || "대중교통"}
+          </Text>
+          <Text style={styles.routeBusDirection}>
+            {primarySegment?.endStation
+              ? `· ${primarySegment.endStation} 방면`
+              : ""}
+          </Text>
         </View>
         <View style={styles.finalTotalTime}>
-          <Text style={styles.finalTotalTimeNumber}>21</Text>
+          <Text style={styles.finalTotalTimeNumber}>{displayDuration}</Text>
           <Text style={styles.finalTotalTimeUnit}>분</Text>
         </View>
       </View>
@@ -447,14 +684,14 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
           <View style={styles.timeSummaryBlock}>
             <Text style={styles.finalLabel}>출발 적정 시간</Text>
             <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>오전 11 : 09</Text>
+              <Text style={styles.timeCardText}>경로 기준 계산</Text>
             </View>
           </View>
           <ChevronRightIcon />
           <View style={styles.timeSummaryBlock}>
             <Text style={styles.finalLabel}>도착 예정 시간</Text>
             <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>오전 11 : 30</Text>
+              <Text style={styles.timeCardText}>{formattedArrivalTime}</Text>
             </View>
           </View>
         </View>
@@ -473,7 +710,11 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
           onPress={() => setIsReminderModalVisible(true)}
           style={styles.reminderSelect}
         >
-          <Text style={styles.reminderSelectText}>10분 전 알림</Text>
+          <Text style={styles.reminderSelectText}>
+            {selectedReminderOffsets.length > 0
+              ? `${selectedReminderOffsets.join(", ")}분 전 알림`
+              : "알림 시간 선택"}
+          </Text>
           <ChevronDownIcon />
         </Pressable>
 
@@ -506,10 +747,10 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
       <View style={styles.finalFooter}>
         <View style={styles.finalInfoBox}>
           <Text style={styles.finalInfoText}>
-            11시 30분까지 도착하실 수 있도록,
+            {formattedArrivalTime}까지 도착하실 수 있도록,
           </Text>
           <Text style={styles.finalInfoText}>
-            출발 적정 시간 10분 전인 10시 59분에 알려드릴게요.
+            선택한 출발 전 알림 시간에 맞춰 알려드릴게요.
           </Text>
         </View>
         <View style={styles.finalButtonRow}>
@@ -522,10 +763,13 @@ function ScheduleAlarmFinalStep({ onBackPress, onPrevPress, onSavePress }) {
           </Pressable>
           <Pressable
             accessibilityRole="button"
+            disabled={isSubmitting}
             onPress={saveAlarm}
-            style={styles.saveButton}
+            style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
           >
-            <Text style={styles.saveButtonText}>저장</Text>
+            <Text style={styles.saveButtonText}>
+              {isSubmitting ? "저장 중" : "저장"}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -591,30 +835,54 @@ function ReminderModal({ onClose, onToggle, reminders, visible }) {
   );
 }
 
-function RouteTimeline() {
+function RouteTimeline({ segments = [] }) {
+  const visibleSegments = segments;
+
+  if (visibleSegments.length === 0) {
+    return null;
+  }
+
+  const totalDuration = visibleSegments.reduce(
+    (sum, segment) => sum + Math.max(segment.durationMinutes ?? 0, 1),
+    0,
+  );
+
   return (
     <View style={styles.routeTimeline}>
-      <View style={[styles.routeTimelineSegment, styles.routeWalkSegment]}>
-        <View style={styles.routeWalkIcon}>
-          <WalkIcon />
-        </View>
-        <View style={styles.routeTimelineTextWrap}>
-          <Text style={styles.routeTimelineText}>5분</Text>
-        </View>
-      </View>
-      <View style={[styles.routeTimelineSegment, styles.routeBusSegment]}>
-        <View style={styles.routeBusIcon}>
-          <BusIconPlain />
-        </View>
-        <View style={styles.routeTimelineTextWrap}>
-          <Text style={styles.routeTimelineTextOn}>4분</Text>
-        </View>
-      </View>
-      <View style={[styles.routeTimelineSegment, styles.routeAfterWalkSegment]}>
-        <View style={styles.routeTimelineTextWrap}>
-          <Text style={styles.routeTimelineText}>8분</Text>
-        </View>
-      </View>
+      {visibleSegments.map((segment, index) => {
+        const isTransit = segment.transitType !== "WALK";
+        const duration = Math.max(segment.durationMinutes ?? 0, 1);
+
+        return (
+          <View
+            key={segment.id ?? `${segment.transitType}-${index}`}
+            style={[
+              styles.routeTimelineSegment,
+              isTransit ? styles.routeBusSegment : styles.routeWalkSegment,
+              { flex: duration / totalDuration },
+            ]}
+          >
+            {index === 0 || isTransit ? (
+              <View
+                style={isTransit ? styles.routeBusIcon : styles.routeWalkIcon}
+              >
+                {isTransit ? <BusIconPlain /> : <WalkIcon />}
+              </View>
+            ) : null}
+            <View style={styles.routeTimelineTextWrap}>
+              <Text
+                style={
+                  isTransit
+                    ? styles.routeTimelineTextOn
+                    : styles.routeTimelineText
+                }
+              >
+                {duration}분
+              </Text>
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -627,23 +895,6 @@ function StopRow({ active = false, label, name }) {
       </View>
       <Text style={styles.stopLabel}>{label}</Text>
       <Text style={styles.stopName}>{name}</Text>
-    </View>
-  );
-}
-
-function MapPlaceholder() {
-  return (
-    <View style={styles.mapPlaceholder}>
-      <View style={[styles.mapBlock, styles.mapPark]} />
-      <View style={[styles.mapBlock, styles.mapCampus]} />
-      <View style={[styles.mapRoad, styles.mapRoadA]} />
-      <View style={[styles.mapRoad, styles.mapRoadB]} />
-      <View style={[styles.mapRoad, styles.mapRoadC]} />
-      <View style={[styles.mapRoad, styles.mapRoadD]} />
-      <Text style={[styles.mapLabel, styles.mapLabelTop]}>제이에스갤러리</Text>
-      <Text style={[styles.mapLabel, styles.mapLabelSchool]}>서교초등학교</Text>
-      <Text style={[styles.mapLabel, styles.mapLabelCampus]}>홍익대학교{"\n"}서울캠퍼스</Text>
-      <Text style={[styles.mapLabel, styles.mapLabelPark]}>와우산{"\n"}(101.8m)</Text>
     </View>
   );
 }
@@ -1003,95 +1254,6 @@ const styles = StyleSheet.create({
     lineHeight: 22.4,
     color: colors.white,
   },
-  mapPlaceholder: {
-    flex: 1,
-    position: "relative",
-    overflow: "hidden",
-    backgroundColor: "#E8E2D6",
-  },
-  mapBlock: {
-    position: "absolute",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.7)",
-  },
-  mapPark: {
-    right: -44,
-    bottom: 260,
-    width: 210,
-    height: 190,
-    borderRadius: 40,
-    backgroundColor: "#CFE7BC",
-    transform: [{ rotate: "-16deg" }],
-  },
-  mapCampus: {
-    left: -24,
-    bottom: 245,
-    width: 220,
-    height: 150,
-    borderRadius: 28,
-    backgroundColor: "#D8E5EF",
-    transform: [{ rotate: "-14deg" }],
-  },
-  mapRoad: {
-    position: "absolute",
-    height: 22,
-    borderRadius: 12,
-    backgroundColor: "#F8F8F5",
-    borderWidth: 2,
-    borderColor: "#D8D1C8",
-  },
-  mapRoadA: {
-    top: 96,
-    left: -40,
-    width: 520,
-    transform: [{ rotate: "-31deg" }],
-  },
-  mapRoadB: {
-    top: 178,
-    left: -60,
-    width: 560,
-    transform: [{ rotate: "23deg" }],
-  },
-  mapRoadC: {
-    top: 286,
-    left: -80,
-    width: 560,
-    transform: [{ rotate: "-22deg" }],
-  },
-  mapRoadD: {
-    top: 392,
-    left: -70,
-    width: 540,
-    transform: [{ rotate: "18deg" }],
-  },
-  mapLabel: {
-    position: "absolute",
-    textAlign: "center",
-    fontFamily: "SUIT",
-    fontSize: 15,
-    fontWeight: "800",
-    lineHeight: 21,
-    color: "rgba(80, 87, 93, 0.58)",
-  },
-  mapLabelTop: {
-    top: 118,
-    left: 186,
-  },
-  mapLabelSchool: {
-    top: 184,
-    left: 34,
-    color: "rgba(66, 113, 183, 0.7)",
-  },
-  mapLabelCampus: {
-    bottom: 320,
-    left: 86,
-    color: "rgba(66, 113, 183, 0.78)",
-  },
-  mapLabelPark: {
-    bottom: 350,
-    right: 78,
-    color: "rgba(48, 126, 54, 0.78)",
-  },
   placeSearchBox: {
     height: 46,
     marginTop: 8,
@@ -1236,9 +1398,23 @@ const styles = StyleSheet.create({
     color: colors.gray07,
   },
   routeResultContent: {
+    flex: 1,
     paddingTop: 18,
     paddingHorizontal: 20,
     backgroundColor: colors.white,
+  },
+  routeStatusBox: {
+    minHeight: 180,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  routeStatusText: {
+    textAlign: "center",
+    fontFamily: "SUIT",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 21,
+    color: colors.gray06,
   },
   optionBadges: {
     flexDirection: "row",
@@ -1265,7 +1441,7 @@ const styles = StyleSheet.create({
   },
   routeClockGroup: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     gap: 12,
   },
   routeClockText: {
@@ -1651,6 +1827,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: colors.main,
+  },
+  saveButtonDisabled: {
+    backgroundColor: colors.gray05,
   },
   saveButtonText: {
     fontFamily: "SUIT",

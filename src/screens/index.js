@@ -4,6 +4,7 @@ export { ChangePasswordScreen } from "./ChangePasswordScreen";
 export { CustomAlarmScreen } from "./home/custom-alarm/CustomAlarmScreen";
 export { DeleteAccountScreen } from "./DeleteAccountScreen";
 export { FindEmailPasswordScreen } from "./FindEmailPasswordScreen";
+export { FaqsScreen } from "./FaqsScreen";
 export { HomeScreen } from "./HomeScreen";
 export { InquiryScreen } from "./InquiryScreen";
 export { LoginScreen } from "./LoginScreen";

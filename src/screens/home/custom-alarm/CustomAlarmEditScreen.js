@@ -1,19 +1,168 @@
-import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+﻿import React, { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import {
+  getArrivalNotificationById,
+  updateArrivalNotification,
+} from "../../../api/notifications/arrival";
 import { Header } from "../../../components";
 import { colors, typography } from "../../../theme";
 
 const days = ["월", "화", "수", "목", "금", "토", "일"];
+const apiDayToKoreanDay = {
+  MON: "월",
+  TUE: "화",
+  WED: "수",
+  THU: "목",
+  FRI: "금",
+  SAT: "토",
+  SUN: "일",
+};
+const koreanDayToApiDay = {
+  월: "MON",
+  화: "TUE",
+  수: "WED",
+  목: "THU",
+  금: "FRI",
+  토: "SAT",
+  일: "SUN",
+};
 
 // TODO: API 연동 시 아래 화면의 더미 경로/알림 데이터를 교체하세요.
 // GET /home/custom-alarms/{alarmId}
 // PATCH /home/custom-alarms/{alarmId}
 
+function getNotificationId(alarm) {
+  const id = alarm?.notificationId ?? alarm?.id;
+
+  return typeof id === "string" ? id.replace(/^arrival-/, "") : id;
+}
+
+function formatArrivalTime(time) {
+  if (!time) {
+    return "시간 정보 없음";
+  }
+
+  if (typeof time === "string") {
+    const [hour = "00", minute = "00"] = time.split(":");
+
+    return `${hour}:${minute}`;
+  }
+
+  return `${String(time.hour ?? 0).padStart(2, "0")}:${String(
+    time.minute ?? 0,
+  ).padStart(2, "0")}`;
+}
+
+function formatTargetArrivalTimeForApi(time) {
+  if (!time) {
+    return "";
+  }
+
+  if (typeof time === "string") {
+    const [hour = "00", minute = "00", second = "00"] = time.split(":");
+
+    return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}:${second.padStart(
+      2,
+      "0",
+    )}`;
+  }
+
+  return `${String(time.hour ?? 0).padStart(2, "0")}:${String(
+    time.minute ?? 0,
+  ).padStart(2, "0")}:${String(time.second ?? 0).padStart(2, "0")}`;
+}
+
+function getPrimaryTransitSegment(route) {
+  return route?.segments?.find((segment) => segment.transitType !== "WALK");
+}
+
+function getRepeatDays(repeatDays) {
+  return Array.isArray(repeatDays)
+    ? repeatDays.map((day) => apiDayToKoreanDay[day]).filter(Boolean)
+    : [];
+}
+
+function getRouteDetails(alarm) {
+  if (alarm?.routeDetails) {
+    return alarm.routeDetails;
+  }
+
+  const route = alarm?.route ?? alarm?.raw?.route;
+
+  return route ? JSON.stringify(route) : undefined;
+}
+
 export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
   const [routeName, setRouteName] = useState(alarm?.routeName ?? "출근길");
-  const [selectedDays, setSelectedDays] = useState(["화", "목", "금"]);
+  const [selectedDays, setSelectedDays] = useState(
+    getRepeatDays(alarm?.repeatDays),
+  );
+  const [arrivalAlarm, setArrivalAlarm] = useState(alarm);
+  const [isLoadingAlarm, setIsLoadingAlarm] = useState(false);
+  const [isSavingAlarm, setIsSavingAlarm] = useState(false);
+  const [alarmError, setAlarmError] = useState("");
+  const notificationId = getNotificationId(alarm);
+  const route = arrivalAlarm?.route ?? arrivalAlarm?.raw?.route;
+  const primarySegment = useMemo(() => getPrimaryTransitSegment(route), [route]);
+  const arrivalTime = formatArrivalTime(
+    arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
+  );
+  const reminderText = Array.isArray(arrivalAlarm?.reminderOffsetMinutes)
+    ? `${arrivalAlarm.reminderOffsetMinutes.join(", ")}분 전 알림`
+    : "10분 전 알림";
+  const totalDuration =
+    route?.realTimeDurationMinutes ?? route?.totalDurationMinutes ?? 0;
+
+  useEffect(() => {
+    if (!notificationId) {
+      return undefined;
+    }
+
+    let isActive = true;
+    const controller = new AbortController();
+
+    async function loadArrivalAlarm() {
+      setIsLoadingAlarm(true);
+      setAlarmError("");
+
+      try {
+        const nextAlarm = await getArrivalNotificationById({
+          id: notificationId,
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setArrivalAlarm(nextAlarm);
+          setRouteName(nextAlarm.routeName ?? "");
+          setSelectedDays(getRepeatDays(nextAlarm.repeatDays));
+        }
+      } catch (error) {
+        if (isActive) {
+          setAlarmError(error?.message ?? "도착 알림을 불러오지 못했습니다.");
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingAlarm(false);
+        }
+      }
+    }
+
+    loadArrivalAlarm();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [notificationId]);
 
   const toggleDay = (day) => {
     setSelectedDays((current) =>
@@ -23,10 +172,62 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
     );
   };
 
-  const handleSave = () => {
-    // TODO: PATCH /home/custom-alarms/{alarmId}
-    // body: { routeName, selectedDays, reminderMinutes: 10 }
-    onSavePress?.();
+  const handleSave = async () => {
+    if (isSavingAlarm) {
+      return;
+    }
+
+    if (!notificationId) {
+      Alert.alert("알림 수정 실패", "수정할 알림 id를 찾지 못했습니다.");
+      return;
+    }
+
+    const reminderOffsetMinutes = arrivalAlarm?.reminderOffsetMinutes ?? [];
+
+    if (
+      !Array.isArray(reminderOffsetMinutes) ||
+      reminderOffsetMinutes.length === 0
+    ) {
+      Alert.alert("알림 수정 실패", "출발 전 알림 시간이 필요합니다.");
+      return;
+    }
+
+    const payload = {
+      routeName: routeName.trim() || undefined,
+      targetArrivalTime: formatTargetArrivalTimeForApi(
+        arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
+      ),
+      reminderOffsetMinutes,
+      repeatDays: selectedDays
+        .map((day) => koreanDayToApiDay[day])
+        .filter(Boolean),
+      routeDetails: getRouteDetails(arrivalAlarm),
+      scheduleType: arrivalAlarm?.scheduleType,
+    };
+
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === undefined || payload[key] === "") {
+        delete payload[key];
+      }
+    });
+
+    setIsSavingAlarm(true);
+
+    try {
+      await updateArrivalNotification({
+        id: notificationId,
+        payload,
+      });
+
+      onSavePress?.();
+    } catch (error) {
+      Alert.alert(
+        "알림 수정 실패",
+        error?.message ?? "도착 알림 수정에 실패했습니다.",
+      );
+    } finally {
+      setIsSavingAlarm(false);
+    }
   };
 
   return (
@@ -38,6 +239,15 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
         titleStyle={styles.headerTitle}
         type="back"
       />
+      {isLoadingAlarm ? (
+        <View style={styles.statusBox}>
+          <Text style={styles.statusText}>알림 정보를 불러오는 중입니다.</Text>
+        </View>
+      ) : alarmError ? (
+        <View style={styles.statusBox}>
+          <Text style={styles.statusText}>{alarmError}</Text>
+        </View>
+      ) : null}
       <View style={styles.routeHeader}>
         <View style={styles.routeClockGroup}>
           <Text style={styles.routeClockText}>23:42</Text>
@@ -45,7 +255,7 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
           <Text style={styles.routeClockText}>00:04</Text>
         </View>
         <View style={styles.totalTime}>
-          <Text style={styles.totalTimeNumber}>21</Text>
+          <Text style={styles.totalTimeNumber}>{totalDuration}</Text>
           <Text style={styles.totalTimeUnit}>분</Text>
         </View>
       </View>
@@ -55,14 +265,14 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
           <View style={styles.timeSummaryBlock}>
             <Text style={styles.fieldLabel}>출발 적정 시간</Text>
             <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>오전 11 : 09</Text>
+              <Text style={styles.timeCardText}>경로 기준 계산</Text>
             </View>
           </View>
           <ChevronRightIcon />
           <View style={styles.timeSummaryBlock}>
             <Text style={styles.fieldLabel}>도착 예정 시간</Text>
             <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>오전 11 : 30</Text>
+              <Text style={styles.timeCardText}>{arrivalTime}</Text>
             </View>
           </View>
         </View>
@@ -83,7 +293,7 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
 
         <Text style={styles.sectionLabel}>출발 알림</Text>
         <Pressable accessibilityRole="button" style={styles.reminderSelect}>
-          <Text style={styles.reminderText}>10분 전 알림</Text>
+          <Text style={styles.reminderText}>{reminderText}</Text>
           <ChevronDownIcon />
         </Pressable>
 
@@ -115,17 +325,27 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
 
       <View style={styles.footer}>
         <View style={styles.infoBox}>
-          <Text style={styles.infoText}>11시 30분까지 도착하실 수 있도록,</Text>
+          <Text style={styles.infoText}>{arrivalTime}까지 도착하실 수 있도록,</Text>
           <Text style={styles.infoText}>
-            출발 적정 시간 10분 전인 10시 59분에 알려드릴게요.
+            설정된 출발 전 알림 시간에 맞춰 알려드릴게요.
           </Text>
         </View>
         <View style={styles.footerButtons}>
           <Pressable accessibilityRole="button" onPress={onBackPress} style={styles.cancelButton}>
             <Text style={styles.cancelText}>취소</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={handleSave} style={styles.saveButton}>
-            <Text style={styles.saveText}>저장</Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isSavingAlarm}
+            onPress={handleSave}
+            style={[
+              styles.saveButton,
+              isSavingAlarm && styles.saveButtonDisabled,
+            ]}
+          >
+            <Text style={styles.saveText}>
+              {isSavingAlarm ? "저장 중" : "저장"}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -289,9 +509,30 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: colors.gray02,
   },
+  statusBox: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: colors.gray02,
+  },
+  statusText: {
+    ...typography.caption01M,
+    color: colors.gray07,
+  },
   busInfo: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  routeClockGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  routeClockText: {
+    fontFamily: "SUIT",
+    fontSize: 28,
+    fontWeight: "700",
+    lineHeight: 34,
+    color: colors.gray09,
   },
   busIconCircle: {
     width: 22,
@@ -315,18 +556,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 18.2,
     color: colors.gray06,
-  },
-  routeClockGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  routeClockText: {
-    fontFamily: "SUIT",
-    fontSize: 26,
-    fontWeight: "700",
-    lineHeight: 32,
-    color: colors.gray09,
   },
   totalTime: {
     flexDirection: "row",
@@ -524,6 +753,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: colors.main,
+  },
+  saveButtonDisabled: {
+    backgroundColor: colors.gray05,
   },
   saveText: {
     fontFamily: "SUIT",

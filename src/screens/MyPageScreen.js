@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import MailIcon from "../../assets/images/icon_mail.svg";
 import MessageIcon from "../../assets/images/icon_message.svg";
@@ -9,8 +9,9 @@ import PenIcon from "../../assets/images/icon_pen.svg";
 import LockIcon from "../../assets/images/icon_lock.svg";
 import RightIcon from "../../assets/images/R.svg";
 import packageJson from "../../package.json";
-import { getMyPage } from "../../api/mypage";
-import { deleteUser } from "../../api/user";
+import { logout } from "../api/auth/logout";
+import { getMyPage } from "../api/mypage";
+import { deleteUser } from "../api/user";
 import { AppScreen, HomeTopSection } from "../components";
 import { colors, typography } from "../theme";
 
@@ -27,6 +28,7 @@ const ACCOUNT_ITEMS = [
 
 const SERVICE_ITEMS = [
   { key: "notice", label: "공지사항", Icon: MessageIcon },
+  { key: "faq", label: "FAQ", Icon: NoteIcon },
   { key: "contact", label: "문의하기", Icon: MailIcon },
   {
     key: "privacy",
@@ -36,6 +38,15 @@ const SERVICE_ITEMS = [
   { key: "terms", label: "이용약관", Icon: NoteIcon },
 ];
 
+function isAuthError(error) {
+  return (
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.code === "C007" ||
+    error?.code === "C005"
+  );
+}
+
 export function MyPageScreen({
   embedded = false,
   onBackPress,
@@ -44,13 +55,16 @@ export function MyPageScreen({
   notificationCount = 0,
   onOpenNotifications,
   onOpenNotices,
+  onOpenFaqs,
   onOpenContact,
   onOpenPassword,
   onOpenPrivacy,
   onOpenTerms,
+  onLogoutComplete,
   onWithdrawComplete,
 }) {
   const [withdrawStep, setWithdrawStep] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawErrorMessage, setWithdrawErrorMessage] = useState("");
   const [myPageInfo, setMyPageInfo] = useState(defaultMyPageInfo);
@@ -67,12 +81,17 @@ export function MyPageScreen({
         }
 
         setMyPageInfo({
-          appVersion: data.appVersion ?? defaultMyPageInfo.appVersion,
+          appVersion: defaultMyPageInfo.appVersion,
           email: data.email ?? defaultMyPageInfo.email,
           nickname: data.nickname ?? defaultMyPageInfo.nickname,
         });
-      } catch {
+      } catch (error) {
         if (isActive) {
+          if (isAuthError(error)) {
+            onLogoutComplete?.();
+            return;
+          }
+
           setMyPageInfo(defaultMyPageInfo);
         }
       }
@@ -100,6 +119,10 @@ export function MyPageScreen({
   };
 
   const handleWithdrawPress = async () => {
+    if (isWithdrawing) {
+      return;
+    }
+
     setWithdrawErrorMessage("");
     setIsWithdrawing(true);
 
@@ -120,6 +143,31 @@ export function MyPageScreen({
     onWithdrawComplete?.();
   };
 
+  const handleLogoutPress = async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+
+    try {
+      await logout();
+      onLogoutComplete?.();
+    } catch (error) {
+      if (isAuthError(error)) {
+        onLogoutComplete?.();
+        return;
+      }
+
+      Alert.alert(
+        "로그아웃 실패",
+        error?.message ?? "로그아웃에 실패했습니다.",
+      );
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   const handleMenuPress = (menuKey) => {
     if (menuKey === "nickname") {
       onProfilePress?.();
@@ -131,6 +179,10 @@ export function MyPageScreen({
 
     if (menuKey === "notice") {
       onOpenNotices?.();
+    }
+
+    if (menuKey === "faq") {
+      onOpenFaqs?.();
     }
 
     if (menuKey === "contact") {
@@ -214,8 +266,18 @@ export function MyPageScreen({
 
         <View style={styles.bottomActions}>
           <View style={styles.accountActions}>
-            <Pressable style={styles.logoutButton}>
-              <Text style={styles.logoutButtonText}>로그아웃</Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isLoggingOut}
+              onPress={handleLogoutPress}
+              style={[
+                styles.logoutButton,
+                isLoggingOut && styles.logoutButtonDisabled,
+              ]}
+            >
+              <Text style={styles.logoutButtonText}>
+                {isLoggingOut ? "처리중" : "로그아웃"}
+              </Text>
             </Pressable>
 
             <Pressable
@@ -243,7 +305,14 @@ export function MyPageScreen({
       {screen}
       <Modal
         animationType="fade"
-        onRequestClose={closeWithdrawModal}
+        onRequestClose={() => {
+          if (withdrawStep === "complete") {
+            handleWithdrawCompletePress();
+            return;
+          }
+
+          closeWithdrawModal();
+        }}
         transparent
         visible={withdrawStep !== null}
       >
@@ -274,7 +343,7 @@ export function MyPageScreen({
                     onPress={handleWithdrawPress}
                     style={[
                       styles.withdrawButton,
-                      isWithdrawing && styles.disabledButton,
+                      isWithdrawing && styles.withdrawButtonDisabled,
                     ]}
                   >
                     <Text
@@ -419,6 +488,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  logoutButtonDisabled: {
+    opacity: 0.7,
+  },
   logoutButtonText: {
     ...typography.caption01M,
     color: colors.white,
@@ -527,6 +599,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
     backgroundColor: colors.main,
+  },
+  withdrawButtonDisabled: {
+    opacity: 0.7,
   },
   withdrawButtonText: {
     color: colors.white,

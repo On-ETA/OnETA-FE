@@ -1,9 +1,26 @@
-import React, { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
 import MemoIcon from "../../../../public/images/memo.svg";
 import PlusIcon from "../../../../public/images/plus.svg";
+import {
+  deleteDepotNotification,
+  getMyDepotNotifications,
+} from "../../../api/notifications/depot";
+import {
+  deleteArrivalNotifications,
+  getArrivalNotifications,
+  updateArrivalNotificationStatus,
+} from "../../../api/notifications/arrival";
 import { colors, typography } from "../../../theme";
 
 // TODO: API 연동 시 아래 더미 데이터를 교체하세요.
@@ -17,6 +34,12 @@ const initialGarageAlarms = [];
 
 const initialScheduleAlarms = [];
 
+function getArrivalNotificationId(alarm) {
+  const id = alarm?.notificationId ?? alarm?.id;
+
+  return typeof id === "string" ? id.replace(/^arrival-/, "") : id;
+}
+
 export function CustomAlarmScreen({
   onGarageDepartureAddPress,
   onGarageAlarmEditPress,
@@ -25,6 +48,12 @@ export function CustomAlarmScreen({
 }) {
   const [garageAlarms, setGarageAlarms] = useState(initialGarageAlarms);
   const [scheduleAlarms, setScheduleAlarms] = useState(initialScheduleAlarms);
+  const [isLoadingGarageAlarms, setIsLoadingGarageAlarms] = useState(false);
+  const [garageAlarmError, setGarageAlarmError] = useState("");
+  const [isLoadingScheduleAlarms, setIsLoadingScheduleAlarms] = useState(false);
+  const [scheduleAlarmError, setScheduleAlarmError] = useState("");
+  const [isDeletingAlarms, setIsDeletingAlarms] = useState(false);
+  const [updatingScheduleAlarmIds, setUpdatingScheduleAlarmIds] = useState([]);
   const [editingSections, setEditingSections] = useState({
     garage: false,
     schedule: false,
@@ -35,6 +64,71 @@ export function CustomAlarmScreen({
   const isDeleteModalVisible = deleteTargetIds.length > 0;
   const isAnyEditing = editingSections.garage || editingSections.schedule;
   const hasEditableAlarms = garageAlarms.length > 0 || scheduleAlarms.length > 0;
+
+  useEffect(() => {
+    let isActive = true;
+    const controller = new AbortController();
+
+    async function loadGarageAlarms() {
+      setIsLoadingGarageAlarms(true);
+      setGarageAlarmError("");
+
+      try {
+        const alarms = await getMyDepotNotifications({
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setGarageAlarms(alarms);
+        }
+      } catch (error) {
+        if (isActive) {
+          setGarageAlarms([]);
+          setGarageAlarmError(
+            error?.message ?? "차고지 출발 알림을 불러오지 못했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingGarageAlarms(false);
+        }
+      }
+    }
+
+    async function loadScheduleAlarms() {
+      setIsLoadingScheduleAlarms(true);
+      setScheduleAlarmError("");
+
+      try {
+        const alarms = await getArrivalNotifications({
+          signal: controller.signal,
+        });
+
+        if (isActive) {
+          setScheduleAlarms(alarms);
+        }
+      } catch (error) {
+        if (isActive) {
+          setScheduleAlarms([]);
+          setScheduleAlarmError(
+            error?.message ?? "내 일정 알림을 불러오지 못했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingScheduleAlarms(false);
+        }
+      }
+    }
+
+    loadGarageAlarms();
+    loadScheduleAlarms();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, []);
 
   const toggleEditSection = (sectionKey) => {
     setEditingSections((current) => {
@@ -66,12 +160,50 @@ export function CustomAlarmScreen({
     );
   };
 
-  const toggleScheduleAlarm = (alarmId) => {
+  const toggleScheduleAlarm = async (alarmId) => {
+    const targetAlarm = scheduleAlarms.find((alarm) => alarm.id === alarmId);
+    const notificationId = getArrivalNotificationId(targetAlarm);
+
+    if (!targetAlarm || !notificationId) {
+      Alert.alert("알림 상태 변경 실패", "변경할 알림 id를 찾지 못했습니다.");
+      return;
+    }
+
+    if (updatingScheduleAlarmIds.includes(alarmId)) {
+      return;
+    }
+
+    const nextEnabled = !targetAlarm.enabled;
+
+    setUpdatingScheduleAlarmIds((current) => [...current, alarmId]);
     setScheduleAlarms((current) =>
       current.map((alarm) =>
-        alarm.id === alarmId ? { ...alarm, enabled: !alarm.enabled } : alarm,
+        alarm.id === alarmId ? { ...alarm, enabled: nextEnabled } : alarm,
       ),
     );
+
+    try {
+      await updateArrivalNotificationStatus({
+        id: notificationId,
+        payload: { isActive: nextEnabled },
+      });
+    } catch (error) {
+      setScheduleAlarms((current) =>
+        current.map((alarm) =>
+          alarm.id === alarmId
+            ? { ...alarm, enabled: targetAlarm.enabled }
+            : alarm,
+        ),
+      );
+      Alert.alert(
+        "알림 상태 변경 실패",
+        error?.message ?? "도착 알림 상태 변경에 실패했습니다.",
+      );
+    } finally {
+      setUpdatingScheduleAlarmIds((current) =>
+        current.filter((id) => id !== alarmId),
+      );
+    }
   };
 
   const requestSelectedDelete = () => {
@@ -84,17 +216,70 @@ export function CustomAlarmScreen({
     setDeleteTargetIds([]);
   };
 
-  const confirmDelete = () => {
-    setGarageAlarms((current) =>
-      current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
+  const confirmDelete = async () => {
+    if (isDeletingAlarms) {
+      return;
+    }
+
+    const garageTargets = garageAlarms.filter((alarm) =>
+      deleteTargetIds.includes(alarm.id),
     );
-    setScheduleAlarms((current) =>
-      current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
+    const scheduleTargets = scheduleAlarms.filter((alarm) =>
+      deleteTargetIds.includes(alarm.id),
     );
-    setSelectedIds((current) =>
-      current.filter((alarmId) => !deleteTargetIds.includes(alarmId)),
-    );
-    setDeleteTargetIds([]);
+    const scheduleTargetIds = scheduleTargets
+      .map(getArrivalNotificationId)
+      .filter((id) => id !== undefined && id !== null && id !== "");
+
+    setIsDeletingAlarms(true);
+
+    try {
+      const garageResults = await Promise.allSettled(
+        garageTargets.map((alarm) =>
+          deleteDepotNotification({ userBusId: alarm.userBusId ?? alarm.id }),
+        ),
+      );
+      const scheduleResult =
+        scheduleTargetIds.length > 0
+          ? await deleteArrivalNotifications({ ids: scheduleTargetIds }).then(
+              () => ({ status: "fulfilled" }),
+              () => ({ status: "rejected" }),
+            )
+          : { status: "fulfilled" };
+      const deletedGarageIds = garageTargets
+        .filter((_, index) => garageResults[index]?.status === "fulfilled")
+        .map((alarm) => alarm.id);
+      const deletedScheduleIds =
+        scheduleResult.status === "fulfilled"
+          ? scheduleTargets.map((alarm) => alarm.id)
+          : [];
+      const deletedIds = [...deletedGarageIds, ...deletedScheduleIds];
+
+      setGarageAlarms((current) =>
+        current.filter((alarm) => !deletedIds.includes(alarm.id)),
+      );
+      setScheduleAlarms((current) =>
+        current.filter((alarm) => !deletedIds.includes(alarm.id)),
+      );
+      setSelectedIds((current) =>
+        current.filter((alarmId) => !deletedIds.includes(alarmId)),
+      );
+      setDeleteTargetIds([]);
+
+      if (
+        garageResults.some((result) => result.status === "rejected") ||
+        scheduleResult.status === "rejected"
+      ) {
+        Alert.alert("알림 삭제 실패", "일부 알림을 삭제하지 못했습니다.");
+      }
+    } catch (error) {
+      Alert.alert(
+        "알림 삭제 실패",
+        error?.message ?? "알림 삭제에 실패했습니다.",
+      );
+    } finally {
+      setIsDeletingAlarms(false);
+    }
   };
 
   return (
@@ -109,7 +294,11 @@ export function CustomAlarmScreen({
           onEditPress={() => toggleEditSection("garage")}
           title="차고지 출발 알림"
         />
-        {garageAlarms.length > 0 ? (
+        {isLoadingGarageAlarms ? (
+          <EmptyAlarmBox />
+        ) : garageAlarmError ? (
+          <EmptyAlarmBox />
+        ) : garageAlarms.length > 0 ? (
           <ScrollView
             contentContainerStyle={styles.garageList}
             horizontal
@@ -154,7 +343,11 @@ export function CustomAlarmScreen({
           </Text>
           <Text style={[styles.tableHeaderText, styles.alarmColumn]}>알림</Text>
         </View>
-        {scheduleAlarms.length > 0 ? (
+        {isLoadingScheduleAlarms ? (
+          <EmptyAlarmBox />
+        ) : scheduleAlarmError ? (
+          <EmptyAlarmBox />
+        ) : scheduleAlarms.length > 0 ? (
           <View style={styles.scheduleList}>
             {scheduleAlarms.map((alarm) => {
               const selected = selectedIds.includes(alarm.id);
@@ -175,6 +368,7 @@ export function CustomAlarmScreen({
                   }}
                   onToggleAlarm={() => toggleScheduleAlarm(alarm.id)}
                   selected={selected}
+                  updating={updatingScheduleAlarmIds.includes(alarm.id)}
                 />
               );
             })}
@@ -202,6 +396,7 @@ export function CustomAlarmScreen({
       <DeleteConfirmModal
         onCancel={closeDeleteModal}
         onConfirm={confirmDelete}
+        deleting={isDeletingAlarms}
         visible={isDeleteModalVisible}
       />
     </View>
@@ -238,12 +433,10 @@ function AlarmSectionHeader({ onAddPress, onEditPress, title }) {
   );
 }
 
-function EmptyAlarmBox() {
+function EmptyAlarmBox({ text = "우측 더하기 버튼으로 알림을 추가해보세요" }) {
   return (
     <View style={styles.emptyAlarmBox}>
-      <Text style={styles.emptyAlarmText}>
-        우측 더하기 버튼으로 알림을 추가해보세요
-      </Text>
+      <Text style={styles.emptyAlarmText}>{text}</Text>
     </View>
   );
 }
@@ -313,6 +506,7 @@ function ScheduleAlarmRow({
   onPress,
   onToggleAlarm,
   selected,
+  updating,
 }) {
   return (
     <Pressable
@@ -334,8 +528,9 @@ function ScheduleAlarmRow({
         <Pressable
           accessibilityRole="switch"
           accessibilityState={{ checked: alarm.enabled }}
+          disabled={updating}
           onPress={onToggleAlarm}
-          style={styles.switchButton}
+          style={[styles.switchButton, updating && styles.switchButtonDisabled]}
         >
           <Switch enabled={alarm.enabled} />
         </Pressable>
@@ -344,18 +539,33 @@ function ScheduleAlarmRow({
   );
 }
 
-function DeleteConfirmModal({ onCancel, onConfirm, visible }) {
+function DeleteConfirmModal({ deleting = false, onCancel, onConfirm, visible }) {
   return (
     <Modal animationType="fade" transparent visible={visible}>
       <View style={styles.modalOverlay}>
         <View style={styles.confirmCard}>
           <Text style={styles.confirmTitle}>선택한 알림을 삭제할까요?</Text>
           <View style={styles.confirmActions}>
-            <Pressable accessibilityRole="button" onPress={onCancel} style={styles.cancelButton}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={deleting}
+              onPress={onCancel}
+              style={styles.cancelButton}
+            >
               <Text style={styles.cancelButtonText}>취소</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={onConfirm} style={styles.confirmButton}>
-              <Text style={styles.confirmButtonText}>삭제</Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={deleting}
+              onPress={onConfirm}
+              style={[
+                styles.confirmButton,
+                deleting && styles.confirmButtonDisabled,
+              ]}
+            >
+              <Text style={styles.confirmButtonText}>
+                {deleting ? "삭제 중" : "삭제"}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -607,6 +817,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  switchButtonDisabled: {
+    opacity: 0.5,
+  },
   switchTrack: {
     width: 44,
     height: 26,
@@ -715,6 +928,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 21,
     backgroundColor: colors.point,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.72,
   },
   confirmButtonText: {
     fontFamily: "SUIT",

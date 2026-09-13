@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
@@ -19,39 +19,11 @@ const PRE_DEPARTURE_ALARMS = [
   { key: "60", label: "1시간 전" },
 ];
 
-// TODO: API 연동 시 아래 더미 데이터를 교체하세요.
-// GET /home/first-last-route
-// - routeType: "first" | "last"
-// - remainingMinutes: number
-// - departureTime: string
-// - routeNumber: string
-// - routeDirection: string
-// - walkMinutes: number
-// - busMinutes: number
-// - afterWalkMinutes: number
-// - boardingStopName: string
-// - boardingTime: string
-// - arrivalStopName: string
-// - arrivalTime: string
-// - preDepartureAlarmMinutes: number
-const routeSummary = null;
-
-// const routeSummary = {
-//   remainingMinutes: 12,
-//   departureTime: "23:42",
-//   routeNumber: "147",
-//   routeDirection: "강남역 방면",
-//   walkMinutes: 5,
-//   busMinutes: 4,
-//   afterWalkMinutes: 8,
-//   boardingStopName: "홍대정문",
-//   boardingTime: "23:47",
-//   arrivalStopName: "도착정류장",
-//   arrivalTime: "23:51",
-//   preDepartureAlarmMinutes: 10,
-// };
-
-export function FirstLastRouteScreen({ onRouteDetailPress, onRouteSetupPress }) {
+export function FirstLastRouteScreen({
+  onRouteDetailPress,
+  onRouteSetupPress,
+  routeSummary,
+}) {
   const [isLastRouteFirst, setIsLastRouteFirst] = useState(false);
   const [isAlarmModalVisible, setIsAlarmModalVisible] = useState(false);
   const [alarmSettings, setAlarmSettings] = useState({
@@ -127,15 +99,19 @@ export function FirstLastRouteScreen({ onRouteDetailPress, onRouteSetupPress }) 
                   <Text style={styles.summaryLabel}>남은 시간</Text>
                   <View style={styles.remainingGroup}>
                     <Text style={styles.remainingNumber}>
-                      {routeSummary.remainingMinutes}
+                      {Number.isFinite(routeSummary.remainingMinutes)
+                        ? routeSummary.remainingMinutes
+                        : ""}
                     </Text>
-                    <Text style={styles.remainingUnit}>분</Text>
+                    {Number.isFinite(routeSummary.remainingMinutes) ? (
+                      <Text style={styles.remainingUnit}>분</Text>
+                    ) : null}
                   </View>
                 </View>
                 <View style={[styles.summaryBlock, styles.summaryBlockRight]}>
                   <Text style={styles.summaryLabel}>출발 적정 시간</Text>
                   <Text style={styles.departureTime}>
-                    {routeSummary.departureTime}
+                    {routeSummary.departureTime ?? ""}
                   </Text>
                 </View>
               </View>

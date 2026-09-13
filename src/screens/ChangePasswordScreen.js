@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 
-import { changePassword } from "../../api/mypage/password";
+import { changePassword } from "../api/mypage/password";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import BackIcon from "../../assets/images/L.svg";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";

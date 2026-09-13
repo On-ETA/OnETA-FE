@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { getNoticeById } from "../../api/mypage/id";
+import { getNoticeById } from "../api/mypage/id";
 import { AppScreen, Header } from "../components";
 import { colors } from "../theme";
 import { DEFAULT_NOTICE_ITEMS } from "./NoticesScreen";

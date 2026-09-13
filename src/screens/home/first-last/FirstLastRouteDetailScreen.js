@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
   railLine: {
     width: 2,
     flex: 1,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   stopCircleOff: {
     width: 20,
@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 4,
-    backgroundColor: colors.main,
+    backgroundColor: colors.bus,
   },
   busBadgeText: {
     marginLeft: 4,

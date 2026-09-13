@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,15 +9,51 @@ import {
   View,
 } from "react-native";
 
-import { changeNickname } from "../../api/mypage/nickname";
+import { changeNickname } from "../api/mypage/nickname";
+import { getUser } from "../api/user";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import BackIcon from "../../assets/images/L.svg";
 import { colors, layout, typography } from "../theme";
 
 export function AccountInfoScreen({ onBackPress, onConfirmPress }) {
+  const [email, setEmail] = useState("");
   const [nickname, setNickname] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+    const controller = new AbortController();
+
+    async function loadUser() {
+      setIsLoadingUser(true);
+
+      try {
+        const user = await getUser({ signal: controller.signal });
+
+        if (isActive) {
+          setEmail(user.email ?? "");
+          setNickname(user.nickname ?? "");
+        }
+      } catch (error) {
+        if (isActive) {
+          setErrorMessage(error?.message ?? "회원 정보를 불러오지 못했습니다.");
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingUser(false);
+        }
+      }
+    }
+
+    loadUser();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, []);
 
   const handleConfirmPress = async () => {
     setErrorMessage("");
@@ -58,8 +94,10 @@ export function AccountInfoScreen({ onBackPress, onConfirmPress }) {
             style={styles.scroller}
           >
             <View style={styles.content}>
+              {email ? <Text style={styles.emailText}>{email}</Text> : null}
               <TextInput
                 cursorColor={colors.black}
+                editable={!isLoadingUser && !isSubmitting}
                 onChangeText={(value) => {
                   setNickname(value);
                   setErrorMessage("");
@@ -82,12 +120,12 @@ export function AccountInfoScreen({ onBackPress, onConfirmPress }) {
             </Text>
           ) : null}
           <PrimaryButton
-            disabled={isSubmitting}
+            disabled={isLoadingUser || isSubmitting}
             onPress={handleConfirmPress}
             style={[styles.confirmButton, isSubmitting && styles.disabled]}
             textStyle={styles.confirmText}
           >
-            {isSubmitting ? "처리 중" : "확인"}
+            {isLoadingUser ? "불러오는 중" : isSubmitting ? "처리 중" : "확인"}
           </PrimaryButton>
         </View>
       </View>
@@ -177,6 +215,11 @@ const styles = StyleSheet.create({
     fontStyle: "normal",
     letterSpacing: -0.16,
     textAlign: "left",
+  },
+  emailText: {
+    marginBottom: 12,
+    ...typography.body03M,
+    color: colors.gray07,
   },
   footer: {
     paddingHorizontal: layout.screenMargin,
