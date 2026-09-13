@@ -373,7 +373,7 @@ export function AddressManagementScreen({
 }
 
 function AddressSearchScreen({ onBackPress, onResultPress }) {
-  const [keyword, setKeyword] = useState("홍익대");
+  const [keyword, setKeyword] = useState("");
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
