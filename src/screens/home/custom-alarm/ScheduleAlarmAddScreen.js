@@ -5,6 +5,7 @@ import {
   Modal,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import { searchAddresses } from "../../../api/addresses";
 import { createArrivalNotification } from "../../../api/notifications/arrival";
 import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
@@ -39,6 +41,62 @@ function getPrimaryTransitSegment(route) {
   return route?.segments?.find(
     (segment) => segment.transitType !== "WALK",
   );
+}
+
+function createRoutePlace(place) {
+  if (typeof place === "object" && place !== null) {
+    const label =
+      place.label ||
+      place.name ||
+      place.placeName ||
+      place.address ||
+      "";
+
+    return {
+      ...place,
+      label,
+      address:
+        place.address ||
+        place.roadAddress ||
+        label,
+    };
+  }
+
+  return {
+    label: place || "",
+    name: place || "",
+    address: place || "",
+    x: undefined,
+    y: undefined,
+  };
+}
+
+function createRoutePlaceFromSearchResult(result) {
+  return createRoutePlace({
+    label:
+      result?.name ||
+      result?.address ||
+      result?.roadAddress ||
+      "",
+    name: result?.name,
+    address:
+      result?.address ||
+      result?.roadAddress ||
+      "",
+    x: result?.x,
+    y: result?.y,
+    raw: result?.raw ?? result,
+  });
+}
+
+function getRoutePlaceText(place) {
+  return createRoutePlace(place).label;
+}
+
+function getRoutePlaceAddress(place) {
+  const routePlace = createRoutePlace(place);
+
+  return routePlace.address || routePlace.label;
 }
 
 function getSegmentStopName(segment, edge) {
@@ -123,8 +181,8 @@ export function ScheduleAlarmAddScreen({
     useState(null);
 
   const [routePlaces, setRoutePlaces] = useState({
-    origin: "마포구 와우산로 94",
-    destination: "우리집",
+    origin: createRoutePlace("마포구 와우산로 94"),
+    destination: createRoutePlace("우리집"),
   });
 
   const formattedTime =
@@ -332,11 +390,33 @@ function ScheduleRouteMapStep({
     useState("");
 
   const [origin, setOrigin] = useState(
-    "마포구 와우산로 94",
+    createRoutePlace("마포구 와우산로 94"),
   );
 
   const [destination, setDestination] =
-    useState("우리집");
+    useState(createRoutePlace("우리집"));
+
+  const [activePlaceType, setActivePlaceType] =
+    useState("origin");
+
+  const [placeResults, setPlaceResults] =
+    useState([]);
+
+  const [
+    isSearchingPlaces,
+    setIsSearchingPlaces,
+  ] = useState(false);
+
+  const [
+    placeSearchError,
+    setPlaceSearchError,
+  ] = useState("");
+
+  const trimmedPlaceKeyword =
+    placeKeyword.trim();
+
+  const hasPlaceKeyword =
+    trimmedPlaceKeyword.length > 0;
 
   /*
    * 처음 화면 진입 시
@@ -450,6 +530,87 @@ function ScheduleRouteMapStep({
     }),
   ).current;
 
+  useEffect(() => {
+    if (!hasPlaceKeyword) {
+      setPlaceResults([]);
+      setPlaceSearchError("");
+      setIsSearchingPlaces(false);
+      return undefined;
+    }
+
+    let isActive = true;
+    const controller = new AbortController();
+
+    const debounceId = setTimeout(async () => {
+      setIsSearchingPlaces(true);
+      setPlaceSearchError("");
+
+      try {
+        const nextResults =
+          await searchAddresses({
+            keyword: trimmedPlaceKeyword,
+            signal: controller.signal,
+          });
+
+        if (isActive) {
+          setPlaceResults(
+            Array.isArray(nextResults)
+              ? nextResults
+              : [],
+          );
+        }
+      } catch (error) {
+        if (
+          isActive &&
+          error?.name !== "AbortError"
+        ) {
+          setPlaceResults([]);
+          setPlaceSearchError(
+            error?.message ??
+              "장소 검색에 실패했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsSearchingPlaces(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      isActive = false;
+      clearTimeout(debounceId);
+      controller.abort();
+    };
+  }, [hasPlaceKeyword, trimmedPlaceKeyword]);
+
+  const updateTypedPlace = (type, value) => {
+    const nextPlace = createRoutePlace(value);
+
+    if (type === "origin") {
+      setOrigin(nextPlace);
+      return;
+    }
+
+    setDestination(nextPlace);
+  };
+
+  const selectPlaceResult = (result) => {
+    const nextPlace =
+      createRoutePlaceFromSearchResult(result);
+
+    if (activePlaceType === "origin") {
+      setOrigin(nextPlace);
+      setActivePlaceType("destination");
+    } else {
+      setDestination(nextPlace);
+    }
+
+    setPlaceKeyword("");
+    setPlaceResults([]);
+    setPlaceSearchError("");
+  };
+
   return (
     <View style={styles.mapScreen}>
       <NaverMapView />
@@ -474,7 +635,11 @@ function ScheduleRouteMapStep({
             onChangeText={
               setPlaceKeyword
             }
-            placeholder="장소 검색"
+            placeholder={
+              activePlaceType === "origin"
+                ? "출발지 장소 검색"
+                : "도착지 장소 검색"
+            }
             placeholderTextColor={
               colors.gray06
             }
@@ -484,6 +649,83 @@ function ScheduleRouteMapStep({
             value={placeKeyword}
           />
         </View>
+
+        {hasPlaceKeyword ? (
+          <View
+            style={styles.placeResultPanel}
+          >
+            {isSearchingPlaces ? (
+              <Text
+                style={
+                  styles.placeResultStatus
+                }
+              >
+                장소를 검색하는 중입니다.
+              </Text>
+            ) : placeSearchError ? (
+              <Text
+                style={
+                  styles.placeResultStatus
+                }
+              >
+                {placeSearchError}
+              </Text>
+            ) : placeResults.length === 0 ? (
+              <Text
+                style={
+                  styles.placeResultStatus
+                }
+              >
+                검색 결과가 없습니다.
+              </Text>
+            ) : (
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={
+                  false
+                }
+                style={
+                  styles.placeResultList
+                }
+              >
+                {placeResults.map((result) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={
+                      result.id ??
+                      `${result.name}-${result.address}-${result.roadAddress}`
+                    }
+                    onPress={() =>
+                      selectPlaceResult(result)
+                    }
+                    style={
+                      styles.placeResultRow
+                    }
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={
+                        styles.placeResultName
+                      }
+                    >
+                      {result.name}
+                    </Text>
+
+                    <Text
+                      numberOfLines={1}
+                      style={
+                        styles.placeResultAddress
+                      }
+                    >
+                      {result.roadAddress ||
+                        result.address}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        ) : null}
       </View>
 
       <Animated.View
@@ -526,11 +768,27 @@ function ScheduleRouteMapStep({
             출발지
           </Text>
 
-          <View
-            style={styles.routeField}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              setActivePlaceType("origin")
+            }
+            style={[
+              styles.routeField,
+              activePlaceType === "origin" &&
+                styles.routeFieldActive,
+            ]}
           >
             <TextInput
-              onChangeText={setOrigin}
+              onChangeText={(value) =>
+                updateTypedPlace(
+                  "origin",
+                  value,
+                )
+              }
+              onFocus={() =>
+                setActivePlaceType("origin")
+              }
               placeholder="출발지 입력"
               placeholderTextColor={
                 colors.gray06
@@ -538,9 +796,11 @@ function ScheduleRouteMapStep({
               style={
                 styles.routeFieldInput
               }
-              value={origin}
+              value={getRoutePlaceText(
+                origin,
+              )}
             />
-          </View>
+          </Pressable>
 
           <Text
             style={
@@ -550,12 +810,32 @@ function ScheduleRouteMapStep({
             도착지
           </Text>
 
-          <View
-            style={styles.routeField}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              setActivePlaceType(
+                "destination",
+              )
+            }
+            style={[
+              styles.routeField,
+              activePlaceType ===
+                "destination" &&
+                styles.routeFieldActive,
+            ]}
           >
             <TextInput
               onChangeText={
-                setDestination
+                (value) =>
+                  updateTypedPlace(
+                    "destination",
+                    value,
+                  )
+              }
+              onFocus={() =>
+                setActivePlaceType(
+                  "destination",
+                )
               }
               placeholder="도착지 입력"
               placeholderTextColor={
@@ -564,9 +844,11 @@ function ScheduleRouteMapStep({
               style={
                 styles.routeFieldInput
               }
-              value={destination}
+              value={getRoutePlaceText(
+                destination,
+              )}
             />
-          </View>
+          </Pressable>
         </View>
 
         <Pressable
@@ -602,12 +884,14 @@ export function ScheduleRouteResultStep({
   onRouteSelect,
 }) {
   const [origin, setOrigin] =
-    useState(initialOrigin);
+    useState(createRoutePlace(initialOrigin));
 
   const [
     destination,
     setDestination,
-  ] = useState(initialDestination);
+  ] = useState(
+    createRoutePlace(initialDestination),
+  );
 
   const [routes, setRoutes] =
     useState([]);
@@ -652,16 +936,22 @@ export function ScheduleRouteResultStep({
         const nextRoutes =
           await searchTransitRoutes({
             originX:
+              origin.x ??
               DEFAULT_ORIGIN_POINT.x,
             originY:
+              origin.y ??
               DEFAULT_ORIGIN_POINT.y,
-            originAddress: origin,
+            originAddress:
+              getRoutePlaceAddress(origin),
 
             destX:
+              destination.x ??
               DEFAULT_DESTINATION_POINT.x,
             destY:
+              destination.y ??
               DEFAULT_DESTINATION_POINT.y,
-            destAddress: destination,
+            destAddress:
+              getRoutePlaceAddress(destination),
 
             signal:
               controller.signal,
@@ -698,6 +988,14 @@ export function ScheduleRouteResultStep({
     };
   }, [destination, origin]);
 
+  const updateOriginText = (value) => {
+    setOrigin(createRoutePlace(value));
+  };
+
+  const updateDestinationText = (value) => {
+    setDestination(createRoutePlace(value));
+  };
+
   return (
     <View style={styles.resultScreen}>
       <View style={styles.resultHeader}>
@@ -720,7 +1018,7 @@ export function ScheduleRouteResultStep({
         >
           <TextInput
             numberOfLines={1}
-            onChangeText={setOrigin}
+            onChangeText={updateOriginText}
             placeholder="출발지"
             placeholderTextColor={
               colors.gray06
@@ -728,7 +1026,7 @@ export function ScheduleRouteResultStep({
             style={
               styles.routeSummaryInput
             }
-            value={origin}
+            value={getRoutePlaceText(origin)}
           />
 
           <ChevronRightIcon />
@@ -736,7 +1034,7 @@ export function ScheduleRouteResultStep({
           <TextInput
             numberOfLines={1}
             onChangeText={
-              setDestination
+              updateDestinationText
             }
             placeholder="도착지"
             placeholderTextColor={
@@ -745,7 +1043,9 @@ export function ScheduleRouteResultStep({
             style={
               styles.routeSummaryInput
             }
-            value={destination}
+            value={getRoutePlaceText(
+              destination,
+            )}
           />
 
           <CloseIcon />
@@ -917,7 +1217,8 @@ export function ScheduleRouteResultStep({
                   getSegmentStopName(
                     primarySegment,
                     "start",
-                  ) || origin
+                  ) ||
+                  getRoutePlaceText(origin)
                 }
               />
 
@@ -927,7 +1228,10 @@ export function ScheduleRouteResultStep({
                   getSegmentStopName(
                     primarySegment,
                     "end",
-                  ) || destination
+                  ) ||
+                  getRoutePlaceText(
+                    destination,
+                  )
                 }
               />
             </View>
@@ -938,8 +1242,17 @@ export function ScheduleRouteResultStep({
                 onRouteSelect?.(
                   selectedRoute,
                   {
-                    origin,
-                    destination,
+                    origin:
+                      getRoutePlaceText(
+                        origin,
+                      ),
+                    destination:
+                      getRoutePlaceText(
+                        destination,
+                      ),
+                    originPlace: origin,
+                    destinationPlace:
+                      destination,
                   },
                 )
               }
@@ -2173,6 +2486,65 @@ const styles = StyleSheet.create({
     color: colors.gray09,
   },
 
+  placeResultPanel: {
+    maxHeight: 214,
+    marginTop: 8,
+    marginHorizontal: 24,
+    borderWidth: 1,
+    borderColor: colors.gray04,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: colors.white,
+    shadowColor: "#3D445E",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+
+  placeResultList: {
+    maxHeight: 214,
+  },
+
+  placeResultRow: {
+    minHeight: 64,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    justifyContent: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray03,
+  },
+
+  placeResultName: {
+    fontFamily: "SUIT",
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 21,
+    color: colors.gray09,
+  },
+
+  placeResultAddress: {
+    marginTop: 3,
+    fontFamily: "SUIT",
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 16.8,
+    color: colors.gray07,
+  },
+
+  placeResultStatus: {
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 19.6,
+    color: colors.gray07,
+  },
+
   /*
    * 중요:
    * overflow hidden으로 접혔을 때
@@ -2226,6 +2598,10 @@ const styles = StyleSheet.create({
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.white,
+  },
+
+  routeFieldActive: {
+    borderColor: colors.main,
   },
 
   routeFieldInput: {
