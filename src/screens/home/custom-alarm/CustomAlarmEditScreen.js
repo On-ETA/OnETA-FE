@@ -13,6 +13,8 @@ import {
   getArrivalNotificationById,
   updateArrivalNotification,
 } from "../../../api/notifications/arrival";
+import { getBusRouteDirections } from "../../../api/busRoutes";
+import { updateDepotNotification } from "../../../api/notifications/depot";
 import { Header } from "../../../components";
 import { colors, typography } from "../../../theme";
 
@@ -359,26 +361,111 @@ export function GarageDepartureAlarmEditScreen({
   onChangeBusPress,
   onSavePress,
 }) {
+  const initialDirectionId = alarm?.directionType ?? alarm?.raw?.direction ?? "";
   const [selectedDirectionId, setSelectedDirectionId] = useState(
-    alarm?.directionId ?? "mangwon",
+    initialDirectionId,
   );
-  const directions = alarm?.directions ?? [
-    {
-      id: "sinchon",
-      title: "신촌역 방면",
-      description: "망원유수지 정류장에서 출고 시 1회 알림",
-    },
-    {
-      id: "mangwon",
-      title: "망원유수지 방면",
-      description: "신촌역 정류장에서 출고 시 1회 알림",
-    },
-  ];
+  const [directions, setDirections] = useState(alarm?.directions ?? []);
+  const [busRouteInfo, setBusRouteInfo] = useState(null);
+  const [isLoadingDirections, setIsLoadingDirections] = useState(false);
+  const [isSavingAlarm, setIsSavingAlarm] = useState(false);
 
-  const handleSave = () => {
-    // TODO: PATCH /home/custom-alarms/{alarmId}
-    // body: { directionId: selectedDirectionId }
-    onSavePress?.();
+  useEffect(() => {
+    const routeId = alarm?.routeId ?? alarm?.raw?.routeId;
+
+    if (!routeId) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let isActive = true;
+
+    async function loadDirections() {
+      setIsLoadingDirections(true);
+
+      try {
+        const routeInfo = await getBusRouteDirections({
+          routeId,
+          signal: controller.signal,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setBusRouteInfo(routeInfo);
+        setDirections(routeInfo.directions ?? []);
+        setSelectedDirectionId((current) => current || routeInfo.directions?.[0]?.id || "");
+      } catch (error) {
+        if (isActive && error?.name !== "AbortError") {
+          Alert.alert(
+            "방면 정보 조회 실패",
+            error?.message ?? "버스 방면 정보를 불러오지 못했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingDirections(false);
+        }
+      }
+    }
+
+    loadDirections();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [alarm?.raw?.routeId, alarm?.routeId]);
+
+  const selectedDirection = directions.find(
+    (direction) => direction.id === selectedDirectionId,
+  );
+
+  const handleSave = async () => {
+    const userBusId = alarm?.userBusId ?? alarm?.id;
+    const direction = selectedDirection?.type ?? selectedDirection?.direction ?? selectedDirection?.id;
+    const directionName =
+      direction === "DEPOT"
+        ? busRouteInfo?.depotName
+        : direction === "TURNAROUND"
+          ? busRouteInfo?.turnaroundName
+          : selectedDirection?.directionName ??
+            selectedDirection?.name ??
+            String(selectedDirection?.title ?? "").replace(/\s*방면$/, "").trim();
+
+    if (!userBusId || !direction || !directionName) {
+      Alert.alert(
+        "알림 수정 실패",
+        "차고지 알림 수정에 필요한 정보를 찾지 못했습니다.",
+      );
+      return;
+    }
+
+    if (isSavingAlarm) {
+      return;
+    }
+
+    setIsSavingAlarm(true);
+
+    try {
+      await updateDepotNotification({
+        userBusId,
+        payload: {
+          direction,
+          directionName,
+        },
+      });
+
+      onSavePress?.();
+    } catch (error) {
+      Alert.alert(
+        "알림 수정 실패",
+        error?.message ?? "차고지 출발 알림 수정에 실패했습니다.",
+      );
+    } finally {
+      setIsSavingAlarm(false);
+    }
   };
 
   return (
@@ -396,9 +483,11 @@ export function GarageDepartureAlarmEditScreen({
           <View style={styles.garageBusTitleRow}>
             <BusIcon />
             <View>
-              <Text style={styles.garageBusName}>147번</Text>
+              <Text style={styles.garageBusName}>
+                {alarm?.routeName ?? alarm?.routeNumber ?? "버스 정보 없음"}
+              </Text>
               <Text style={styles.garageBusDescription}>
-                배차 간격 15분 · 망원유수지 - 신촌역
+                {busRouteInfo?.route || alarm?.raw?.route || "방면을 선택해 주세요"}
               </Text>
             </View>
           </View>
@@ -412,6 +501,9 @@ export function GarageDepartureAlarmEditScreen({
         </View>
 
         <View style={styles.directionList}>
+          {isLoadingDirections && directions.length === 0 ? (
+            <Text style={styles.directionDescription}>방면 정보를 불러오는 중입니다.</Text>
+          ) : null}
           {directions.map((direction) => {
             const selected = selectedDirectionId === direction.id;
 
@@ -438,8 +530,16 @@ export function GarageDepartureAlarmEditScreen({
             알림은 1회 발송 후 자동으로 꺼지니 필요할 때 다시 켜주세요.
           </Text>
         </View>
-        <Pressable accessibilityRole="button" onPress={handleSave} style={styles.fullSaveButton}>
-          <Text style={styles.saveText}>저장</Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={isSavingAlarm || isLoadingDirections}
+          onPress={handleSave}
+          style={[
+            styles.fullSaveButton,
+            (isSavingAlarm || isLoadingDirections) && styles.saveButtonDisabled,
+          ]}
+        >
+          <Text style={styles.saveText}>{isSavingAlarm ? "저장 중" : "저장"}</Text>
         </Pressable>
       </View>
     </View>

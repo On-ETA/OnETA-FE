@@ -1,5 +1,5 @@
 ﻿import React, { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
 import ArrowRightIcon from "../../../../assets/images/R.svg";
@@ -49,7 +49,11 @@ export function FirstLastRouteScreen({
   };
 
   return (
-    <View style={styles.homeBody}>
+    <ScrollView
+      contentContainerStyle={styles.homeBodyContent}
+      showsVerticalScrollIndicator
+      style={styles.homeBody}
+    >
       <View style={styles.routeCard}>
         <View style={styles.routeCardPanel}>
           <View style={styles.routeCardTop}>
@@ -264,7 +268,7 @@ export function FirstLastRouteScreen({
           </View>
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -307,6 +311,9 @@ function BusIcon({ size = 13 }) {
 const styles = StyleSheet.create({
   homeBody: {
     flex: 1,
+    width: "100%",
+  },
+  homeBodyContent: {
     alignItems: "center",
     paddingTop: 24,
     paddingHorizontal: 16,

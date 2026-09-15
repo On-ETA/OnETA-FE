@@ -456,6 +456,8 @@ const styles = StyleSheet.create({
       web: {
         alignSelf: "center",
         maxWidth: layout.mobileFrameWidth,
+        overflowX: "hidden",
+        overflowY: "auto",
       },
     }),
   },

@@ -158,7 +158,7 @@ export function LoginScreen({
           responsiveLayout.scrollContent,
         ]}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator
         style={styles.scroller}
       >
         <View style={[styles.content, responsiveLayout.content]}>

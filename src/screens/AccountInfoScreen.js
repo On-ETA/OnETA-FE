@@ -90,7 +90,7 @@ export function AccountInfoScreen({ onBackPress, onConfirmPress }) {
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator
             style={styles.scroller}
           >
             <View style={styles.content}>

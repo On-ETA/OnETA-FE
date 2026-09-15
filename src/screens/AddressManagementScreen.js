@@ -333,7 +333,7 @@ export function AddressManagementScreen({
       <ScreenHeader onBackPress={handleBackPress} title="주소 관리" />
       <ScrollView
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator
       >
         {isLoadingAddresses ? (
           <View style={styles.statusCard}>

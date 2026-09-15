@@ -59,7 +59,7 @@ export function FaqsScreen({ faqs, onBackPress }) {
 
         <ScrollView
           contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator
         >
           {isLoading ? (
             <StatusBox text="FAQ 목록을 불러오는 중입니다." />

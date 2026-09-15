@@ -33,7 +33,7 @@ export function TermsOfServiceScreen({ onBackPress }) {
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator
         >
           <Text style={styles.body}>{TERMS_OF_SERVICE_TEXT}</Text>
         </ScrollView>

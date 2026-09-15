@@ -2,6 +2,7 @@
 import {
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -293,7 +294,8 @@ export function CustomAlarmScreen({
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         horizontal={false}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator
+        style={styles.scroller}
       >
         <AlarmSectionHeader
           onAddPress={onGarageDepartureAddPress}
@@ -645,6 +647,14 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     backgroundColor: colors.gray01,
+  },
+  scroller: {
+    flex: 1,
+    ...Platform.select({
+      web: {
+        overflowY: "scroll",
+      },
+    }),
   },
   scrollContent: {
     paddingTop: 16,
