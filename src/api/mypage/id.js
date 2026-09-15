@@ -42,6 +42,10 @@ export function normalizeNoticeDetail(notice) {
   };
 }
 
+function getNoticeDetail(response) {
+  return response?.data?.data ?? response?.data ?? response;
+}
+
 export async function getNoticeById({
   id,
   accessToken = getAccessToken(),
@@ -59,5 +63,5 @@ export async function getNoticeById({
     errorMessage: "공지사항을 불러오지 못했습니다.",
   });
 
-  return normalizeNoticeDetail(response?.data);
+  return normalizeNoticeDetail(getNoticeDetail(response));
 }

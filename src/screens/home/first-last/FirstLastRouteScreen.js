@@ -8,6 +8,7 @@ import CloseIcon from "../../../../public/images/close.svg";
 import LoadIcon from "../../../../public/images/load.svg";
 import SettingIcon from "../../../../public/images/setting.svg";
 import { colors } from "../../../theme";
+import { blurActiveElement } from "../../../utils/accessibility";
 
 const PRE_DEPARTURE_ALARMS = [
   { key: "1", label: "1분 전" },
@@ -38,6 +39,7 @@ export function FirstLastRouteScreen({
   const hasConfiguredRoute = Boolean(routeSummary);
 
   const closeAlarmModal = () => {
+    blurActiveElement();
     setIsAlarmModalVisible(false);
   };
 
@@ -207,7 +209,10 @@ export function FirstLastRouteScreen({
           accessibilityLabel="출발 전 알림 설정"
           accessibilityRole="button"
           hitSlop={8}
-          onPress={() => setIsAlarmModalVisible(true)}
+          onPress={() => {
+            blurActiveElement();
+            setIsAlarmModalVisible(true);
+          }}
           style={styles.noticeSettingButton}
         >
           <SettingIcon height={21} width={21} />

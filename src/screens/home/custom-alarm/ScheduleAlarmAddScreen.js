@@ -18,6 +18,7 @@ import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { NaverMapView } from "../../../components/NaverMapView";
 import { colors, typography } from "../../../theme";
+import { blurActiveElement } from "../../../utils/accessibility";
 
 const DEFAULT_TIME = {
   period: "오전",
@@ -245,9 +246,10 @@ export function ScheduleAlarmAddScreen({
 
         <Pressable
           accessibilityRole="button"
-          onPress={() =>
-            setIsTimePickerVisible(true)
-          }
+          onPress={() => {
+            blurActiveElement();
+            setIsTimePickerVisible(true);
+          }}
           style={styles.timeInput}
         >
           <Text style={styles.timeInputText}>
@@ -281,10 +283,12 @@ export function ScheduleAlarmAddScreen({
       </View>
 
       <TimePickerSheet
-        onClose={() =>
-          setIsTimePickerVisible(false)
-        }
+        onClose={() => {
+          blurActiveElement();
+          setIsTimePickerVisible(false);
+        }}
         onConfirm={(time) => {
+          blurActiveElement();
           setArrivalTime(time);
           setIsTimePickerVisible(false);
         }}
@@ -1264,11 +1268,10 @@ function ScheduleAlarmFinalStep({
 
         <Pressable
           accessibilityRole="button"
-          onPress={() =>
-            setIsReminderModalVisible(
-              true,
-            )
-          }
+          onPress={() => {
+            blurActiveElement();
+            setIsReminderModalVisible(true);
+          }}
           style={
             styles.reminderSelect
           }
@@ -1387,11 +1390,10 @@ function ScheduleAlarmFinalStep({
       </View>
 
       <ReminderModal
-        onClose={() =>
-          setIsReminderModalVisible(
-            false,
-          )
-        }
+        onClose={() => {
+          blurActiveElement();
+          setIsReminderModalVisible(false);
+        }}
         onToggle={toggleReminder}
         reminders={reminders}
         visible={

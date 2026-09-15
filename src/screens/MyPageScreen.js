@@ -22,6 +22,7 @@ import { getMyPage } from "../api/mypage";
 import { deleteUser } from "../api/user";
 import { AppScreen, HomeTopSection } from "../components";
 import { colors, typography } from "../theme";
+import { blurActiveElement } from "../utils/accessibility";
 
 const defaultMyPageInfo = {
   appVersion: packageJson.version,
@@ -113,11 +114,13 @@ export function MyPageScreen({
   }, []);
 
   const openWithdrawConfirm = () => {
+    blurActiveElement();
     setWithdrawErrorMessage("");
     setWithdrawStep("confirm");
   };
 
   const closeWithdrawModal = () => {
+    blurActiveElement();
     if (isWithdrawing) {
       return;
     }
