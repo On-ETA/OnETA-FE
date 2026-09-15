@@ -5,6 +5,7 @@ import {
   Modal,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import { searchAddresses } from "../../../api/addresses";
 import { createArrivalNotification } from "../../../api/notifications/arrival";
 import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
@@ -25,6 +27,19 @@ const DEFAULT_TIME = {
   hour: "11",
   minute: "30",
 };
+
+const TIME_PICKER_ITEM_HEIGHT = 58;
+const TIME_PICKER_VISIBLE_ITEMS = 3;
+const PERIOD_OPTIONS = ["오전", "오후"];
+const HOUR_OPTIONS = Array.from(
+  { length: 12 },
+  (_, index) =>
+    String(index + 1).padStart(2, "0"),
+);
+const MINUTE_OPTIONS = Array.from(
+  { length: 60 },
+  (_, index) => String(index).padStart(2, "0"),
+);
 
 const DEFAULT_ORIGIN_POINT = {
   x: 126.9256,
@@ -40,6 +55,62 @@ function getPrimaryTransitSegment(route) {
   return route?.segments?.find(
     (segment) => segment.transitType !== "WALK",
   );
+}
+
+function createRoutePlace(place) {
+  if (typeof place === "object" && place !== null) {
+    const label =
+      place.label ||
+      place.name ||
+      place.placeName ||
+      place.address ||
+      "";
+
+    return {
+      ...place,
+      label,
+      address:
+        place.address ||
+        place.roadAddress ||
+        label,
+    };
+  }
+
+  return {
+    label: place || "",
+    name: place || "",
+    address: place || "",
+    x: undefined,
+    y: undefined,
+  };
+}
+
+function createRoutePlaceFromSearchResult(result) {
+  return createRoutePlace({
+    label:
+      result?.name ||
+      result?.address ||
+      result?.roadAddress ||
+      "",
+    name: result?.name,
+    address:
+      result?.address ||
+      result?.roadAddress ||
+      "",
+    x: result?.x,
+    y: result?.y,
+    raw: result?.raw ?? result,
+  });
+}
+
+function getRoutePlaceText(place) {
+  return createRoutePlace(place).label;
+}
+
+function getRoutePlaceAddress(place) {
+  const routePlace = createRoutePlace(place);
+
+  return routePlace.address || routePlace.label;
 }
 
 function getSegmentStopName(segment, edge) {
@@ -124,8 +195,8 @@ export function ScheduleAlarmAddScreen({
     useState(null);
 
   const [routePlaces, setRoutePlaces] = useState({
-    origin: "마포구 와우산로 94",
-    destination: "우리집",
+    origin: createRoutePlace("마포구 와우산로 94"),
+    destination: createRoutePlace("우리집"),
   });
 
   const formattedTime =
@@ -336,11 +407,33 @@ function ScheduleRouteMapStep({
     useState("");
 
   const [origin, setOrigin] = useState(
-    "마포구 와우산로 94",
+    createRoutePlace("마포구 와우산로 94"),
   );
 
   const [destination, setDestination] =
-    useState("우리집");
+    useState(createRoutePlace("우리집"));
+
+  const [activePlaceType, setActivePlaceType] =
+    useState("origin");
+
+  const [placeResults, setPlaceResults] =
+    useState([]);
+
+  const [
+    isSearchingPlaces,
+    setIsSearchingPlaces,
+  ] = useState(false);
+
+  const [
+    placeSearchError,
+    setPlaceSearchError,
+  ] = useState("");
+
+  const trimmedPlaceKeyword =
+    placeKeyword.trim();
+
+  const hasPlaceKeyword =
+    trimmedPlaceKeyword.length > 0;
 
   /*
    * 처음 화면 진입 시
@@ -454,6 +547,87 @@ function ScheduleRouteMapStep({
     }),
   ).current;
 
+  useEffect(() => {
+    if (!hasPlaceKeyword) {
+      setPlaceResults([]);
+      setPlaceSearchError("");
+      setIsSearchingPlaces(false);
+      return undefined;
+    }
+
+    let isActive = true;
+    const controller = new AbortController();
+
+    const debounceId = setTimeout(async () => {
+      setIsSearchingPlaces(true);
+      setPlaceSearchError("");
+
+      try {
+        const nextResults =
+          await searchAddresses({
+            keyword: trimmedPlaceKeyword,
+            signal: controller.signal,
+          });
+
+        if (isActive) {
+          setPlaceResults(
+            Array.isArray(nextResults)
+              ? nextResults
+              : [],
+          );
+        }
+      } catch (error) {
+        if (
+          isActive &&
+          error?.name !== "AbortError"
+        ) {
+          setPlaceResults([]);
+          setPlaceSearchError(
+            error?.message ??
+              "장소 검색에 실패했습니다.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsSearchingPlaces(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      isActive = false;
+      clearTimeout(debounceId);
+      controller.abort();
+    };
+  }, [hasPlaceKeyword, trimmedPlaceKeyword]);
+
+  const updateTypedPlace = (type, value) => {
+    const nextPlace = createRoutePlace(value);
+
+    if (type === "origin") {
+      setOrigin(nextPlace);
+      return;
+    }
+
+    setDestination(nextPlace);
+  };
+
+  const selectPlaceResult = (result) => {
+    const nextPlace =
+      createRoutePlaceFromSearchResult(result);
+
+    if (activePlaceType === "origin") {
+      setOrigin(nextPlace);
+      setActivePlaceType("destination");
+    } else {
+      setDestination(nextPlace);
+    }
+
+    setPlaceKeyword("");
+    setPlaceResults([]);
+    setPlaceSearchError("");
+  };
+
   return (
     <View style={styles.mapScreen}>
       <NaverMapView />
@@ -478,7 +652,11 @@ function ScheduleRouteMapStep({
             onChangeText={
               setPlaceKeyword
             }
-            placeholder="장소 검색"
+            placeholder={
+              activePlaceType === "origin"
+                ? "출발지 장소 검색"
+                : "도착지 장소 검색"
+            }
             placeholderTextColor={
               colors.gray06
             }
@@ -488,6 +666,83 @@ function ScheduleRouteMapStep({
             value={placeKeyword}
           />
         </View>
+
+        {hasPlaceKeyword ? (
+          <View
+            style={styles.placeResultPanel}
+          >
+            {isSearchingPlaces ? (
+              <Text
+                style={
+                  styles.placeResultStatus
+                }
+              >
+                장소를 검색하는 중입니다.
+              </Text>
+            ) : placeSearchError ? (
+              <Text
+                style={
+                  styles.placeResultStatus
+                }
+              >
+                {placeSearchError}
+              </Text>
+            ) : placeResults.length === 0 ? (
+              <Text
+                style={
+                  styles.placeResultStatus
+                }
+              >
+                검색 결과가 없습니다.
+              </Text>
+            ) : (
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={
+                  false
+                }
+                style={
+                  styles.placeResultList
+                }
+              >
+                {placeResults.map((result) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={
+                      result.id ??
+                      `${result.name}-${result.address}-${result.roadAddress}`
+                    }
+                    onPress={() =>
+                      selectPlaceResult(result)
+                    }
+                    style={
+                      styles.placeResultRow
+                    }
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={
+                        styles.placeResultName
+                      }
+                    >
+                      {result.name}
+                    </Text>
+
+                    <Text
+                      numberOfLines={1}
+                      style={
+                        styles.placeResultAddress
+                      }
+                    >
+                      {result.roadAddress ||
+                        result.address}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        ) : null}
       </View>
 
       <Animated.View
@@ -530,11 +785,27 @@ function ScheduleRouteMapStep({
             출발지
           </Text>
 
-          <View
-            style={styles.routeField}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              setActivePlaceType("origin")
+            }
+            style={[
+              styles.routeField,
+              activePlaceType === "origin" &&
+                styles.routeFieldActive,
+            ]}
           >
             <TextInput
-              onChangeText={setOrigin}
+              onChangeText={(value) =>
+                updateTypedPlace(
+                  "origin",
+                  value,
+                )
+              }
+              onFocus={() =>
+                setActivePlaceType("origin")
+              }
               placeholder="출발지 입력"
               placeholderTextColor={
                 colors.gray06
@@ -542,9 +813,11 @@ function ScheduleRouteMapStep({
               style={
                 styles.routeFieldInput
               }
-              value={origin}
+              value={getRoutePlaceText(
+                origin,
+              )}
             />
-          </View>
+          </Pressable>
 
           <Text
             style={
@@ -554,12 +827,32 @@ function ScheduleRouteMapStep({
             도착지
           </Text>
 
-          <View
-            style={styles.routeField}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              setActivePlaceType(
+                "destination",
+              )
+            }
+            style={[
+              styles.routeField,
+              activePlaceType ===
+                "destination" &&
+                styles.routeFieldActive,
+            ]}
           >
             <TextInput
               onChangeText={
-                setDestination
+                (value) =>
+                  updateTypedPlace(
+                    "destination",
+                    value,
+                  )
+              }
+              onFocus={() =>
+                setActivePlaceType(
+                  "destination",
+                )
               }
               placeholder="도착지 입력"
               placeholderTextColor={
@@ -568,9 +861,11 @@ function ScheduleRouteMapStep({
               style={
                 styles.routeFieldInput
               }
-              value={destination}
+              value={getRoutePlaceText(
+                destination,
+              )}
             />
-          </View>
+          </Pressable>
         </View>
 
         <Pressable
@@ -606,12 +901,14 @@ export function ScheduleRouteResultStep({
   onRouteSelect,
 }) {
   const [origin, setOrigin] =
-    useState(initialOrigin);
+    useState(createRoutePlace(initialOrigin));
 
   const [
     destination,
     setDestination,
-  ] = useState(initialDestination);
+  ] = useState(
+    createRoutePlace(initialDestination),
+  );
 
   const [routes, setRoutes] =
     useState([]);
@@ -656,16 +953,22 @@ export function ScheduleRouteResultStep({
         const nextRoutes =
           await searchTransitRoutes({
             originX:
+              origin.x ??
               DEFAULT_ORIGIN_POINT.x,
             originY:
+              origin.y ??
               DEFAULT_ORIGIN_POINT.y,
-            originAddress: origin,
+            originAddress:
+              getRoutePlaceAddress(origin),
 
             destX:
+              destination.x ??
               DEFAULT_DESTINATION_POINT.x,
             destY:
+              destination.y ??
               DEFAULT_DESTINATION_POINT.y,
-            destAddress: destination,
+            destAddress:
+              getRoutePlaceAddress(destination),
 
             signal:
               controller.signal,
@@ -702,6 +1005,14 @@ export function ScheduleRouteResultStep({
     };
   }, [destination, origin]);
 
+  const updateOriginText = (value) => {
+    setOrigin(createRoutePlace(value));
+  };
+
+  const updateDestinationText = (value) => {
+    setDestination(createRoutePlace(value));
+  };
+
   return (
     <View style={styles.resultScreen}>
       <View style={styles.resultHeader}>
@@ -724,7 +1035,7 @@ export function ScheduleRouteResultStep({
         >
           <TextInput
             numberOfLines={1}
-            onChangeText={setOrigin}
+            onChangeText={updateOriginText}
             placeholder="출발지"
             placeholderTextColor={
               colors.gray06
@@ -732,7 +1043,7 @@ export function ScheduleRouteResultStep({
             style={
               styles.routeSummaryInput
             }
-            value={origin}
+            value={getRoutePlaceText(origin)}
           />
 
           <ChevronRightIcon />
@@ -740,7 +1051,7 @@ export function ScheduleRouteResultStep({
           <TextInput
             numberOfLines={1}
             onChangeText={
-              setDestination
+              updateDestinationText
             }
             placeholder="도착지"
             placeholderTextColor={
@@ -749,7 +1060,9 @@ export function ScheduleRouteResultStep({
             style={
               styles.routeSummaryInput
             }
-            value={destination}
+            value={getRoutePlaceText(
+              destination,
+            )}
           />
 
           <CloseIcon />
@@ -921,7 +1234,8 @@ export function ScheduleRouteResultStep({
                   getSegmentStopName(
                     primarySegment,
                     "start",
-                  ) || origin
+                  ) ||
+                  getRoutePlaceText(origin)
                 }
               />
 
@@ -931,7 +1245,10 @@ export function ScheduleRouteResultStep({
                   getSegmentStopName(
                     primarySegment,
                     "end",
-                  ) || destination
+                  ) ||
+                  getRoutePlaceText(
+                    destination,
+                  )
                 }
               />
             </View>
@@ -942,8 +1259,17 @@ export function ScheduleRouteResultStep({
                 onRouteSelect?.(
                   selectedRoute,
                   {
-                    origin,
-                    destination,
+                    origin:
+                      getRoutePlaceText(
+                        origin,
+                      ),
+                    destination:
+                      getRoutePlaceText(
+                        destination,
+                      ),
+                    originPlace: origin,
+                    destinationPlace:
+                      destination,
                   },
                 )
               }
@@ -1645,6 +1971,12 @@ function TimePickerSheet({
   const [draftTime, setDraftTime] =
     useState(value);
 
+  useEffect(() => {
+    if (visible) {
+      setDraftTime(value);
+    }
+  }, [value, visible]);
+
   const selectTime = (patch) => {
     setDraftTime((current) => ({
       ...current,
@@ -1675,101 +2007,49 @@ function TimePickerSheet({
           <View
             style={styles.pickerRows}
           >
-            <View
-              style={styles.pickerRow}
+            <WheelPickerColumn
+              accessibilityLabel="오전 오후 선택"
+              onChange={(period) =>
+                selectTime({ period })
+              }
+              options={PERIOD_OPTIONS}
+              value={draftTime.period}
+              visible={visible}
+            />
+
+            <WheelPickerColumn
+              accessibilityLabel="시 선택"
+              onChange={(hour) =>
+                selectTime({ hour })
+              }
+              options={HOUR_OPTIONS}
+              value={draftTime.hour}
+              visible={visible}
+            />
+
+            <Text
+              style={
+                styles.pickerSeparator
+              }
             >
-              <Text
-                style={
-                  styles.pickerMutedText
-                }
-              >
-                오후
-              </Text>
+              :
+            </Text>
 
-              <Text
-                style={
-                  styles.pickerMutedText
-                }
-              >
-                08:00
-              </Text>
-            </View>
-
-            <View
-              style={styles.pickerRow}
-            >
-              <Pressable
-                accessibilityRole="button"
-                onPress={() =>
-                  selectTime({
-                    period: "오전",
-                  })
-                }
-                style={
-                  styles.pickerSelectedPeriodCell
-                }
-              >
-                <Text
-                  style={
-                    styles.pickerSelectedText
-                  }
-                >
-                  {draftTime.period}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={() =>
-                  selectTime({
-                    hour: "09",
-                    minute: "00",
-                  })
-                }
-                style={
-                  styles.pickerSelectedTimeCell
-                }
-              >
-                <Text
-                  style={
-                    styles.pickerSelectedText
-                  }
-                >
-                  09:00
-                </Text>
-              </Pressable>
-            </View>
-
-            <View
-              style={styles.pickerRow}
-            >
-              <Text
-                style={
-                  styles.pickerMutedText
-                }
-              >
-                오후
-              </Text>
-
-              <Text
-                style={
-                  styles.pickerMutedText
-                }
-              >
-                10:00
-              </Text>
-            </View>
+            <WheelPickerColumn
+              accessibilityLabel="분 선택"
+              onChange={(minute) =>
+                selectTime({ minute })
+              }
+              options={MINUTE_OPTIONS}
+              value={draftTime.minute}
+              visible={visible}
+            />
           </View>
 
           <Pressable
             accessibilityRole="button"
             onPress={() =>
-              onConfirm({
-                period:
-                  draftTime.period,
-                hour: "09",
-                minute: "00",
-              })
+              onConfirm(draftTime)
             }
             style={
               styles.confirmButton
@@ -1786,6 +2066,140 @@ function TimePickerSheet({
         </View>
       </View>
     </Modal>
+  );
+}
+
+function WheelPickerColumn({
+  accessibilityLabel,
+  onChange,
+  options,
+  value,
+  visible,
+}) {
+  const scrollRef = useRef(null);
+  const selectedIndex = Math.max(
+    options.indexOf(value),
+    0,
+  );
+
+  const scrollToIndex = (
+    index,
+    animated = true,
+  ) => {
+    scrollRef.current?.scrollTo({
+      animated,
+      y: index * TIME_PICKER_ITEM_HEIGHT,
+    });
+  };
+
+  useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
+
+    const scrollTimer = setTimeout(() => {
+      scrollToIndex(selectedIndex, false);
+    }, 0);
+
+    return () => {
+      clearTimeout(scrollTimer);
+    };
+  }, [selectedIndex, visible]);
+
+  const handleScrollEnd = (event) => {
+    const offsetY =
+      event.nativeEvent.contentOffset?.y ?? 0;
+    const nextIndex = Math.min(
+      Math.max(
+        Math.round(
+          offsetY / TIME_PICKER_ITEM_HEIGHT,
+        ),
+        0,
+      ),
+      options.length - 1,
+    );
+    const nextValue = options[nextIndex];
+
+    scrollToIndex(nextIndex);
+
+    if (nextValue !== value) {
+      onChange(nextValue);
+    }
+  };
+
+  return (
+    <View style={styles.pickerColumn}>
+      <View
+        pointerEvents="none"
+        style={styles.pickerSelection}
+      />
+
+      <ScrollView
+        accessibilityLabel={
+          accessibilityLabel
+        }
+        decelerationRate="fast"
+        nestedScrollEnabled
+        onMomentumScrollEnd={
+          handleScrollEnd
+        }
+        onScrollEndDrag={
+          handleScrollEnd
+        }
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={
+          TIME_PICKER_ITEM_HEIGHT
+        }
+        style={styles.pickerScroll}
+      >
+        <View
+          style={
+            styles.pickerColumnSpacer
+          }
+        />
+
+        {options.map((option) => {
+          const selected =
+            option === value;
+
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{
+                selected,
+              }}
+              key={option}
+              onPress={() => {
+                onChange(option);
+                scrollToIndex(
+                  options.indexOf(option),
+                );
+              }}
+              style={
+                styles.pickerOption
+              }
+            >
+              <Text
+                style={[
+                  styles.pickerOptionText,
+                  selected &&
+                    styles.pickerOptionTextSelected,
+                ]}
+              >
+                {option}
+              </Text>
+            </Pressable>
+          );
+        })}
+
+        <View
+          style={
+            styles.pickerColumnSpacer
+          }
+        />
+      </ScrollView>
+    </View>
   );
 }
 
@@ -2082,45 +2496,62 @@ const styles = StyleSheet.create({
 
   pickerRows: {
     marginTop: 28,
-    gap: 14,
-  },
-
-  pickerRow: {
+    height:
+      TIME_PICKER_ITEM_HEIGHT *
+      TIME_PICKER_VISIBLE_ITEMS,
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: 8,
   },
 
-  pickerMutedText: {
+  pickerColumn: {
     flex: 1,
-    height: 40,
-    textAlign: "center",
+    height:
+      TIME_PICKER_ITEM_HEIGHT *
+      TIME_PICKER_VISIBLE_ITEMS,
+  },
+
+  pickerSelection: {
+    position: "absolute",
+    top: TIME_PICKER_ITEM_HEIGHT,
+    left: 0,
+    right: 0,
+    height: TIME_PICKER_ITEM_HEIGHT,
+    borderRadius: 4,
+    backgroundColor: colors.gray03,
+  },
+
+  pickerScroll: {
+    height:
+      TIME_PICKER_ITEM_HEIGHT *
+      TIME_PICKER_VISIBLE_ITEMS,
+  },
+
+  pickerColumnSpacer: {
+    height: TIME_PICKER_ITEM_HEIGHT,
+  },
+
+  pickerOption: {
+    height: TIME_PICKER_ITEM_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  pickerOptionText: {
     fontFamily: "SUIT",
-    fontSize: 18,
-    fontWeight: "600",
-    lineHeight: 40,
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 28,
     color: colors.gray05,
   },
 
-  pickerSelectedPeriodCell: {
-    flex: 1,
-    height: 58,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 4,
-    backgroundColor: colors.gray03,
+  pickerOptionTextSelected: {
+    color: colors.gray09,
   },
 
-  pickerSelectedTimeCell: {
-    flex: 1,
-    height: 58,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 4,
-    backgroundColor: colors.gray03,
-  },
-
-  pickerSelectedText: {
+  pickerSeparator: {
+    width: 12,
+    textAlign: "center",
     fontFamily: "SUIT",
     fontSize: 20,
     fontWeight: "700",
@@ -2173,6 +2604,65 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: colors.gray09,
+  },
+
+  placeResultPanel: {
+    maxHeight: 214,
+    marginTop: 8,
+    marginHorizontal: 24,
+    borderWidth: 1,
+    borderColor: colors.gray04,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: colors.white,
+    shadowColor: "#3D445E",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+
+  placeResultList: {
+    maxHeight: 214,
+  },
+
+  placeResultRow: {
+    minHeight: 64,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    justifyContent: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray03,
+  },
+
+  placeResultName: {
+    fontFamily: "SUIT",
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 21,
+    color: colors.gray09,
+  },
+
+  placeResultAddress: {
+    marginTop: 3,
+    fontFamily: "SUIT",
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 16.8,
+    color: colors.gray07,
+  },
+
+  placeResultStatus: {
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 19.6,
+    color: colors.gray07,
   },
 
   /*
@@ -2228,6 +2718,10 @@ const styles = StyleSheet.create({
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.white,
+  },
+
+  routeFieldActive: {
+    borderColor: colors.main,
   },
 
   routeFieldInput: {
