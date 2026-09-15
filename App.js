@@ -28,44 +28,108 @@ import { routes } from "./src/navigation/routes";
 const Stack = createNativeStackNavigator();
 const scrollbarStyleId = "oneta-thin-scrollbar";
 
-function GlobalScrollbarStyle() {
+function WebAppMetadata() {
   React.useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") {
       return undefined;
     }
 
-    if (document.getElementById(scrollbarStyleId)) {
-      return undefined;
+    let style = document.getElementById(scrollbarStyleId);
+    const shouldRemoveStyle = !style;
+
+    if (!style) {
+      style = document.createElement("style");
+
+      style.id = scrollbarStyleId;
+      style.textContent = `
+        * {
+          scrollbar-width: thin;
+          scrollbar-color: #B9C8D0 transparent;
+        }
+
+        *::-webkit-scrollbar {
+          width: 4px;
+          height: 4px;
+        }
+
+        *::-webkit-scrollbar-thumb {
+          background-color: #B9C8D0;
+          border-radius: 999px;
+        }
+
+        *::-webkit-scrollbar-track {
+          background: transparent;
+        }
+      `;
+
+      document.head.appendChild(style);
     }
 
-    const style = document.createElement("style");
+    const managedNodes = [];
+    const upsertMeta = (selector, attributes) => {
+      let element = document.head.querySelector(selector);
 
-    style.id = scrollbarStyleId;
-    style.textContent = `
-      * {
-        scrollbar-width: thin;
-        scrollbar-color: #B9C8D0 transparent;
+      if (!element) {
+        element = document.createElement("meta");
+        managedNodes.push(element);
+        document.head.appendChild(element);
       }
 
-      *::-webkit-scrollbar {
-        width: 4px;
-        height: 4px;
+      Object.entries(attributes).forEach(([name, value]) => {
+        element.setAttribute(name, value);
+      });
+    };
+    const upsertLink = (selector, attributes) => {
+      let element = document.head.querySelector(selector);
+
+      if (!element) {
+        element = document.createElement("link");
+        managedNodes.push(element);
+        document.head.appendChild(element);
       }
 
-      *::-webkit-scrollbar-thumb {
-        background-color: #B9C8D0;
-        border-radius: 999px;
-      }
+      Object.entries(attributes).forEach(([name, value]) => {
+        element.setAttribute(name, value);
+      });
+    };
 
-      *::-webkit-scrollbar-track {
-        background: transparent;
-      }
-    `;
-
-    document.head.appendChild(style);
+    document.documentElement.lang = "ko";
+    document.title = "온에타";
+    upsertMeta('meta[name="theme-color"]', {
+      name: "theme-color",
+      content: "#13b8a6",
+    });
+    upsertMeta('meta[name="apple-mobile-web-app-capable"]', {
+      name: "apple-mobile-web-app-capable",
+      content: "yes",
+    });
+    upsertMeta('meta[name="apple-mobile-web-app-title"]', {
+      name: "apple-mobile-web-app-title",
+      content: "온에타",
+    });
+    upsertMeta('meta[name="apple-mobile-web-app-status-bar-style"]', {
+      name: "apple-mobile-web-app-status-bar-style",
+      content: "default",
+    });
+    upsertLink('link[rel="manifest"]', {
+      rel: "manifest",
+      href: "/manifest.json",
+    });
+    upsertLink('link[rel="icon"]', {
+      rel: "icon",
+      type: "image/png",
+      href: "/logo.png",
+    });
+    upsertLink('link[rel="apple-touch-icon"]', {
+      rel: "apple-touch-icon",
+      href: "/logo.png",
+    });
 
     return () => {
-      style.remove();
+      if (shouldRemoveStyle) {
+        style.remove();
+      }
+      managedNodes.forEach((node) => node.remove());
     };
   }, []);
 
@@ -310,7 +374,7 @@ function FindPasswordRoute({ navigation }) {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <GlobalScrollbarStyle />
+      <WebAppMetadata />
       <NavigationContainer linking={linking}>
         <Stack.Navigator
           initialRouteName={routes.login}

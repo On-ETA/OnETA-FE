@@ -4,13 +4,29 @@
     "slug": "oneta",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/images/logo.png",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": ["**/*"],
     "android": {
-      "package": "com.audmean.service.oneta"
+      "package": "com.audmean.service.oneta",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "icon": "./assets/images/logo.png"
+    },
+    "web": {
+      "favicon": "./assets/images/logo.png",
+      "name": "온에타",
+      "shortName": "온에타",
+      "lang": "ko",
+      "themeColor": "#13b8a6",
+      "backgroundColor": "#ffffff",
+      "display": "standalone",
+      "startUrl": "/"
     }
   }
 }
