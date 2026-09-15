@@ -24,6 +24,7 @@ import {
 } from "./src/screens";
 import { linking } from "./linking";
 import { routes } from "./src/navigation/routes";
+import { blurActiveElement } from "./src/utils/accessibility";
 
 const Stack = createNativeStackNavigator();
 const scrollbarStyleId = "oneta-thin-scrollbar";
@@ -73,6 +74,7 @@ function GlobalScrollbarStyle() {
 }
 
 function resetTo(navigation, name, params) {
+  blurActiveElement();
   navigation.reset({
     index: 0,
     routes: [{ name, params }],
@@ -80,6 +82,8 @@ function resetTo(navigation, name, params) {
 }
 
 function goBackOrReset(navigation, fallbackRoute = routes.home, params) {
+  blurActiveElement();
+
   if (navigation.canGoBack()) {
     navigation.goBack();
     return;
@@ -88,15 +92,20 @@ function goBackOrReset(navigation, fallbackRoute = routes.home, params) {
   resetTo(navigation, fallbackRoute, params);
 }
 
+function navigateTo(navigation, name, params) {
+  blurActiveElement();
+  navigation.navigate(name, params);
+}
+
 function LoginRoute({ navigation, route }) {
   return (
     <LoginScreen
       initialEmail={route.params?.email}
       initialPassword={route.params?.password}
       initialRemember={route.params?.remember}
-      onFindPasswordPress={() => navigation.navigate(routes.findPassword)}
+      onFindPasswordPress={() => navigateTo(navigation, routes.findPassword)}
       onLoginPress={() => resetTo(navigation, routes.home)}
-      onSignupPress={() => navigation.navigate(routes.signup)}
+      onSignupPress={() => navigateTo(navigation, routes.signup)}
     />
   );
 }
@@ -106,7 +115,7 @@ function SignupRoute({ navigation }) {
     <SignupScreen
       onBackPress={() => goBackOrReset(navigation, routes.login)}
       onNextPress={({ email, password, signupTokens }) =>
-        navigation.navigate(routes.termsAgreement, {
+        navigateTo(navigation, routes.termsAgreement, {
           email,
           password,
           signupTokens,
@@ -149,24 +158,24 @@ function HomeRoute({ navigation, route }) {
   return (
     <HomeScreen
       initialTab={route.params?.initialTab ?? "home"}
-      onOpenAccountInfo={() => navigation.navigate(routes.accountInfo)}
-      onOpenContact={() => navigation.navigate(routes.inquiry)}
-      onOpenFaqs={() => navigation.navigate(routes.faqs)}
-      onOpenNotices={() => navigation.navigate(routes.notices)}
-      onOpenNotifications={() => navigation.navigate(routes.notifications)}
-      onOpenPassword={() => navigation.navigate(routes.changePassword)}
-      onOpenPrivacy={() => navigation.navigate(routes.privacyPolicy)}
-      onOpenTerms={() => navigation.navigate(routes.termsOfService)}
+      onOpenAccountInfo={() => navigateTo(navigation, routes.accountInfo)}
+      onOpenContact={() => navigateTo(navigation, routes.inquiry)}
+      onOpenFaqs={() => navigateTo(navigation, routes.faqs)}
+      onOpenNotices={() => navigateTo(navigation, routes.notices)}
+      onOpenNotifications={() => navigateTo(navigation, routes.notifications)}
+      onOpenPassword={() => navigateTo(navigation, routes.changePassword)}
+      onOpenPrivacy={() => navigateTo(navigation, routes.privacyPolicy)}
+      onOpenTerms={() => navigateTo(navigation, routes.termsOfService)}
       onLogoutComplete={() => resetTo(navigation, routes.login)}
       onWithdrawComplete={() => resetTo(navigation, routes.login)}
       onTabPress={(tabKey) => {
         if (tabKey === "home") {
-          navigation.navigate(routes.home);
+          navigateTo(navigation, routes.home);
           return true;
         }
 
         if (tabKey === "myPage") {
-          navigation.navigate(routes.myPage);
+          navigateTo(navigation, routes.myPage);
           return true;
         }
 
@@ -186,24 +195,24 @@ function MyPageRoute({ navigation }) {
   return (
     <HomeScreen
       initialTab="myPage"
-      onOpenAccountInfo={() => navigation.navigate(routes.accountInfo)}
-      onOpenContact={() => navigation.navigate(routes.inquiry)}
-      onOpenFaqs={() => navigation.navigate(routes.faqs)}
-      onOpenNotices={() => navigation.navigate(routes.notices)}
-      onOpenNotifications={() => navigation.navigate(routes.notifications)}
-      onOpenPassword={() => navigation.navigate(routes.changePassword)}
-      onOpenPrivacy={() => navigation.navigate(routes.privacyPolicy)}
-      onOpenTerms={() => navigation.navigate(routes.termsOfService)}
+      onOpenAccountInfo={() => navigateTo(navigation, routes.accountInfo)}
+      onOpenContact={() => navigateTo(navigation, routes.inquiry)}
+      onOpenFaqs={() => navigateTo(navigation, routes.faqs)}
+      onOpenNotices={() => navigateTo(navigation, routes.notices)}
+      onOpenNotifications={() => navigateTo(navigation, routes.notifications)}
+      onOpenPassword={() => navigateTo(navigation, routes.changePassword)}
+      onOpenPrivacy={() => navigateTo(navigation, routes.privacyPolicy)}
+      onOpenTerms={() => navigateTo(navigation, routes.termsOfService)}
       onLogoutComplete={() => resetTo(navigation, routes.login)}
       onWithdrawComplete={() => resetTo(navigation, routes.login)}
       onTabPress={(tabKey) => {
         if (tabKey === "home") {
-          navigation.navigate(routes.home);
+          navigateTo(navigation, routes.home);
           return true;
         }
 
         if (tabKey === "myPage") {
-          navigation.navigate(routes.myPage);
+          navigateTo(navigation, routes.myPage);
           return true;
         }
 
@@ -226,7 +235,7 @@ function NoticesRoute({ navigation }) {
     <NoticesScreen
       onBackPress={() => goBackOrReset(navigation, routes.myPage)}
       onNoticePress={(notice) =>
-        navigation.navigate(routes.noticeDetail, { notice })
+        navigateTo(navigation, routes.noticeDetail, { notice })
       }
     />
   );
