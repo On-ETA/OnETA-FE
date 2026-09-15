@@ -27,6 +27,19 @@ const DEFAULT_TIME = {
   minute: "30",
 };
 
+const TIME_PICKER_ITEM_HEIGHT = 58;
+const TIME_PICKER_VISIBLE_ITEMS = 3;
+const PERIOD_OPTIONS = ["오전", "오후"];
+const HOUR_OPTIONS = Array.from(
+  { length: 12 },
+  (_, index) =>
+    String(index + 1).padStart(2, "0"),
+);
+const MINUTE_OPTIONS = Array.from(
+  { length: 60 },
+  (_, index) => String(index).padStart(2, "0"),
+);
+
 const DEFAULT_ORIGIN_POINT = {
   x: 126.9256,
   y: 37.5515,
@@ -1956,6 +1969,12 @@ function TimePickerSheet({
   const [draftTime, setDraftTime] =
     useState(value);
 
+  useEffect(() => {
+    if (visible) {
+      setDraftTime(value);
+    }
+  }, [value, visible]);
+
   const selectTime = (patch) => {
     setDraftTime((current) => ({
       ...current,
@@ -1986,101 +2005,49 @@ function TimePickerSheet({
           <View
             style={styles.pickerRows}
           >
-            <View
-              style={styles.pickerRow}
+            <WheelPickerColumn
+              accessibilityLabel="오전 오후 선택"
+              onChange={(period) =>
+                selectTime({ period })
+              }
+              options={PERIOD_OPTIONS}
+              value={draftTime.period}
+              visible={visible}
+            />
+
+            <WheelPickerColumn
+              accessibilityLabel="시 선택"
+              onChange={(hour) =>
+                selectTime({ hour })
+              }
+              options={HOUR_OPTIONS}
+              value={draftTime.hour}
+              visible={visible}
+            />
+
+            <Text
+              style={
+                styles.pickerSeparator
+              }
             >
-              <Text
-                style={
-                  styles.pickerMutedText
-                }
-              >
-                오후
-              </Text>
+              :
+            </Text>
 
-              <Text
-                style={
-                  styles.pickerMutedText
-                }
-              >
-                08:00
-              </Text>
-            </View>
-
-            <View
-              style={styles.pickerRow}
-            >
-              <Pressable
-                accessibilityRole="button"
-                onPress={() =>
-                  selectTime({
-                    period: "오전",
-                  })
-                }
-                style={
-                  styles.pickerSelectedPeriodCell
-                }
-              >
-                <Text
-                  style={
-                    styles.pickerSelectedText
-                  }
-                >
-                  {draftTime.period}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={() =>
-                  selectTime({
-                    hour: "09",
-                    minute: "00",
-                  })
-                }
-                style={
-                  styles.pickerSelectedTimeCell
-                }
-              >
-                <Text
-                  style={
-                    styles.pickerSelectedText
-                  }
-                >
-                  09:00
-                </Text>
-              </Pressable>
-            </View>
-
-            <View
-              style={styles.pickerRow}
-            >
-              <Text
-                style={
-                  styles.pickerMutedText
-                }
-              >
-                오후
-              </Text>
-
-              <Text
-                style={
-                  styles.pickerMutedText
-                }
-              >
-                10:00
-              </Text>
-            </View>
+            <WheelPickerColumn
+              accessibilityLabel="분 선택"
+              onChange={(minute) =>
+                selectTime({ minute })
+              }
+              options={MINUTE_OPTIONS}
+              value={draftTime.minute}
+              visible={visible}
+            />
           </View>
 
           <Pressable
             accessibilityRole="button"
             onPress={() =>
-              onConfirm({
-                period:
-                  draftTime.period,
-                hour: "09",
-                minute: "00",
-              })
+              onConfirm(draftTime)
             }
             style={
               styles.confirmButton
@@ -2097,6 +2064,140 @@ function TimePickerSheet({
         </View>
       </View>
     </Modal>
+  );
+}
+
+function WheelPickerColumn({
+  accessibilityLabel,
+  onChange,
+  options,
+  value,
+  visible,
+}) {
+  const scrollRef = useRef(null);
+  const selectedIndex = Math.max(
+    options.indexOf(value),
+    0,
+  );
+
+  const scrollToIndex = (
+    index,
+    animated = true,
+  ) => {
+    scrollRef.current?.scrollTo({
+      animated,
+      y: index * TIME_PICKER_ITEM_HEIGHT,
+    });
+  };
+
+  useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
+
+    const scrollTimer = setTimeout(() => {
+      scrollToIndex(selectedIndex, false);
+    }, 0);
+
+    return () => {
+      clearTimeout(scrollTimer);
+    };
+  }, [selectedIndex, visible]);
+
+  const handleScrollEnd = (event) => {
+    const offsetY =
+      event.nativeEvent.contentOffset?.y ?? 0;
+    const nextIndex = Math.min(
+      Math.max(
+        Math.round(
+          offsetY / TIME_PICKER_ITEM_HEIGHT,
+        ),
+        0,
+      ),
+      options.length - 1,
+    );
+    const nextValue = options[nextIndex];
+
+    scrollToIndex(nextIndex);
+
+    if (nextValue !== value) {
+      onChange(nextValue);
+    }
+  };
+
+  return (
+    <View style={styles.pickerColumn}>
+      <View
+        pointerEvents="none"
+        style={styles.pickerSelection}
+      />
+
+      <ScrollView
+        accessibilityLabel={
+          accessibilityLabel
+        }
+        decelerationRate="fast"
+        nestedScrollEnabled
+        onMomentumScrollEnd={
+          handleScrollEnd
+        }
+        onScrollEndDrag={
+          handleScrollEnd
+        }
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={
+          TIME_PICKER_ITEM_HEIGHT
+        }
+        style={styles.pickerScroll}
+      >
+        <View
+          style={
+            styles.pickerColumnSpacer
+          }
+        />
+
+        {options.map((option) => {
+          const selected =
+            option === value;
+
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{
+                selected,
+              }}
+              key={option}
+              onPress={() => {
+                onChange(option);
+                scrollToIndex(
+                  options.indexOf(option),
+                );
+              }}
+              style={
+                styles.pickerOption
+              }
+            >
+              <Text
+                style={[
+                  styles.pickerOptionText,
+                  selected &&
+                    styles.pickerOptionTextSelected,
+                ]}
+              >
+                {option}
+              </Text>
+            </Pressable>
+          );
+        })}
+
+        <View
+          style={
+            styles.pickerColumnSpacer
+          }
+        />
+      </ScrollView>
+    </View>
   );
 }
 
@@ -2393,45 +2494,62 @@ const styles = StyleSheet.create({
 
   pickerRows: {
     marginTop: 28,
-    gap: 14,
-  },
-
-  pickerRow: {
+    height:
+      TIME_PICKER_ITEM_HEIGHT *
+      TIME_PICKER_VISIBLE_ITEMS,
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: 8,
   },
 
-  pickerMutedText: {
+  pickerColumn: {
     flex: 1,
-    height: 40,
-    textAlign: "center",
+    height:
+      TIME_PICKER_ITEM_HEIGHT *
+      TIME_PICKER_VISIBLE_ITEMS,
+  },
+
+  pickerSelection: {
+    position: "absolute",
+    top: TIME_PICKER_ITEM_HEIGHT,
+    left: 0,
+    right: 0,
+    height: TIME_PICKER_ITEM_HEIGHT,
+    borderRadius: 4,
+    backgroundColor: colors.gray03,
+  },
+
+  pickerScroll: {
+    height:
+      TIME_PICKER_ITEM_HEIGHT *
+      TIME_PICKER_VISIBLE_ITEMS,
+  },
+
+  pickerColumnSpacer: {
+    height: TIME_PICKER_ITEM_HEIGHT,
+  },
+
+  pickerOption: {
+    height: TIME_PICKER_ITEM_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  pickerOptionText: {
     fontFamily: "SUIT",
-    fontSize: 18,
-    fontWeight: "600",
-    lineHeight: 40,
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 28,
     color: colors.gray05,
   },
 
-  pickerSelectedPeriodCell: {
-    flex: 1,
-    height: 58,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 4,
-    backgroundColor: colors.gray03,
+  pickerOptionTextSelected: {
+    color: colors.gray09,
   },
 
-  pickerSelectedTimeCell: {
-    flex: 1,
-    height: 58,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 4,
-    backgroundColor: colors.gray03,
-  },
-
-  pickerSelectedText: {
+  pickerSeparator: {
+    width: 12,
+    textAlign: "center",
     fontFamily: "SUIT",
     fontSize: 20,
     fontWeight: "700",
