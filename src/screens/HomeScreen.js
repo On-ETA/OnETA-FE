@@ -20,6 +20,7 @@ import { FirstLastRouteDetailScreen } from "./home/first-last/FirstLastRouteDeta
 import { FirstLastRouteScreen } from "./home/first-last/FirstLastRouteScreen";
 import { MyPageScreen } from "./MyPageScreen";
 import { colors, layout } from "../theme";
+import { blurActiveElement } from "../utils/accessibility";
 
 const homeBackground = colors.gray01;
 
@@ -249,6 +250,7 @@ export function HomeScreen({
   }, []);
 
   const handleTabPress = (tabKey) => {
+    blurActiveElement();
     setIsAddressManagerVisible(false);
     setIsRouteDetailVisible(false);
     setFirstLastRouteSetupStep(null);
@@ -289,12 +291,18 @@ export function HomeScreen({
             isAddressManagerVisible ? (
               <AddressManagementScreen
                 onAuthRequired={onLogoutComplete}
-                onBackPress={() => setIsAddressManagerVisible(false)}
+                onBackPress={() => {
+                  blurActiveElement();
+                  setIsAddressManagerVisible(false);
+                }}
                 onCurrentAddressChange={setCurrentAddressLabel}
               />
             ) : isGarageDepartureAddVisible ? (
               <GarageDepartureAlarmAddScreen
-                onBackPress={() => setIsGarageDepartureAddVisible(false)}
+                onBackPress={() => {
+                  blurActiveElement();
+                  setIsGarageDepartureAddVisible(false);
+                }}
               />
             ) : isScheduleAlarmAddVisible ? (
               <ScheduleAlarmAddScreen
@@ -305,6 +313,7 @@ export function HomeScreen({
                     : "알림 추가"
                 }
                 onBackPress={() => {
+                  blurActiveElement();
                   setIsScheduleAlarmAddVisible(false);
                   setScheduleAlarmInitialStep("form");
                 }}
@@ -314,6 +323,7 @@ export function HomeScreen({
                         setFirstLastRouteSummary(
                           createFirstLastRouteSummary(route, places),
                         );
+                        blurActiveElement();
                         setIsScheduleAlarmAddVisible(false);
                         setScheduleAlarmInitialStep("form");
                       }
@@ -323,8 +333,12 @@ export function HomeScreen({
             ) : firstLastRouteSetupStep === "map" ? (
               <ScheduleRouteMapStep
                 headerTitle="경로 재설정"
-                onBackPress={() => setFirstLastRouteSetupStep(null)}
+                onBackPress={() => {
+                  blurActiveElement();
+                  setFirstLastRouteSetupStep(null);
+                }}
                 onConfirm={(places) => {
+                  blurActiveElement();
                   setFirstLastRoutePlaces(places);
                   setFirstLastRouteSetupStep("result");
                 }}
@@ -334,28 +348,50 @@ export function HomeScreen({
                 actionLabel="이 경로로 설정"
                 initialDestination={firstLastRoutePlaces.destination}
                 initialOrigin={firstLastRoutePlaces.origin}
-                onBackPress={() => setFirstLastRouteSetupStep("map")}
-                onRouteSelect={() => setFirstLastRouteSetupStep(null)}
+                onBackPress={() => {
+                  blurActiveElement();
+                  setFirstLastRouteSetupStep("map");
+                }}
+                onRouteSelect={() => {
+                  blurActiveElement();
+                  setFirstLastRouteSetupStep(null);
+                }}
               />
             ) : editingCustomAlarm?.type === "schedule" ? (
               <ScheduleAlarmEditScreen
                 alarm={editingCustomAlarm.alarm}
-                onBackPress={() => setEditingCustomAlarm(null)}
-                onSavePress={() => setEditingCustomAlarm(null)}
+                onBackPress={() => {
+                  blurActiveElement();
+                  setEditingCustomAlarm(null);
+                }}
+                onSavePress={() => {
+                  blurActiveElement();
+                  setEditingCustomAlarm(null);
+                }}
               />
             ) : editingCustomAlarm?.type === "garage" ? (
               <GarageDepartureAlarmEditScreen
                 alarm={editingCustomAlarm.alarm}
-                onBackPress={() => setEditingCustomAlarm(null)}
+                onBackPress={() => {
+                  blurActiveElement();
+                  setEditingCustomAlarm(null);
+                }}
                 onChangeBusPress={() => {
+                  blurActiveElement();
                   setEditingCustomAlarm(null);
                   setIsGarageDepartureAddVisible(true);
                 }}
-                onSavePress={() => setEditingCustomAlarm(null)}
+                onSavePress={() => {
+                  blurActiveElement();
+                  setEditingCustomAlarm(null);
+                }}
               />
             ) : isRouteDetailVisible ? (
               <FirstLastRouteDetailScreen
-                onBackPress={() => setIsRouteDetailVisible(false)}
+                onBackPress={() => {
+                  blurActiveElement();
+                  setIsRouteDetailVisible(false);
+                }}
               />
             ) : (
               <HomeDashboard
@@ -365,28 +401,39 @@ export function HomeScreen({
                   (activeHomeTab === "firstLast" ? "주소 등록하기" : "우리집")
                 }
                 notificationCount={notificationCount}
-                onAddressPress={() => setIsAddressManagerVisible(true)}
+                onAddressPress={() => {
+                  blurActiveElement();
+                  setIsAddressManagerVisible(true);
+                }}
                 onBellPress={onOpenNotifications}
-                onGarageDepartureAddPress={() =>
-                  setIsGarageDepartureAddVisible(true)
-                }
+                onGarageDepartureAddPress={() => {
+                  blurActiveElement();
+                  setIsGarageDepartureAddVisible(true);
+                }}
                 onHomeTabPress={setActiveHomeTab}
                 onMyPagePress={() => handleTabPress("myPage")}
-                onRouteDetailPress={() => setIsRouteDetailVisible(true)}
+                onRouteDetailPress={() => {
+                  blurActiveElement();
+                  setIsRouteDetailVisible(true);
+                }}
                 onRouteSetupPress={() => {
+                  blurActiveElement();
                   setIsScheduleAlarmAddVisible(true);
                   setScheduleAlarmInitialStep("route");
                 }}
                 firstLastRouteSummary={firstLastRouteSummary}
-                onScheduleAlarmAddPress={() =>
-                  setIsScheduleAlarmAddVisible(true)
-                }
-                onGarageAlarmEditPress={(alarm) =>
-                  setEditingCustomAlarm({ type: "garage", alarm })
-                }
-                onScheduleAlarmEditPress={(alarm) =>
-                  setEditingCustomAlarm({ type: "schedule", alarm })
-                }
+                onScheduleAlarmAddPress={() => {
+                  blurActiveElement();
+                  setIsScheduleAlarmAddVisible(true);
+                }}
+                onGarageAlarmEditPress={(alarm) => {
+                  blurActiveElement();
+                  setEditingCustomAlarm({ type: "garage", alarm });
+                }}
+                onScheduleAlarmEditPress={(alarm) => {
+                  blurActiveElement();
+                  setEditingCustomAlarm({ type: "schedule", alarm });
+                }}
               />
             )
           ) : null}

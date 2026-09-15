@@ -50,13 +50,29 @@ function formatNoticeDate(createdAt) {
 
 export function normalizeNotice(notice) {
   return {
-    id: notice?.id,
+    id: notice?.id ?? notice?.noticeId,
     title: notice?.title ?? "",
     author: notice?.author ?? "",
     createdAt: notice?.createdAt,
     dateText: formatNoticeDate(notice?.createdAt),
     viewCount: notice?.viewCount ?? 0,
   };
+}
+
+function getNoticeList(response) {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if (Array.isArray(response?.data)) {
+    return response.data;
+  }
+
+  if (Array.isArray(response?.data?.data)) {
+    return response.data.data;
+  }
+
+  return [];
 }
 
 export async function getNotices({ accessToken = getAccessToken(), signal } = {}) {
@@ -68,7 +84,7 @@ export async function getNotices({ accessToken = getAccessToken(), signal } = {}
     errorMessage: "공지사항 목록을 불러오지 못했습니다.",
   });
 
-  const notices = Array.isArray(response?.data) ? response.data : [];
+  const notices = getNoticeList(response);
 
   return notices.map(normalizeNotice);
 }

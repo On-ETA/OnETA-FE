@@ -23,6 +23,7 @@ import {
   updateArrivalNotificationStatus,
 } from "../../../api/notifications/arrival";
 import { colors, typography } from "../../../theme";
+import { blurActiveElement } from "../../../utils/accessibility";
 
 // TODO: API 연동 시 아래 더미 데이터를 교체하세요.
 // GET /home/custom-alarms
@@ -156,6 +157,7 @@ export function CustomAlarmScreen({
   };
 
   const requestSingleDelete = (alarmId) => {
+    blurActiveElement();
     setDeleteTargetIds([alarmId]);
   };
 
@@ -215,11 +217,13 @@ export function CustomAlarmScreen({
 
   const requestSelectedDelete = () => {
     if (selectedIds.length > 0 && !isDeleteModalVisible) {
+      blurActiveElement();
       setDeleteTargetIds(selectedIds);
     }
   };
 
   const closeDeleteModal = () => {
+    blurActiveElement();
     setDeleteTargetIds([]);
   };
 
