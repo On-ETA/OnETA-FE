@@ -373,6 +373,11 @@ export function HomeScreen({
                 onHomeTabPress={setActiveHomeTab}
                 onMyPagePress={() => handleTabPress("myPage")}
                 onRouteDetailPress={() => setIsRouteDetailVisible(true)}
+                onRouteSetupPress={() => {
+                  setIsScheduleAlarmAddVisible(true);
+                  setScheduleAlarmInitialStep("route");
+                }}
+                firstLastRouteSummary={firstLastRouteSummary}
                 onScheduleAlarmAddPress={() =>
                   setIsScheduleAlarmAddVisible(true)
                 }
@@ -428,7 +433,11 @@ function HomeDashboard({
           onScheduleAlarmEditPress={onScheduleAlarmEditPress}
         />
       ) : (
-        <FirstLastRouteScreen onRouteDetailPress={onRouteDetailPress} />
+        <FirstLastRouteScreen
+          onRouteDetailPress={onRouteDetailPress}
+          onRouteSetupPress={onRouteSetupPress}
+          routeSummary={firstLastRouteSummary}
+        />
       )}
     </>
   );
@@ -447,6 +456,8 @@ const styles = StyleSheet.create({
       web: {
         alignSelf: "center",
         maxWidth: layout.mobileFrameWidth,
+        overflowX: "hidden",
+        overflowY: "auto",
       },
     }),
   },

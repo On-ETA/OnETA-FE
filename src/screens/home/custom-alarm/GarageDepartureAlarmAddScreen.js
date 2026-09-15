@@ -399,7 +399,7 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
           {busResults.length > 0 ? (
             <ScrollView
               contentContainerStyle={styles.resultList}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator
             >
               {busResults.map((bus, index) => (
                 <Pressable
@@ -476,7 +476,7 @@ function BusDirectionStep({
 
         <ScrollView
           contentContainerStyle={styles.directionList}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator
         >
           {bus.directions.map((direction) => {
             const selected = selectedDirectionId === direction.id;

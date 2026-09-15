@@ -1,5 +1,13 @@
 ﻿import React, { useEffect, useState } from "react";
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import MailIcon from "../../assets/images/icon_mail.svg";
 import MessageIcon from "../../assets/images/icon_message.svg";
@@ -212,7 +220,11 @@ export function MyPageScreen({
         />
       ) : null}
 
-      <View style={styles.body}>
+      <ScrollView
+        contentContainerStyle={styles.bodyContent}
+        showsVerticalScrollIndicator
+        style={styles.body}
+      >
         <View style={styles.contentGroup}>
           <View style={styles.card}>
             <View style={styles.profileTextWrap}>
@@ -294,7 +306,7 @@ export function MyPageScreen({
             </Text>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 
@@ -395,6 +407,8 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  bodyContent: {
     paddingHorizontal: 16,
     paddingTop: 29,
     paddingBottom: 17,

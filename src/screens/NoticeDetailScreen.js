@@ -56,7 +56,7 @@ export function NoticeDetailScreen({ notice = FALLBACK_NOTICE, onBackPress }) {
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator
         >
           <Text style={styles.title}>{noticeDetail.title}</Text>
 

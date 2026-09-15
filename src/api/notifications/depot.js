@@ -128,6 +128,26 @@ export async function getMyDepotNotifications({
   return pickDepotNotificationList(response).map(normalizeDepotNotification);
 }
 
+export async function updateDepotNotification({
+  userBusId,
+  payload,
+  accessToken = getAccessToken(),
+  signal,
+} = {}) {
+  if (userBusId === undefined || userBusId === null || userBusId === "") {
+    throw new Error("사용자 버스 id가 필요합니다.");
+  }
+
+  return requestDepotNotificationJson({
+    path: buildDepotNotificationEndpoint(userBusId),
+    method: "PATCH",
+    body: payload,
+    accessToken,
+    signal,
+    errorMessage: "차고지 출발 알림 수정에 실패했습니다.",
+  });
+}
+
 export async function deleteDepotNotification({
   userBusId,
   accessToken = getAccessToken(),

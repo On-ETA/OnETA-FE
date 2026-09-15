@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import {
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -38,6 +39,12 @@ function getArrivalNotificationId(alarm) {
   const id = alarm?.notificationId ?? alarm?.id;
 
   return typeof id === "string" ? id.replace(/^arrival-/, "") : id;
+}
+
+function breakRouteNumberAtParenthesis(routeNumber) {
+  return typeof routeNumber === "string"
+    ? routeNumber.trim().replace(/\s*\(/, "\n(")
+    : routeNumber;
 }
 
 export function CustomAlarmScreen({
@@ -287,7 +294,8 @@ export function CustomAlarmScreen({
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         horizontal={false}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator
+        style={styles.scroller}
       >
         <AlarmSectionHeader
           onAddPress={onGarageDepartureAddPress}
@@ -450,18 +458,30 @@ function GarageAlarmCard({
   selected,
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={[styles.garageCard, selected && styles.selectedItem]}
-    >
-      <View style={styles.garageCardTop}>
-        <Text style={styles.garageDirection}>{alarm.direction}</Text>
+    <View style={[styles.garageCard, selected && styles.selectedItem]}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={styles.garageCardTop}
+      >
+        <Text
+          ellipsizeMode="tail"
+          numberOfLines={2}
+          style={styles.garageDirection}
+        >
+          {alarm.direction}
+        </Text>
         <View style={styles.garageRouteRow}>
           <BusIcon />
-          <Text style={styles.garageRouteNumber}>{alarm.routeNumber}</Text>
+          <Text
+            ellipsizeMode="tail"
+            numberOfLines={2}
+            style={styles.garageRouteNumber}
+          >
+            {breakRouteNumberAtParenthesis(alarm.routeNumber)}
+          </Text>
         </View>
-      </View>
+      </Pressable>
       {editMode ? (
         <Pressable
           accessibilityRole="button"
@@ -482,8 +502,12 @@ function GarageAlarmCard({
               : styles.garageAlarmButtonReady,
           ]}
         >
-          <BellGlyph color={alarm.enabled ? colors.main : colors.white} />
+          <View style={styles.garageAlarmIcon}>
+            <BellGlyph color={alarm.enabled ? colors.main : colors.white} />
+          </View>
           <Text
+            ellipsizeMode="tail"
+            numberOfLines={2}
             style={[
               styles.garageAlarmButtonText,
               alarm.enabled
@@ -495,7 +519,7 @@ function GarageAlarmCard({
           </Text>
         </Pressable>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -509,13 +533,15 @@ function ScheduleAlarmRow({
   updating,
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={[styles.scheduleRow, selected && styles.selectedItem]}
-    >
-      <Text style={styles.scheduleName}>{alarm.routeName}</Text>
-      <Text style={styles.scheduleTime}>{alarm.arrivalTime}</Text>
+    <View style={[styles.scheduleRow, selected && styles.selectedItem]}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={styles.scheduleMainArea}
+      >
+        <Text style={styles.scheduleName}>{alarm.routeName}</Text>
+        <Text style={styles.scheduleTime}>{alarm.arrivalTime}</Text>
+      </Pressable>
       {editMode ? (
         <Pressable
           accessibilityRole="button"
@@ -535,7 +561,7 @@ function ScheduleAlarmRow({
           <Switch enabled={alarm.enabled} />
         </Pressable>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -622,6 +648,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.gray01,
   },
+  scroller: {
+    flex: 1,
+    ...Platform.select({
+      web: {
+        overflowY: "scroll",
+      },
+    }),
+  },
   scrollContent: {
     paddingTop: 16,
     paddingHorizontal: 16,
@@ -674,7 +708,7 @@ const styles = StyleSheet.create({
   },
   garageCard: {
     width: 174,
-    height: 120,
+    height: 150,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: colors.gray04,
@@ -687,28 +721,34 @@ const styles = StyleSheet.create({
   },
   garageCardTop: {
     flex: 1,
-    paddingTop: 18,
-    paddingHorizontal: 16,
+    overflow: "hidden",
+    paddingTop: 12,
+    paddingLeft: 8,
+    paddingRight: 12,
   },
   garageDirection: {
+    width: "100%",
     ...typography.caption01M,
     color: colors.gray07,
   },
   garageRouteRow: {
-    marginTop: 7,
+    marginTop: 8,
     flexDirection: "row",
     alignItems: "center",
+    minWidth: 0,
   },
   garageRouteNumber: {
+    flex: 1,
+    minWidth: 0,
     marginLeft: 5,
     fontFamily: "SUIT",
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "700",
-    lineHeight: 28,
+    lineHeight: 23.8,
     color: colors.gray09,
   },
   garageDeleteArea: {
-    height: 52,
+    height: 50,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -716,11 +756,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(238, 243, 246, 0.8)",
   },
   garageAlarmButton: {
-    height: 52,
+    height: 50,
+    paddingHorizontal: 12,
+    overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
+  },
+  garageAlarmIcon: {
+    flexShrink: 0,
+    width: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
   garageAlarmButtonOn: {
     backgroundColor: colors.sub,
@@ -729,10 +778,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.main,
   },
   garageAlarmButtonText: {
+    maxWidth: 118,
+    flexShrink: 1,
+    minWidth: 0,
+    textAlign: "center",
     fontFamily: "SUIT",
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: "700",
-    lineHeight: 19.6,
+    lineHeight: 15.4,
   },
   garageAlarmButtonTextOn: {
     color: colors.main,
@@ -785,6 +838,12 @@ const styles = StyleSheet.create({
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.white,
+  },
+  scheduleMainArea: {
+    flex: 1,
+    alignSelf: "stretch",
+    flexDirection: "row",
+    alignItems: "center",
   },
   scheduleName: {
     flex: 1,
@@ -844,6 +903,7 @@ const styles = StyleSheet.create({
   busIconCircle: {
     width: 24,
     height: 24,
+    flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,

@@ -488,7 +488,7 @@ function ScheduleRouteMapStep({
           sheetTranslateY,
           {
             toValue: nextOffset,
-            useNativeDriver: true,
+            useNativeDriver: false,
           },
         ).start();
       },
@@ -523,7 +523,7 @@ function ScheduleRouteMapStep({
           sheetTranslateY,
           {
             toValue: nextOffset,
-            useNativeDriver: true,
+            useNativeDriver: false,
           },
         ).start();
       },

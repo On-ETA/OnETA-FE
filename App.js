@@ -1,6 +1,7 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -25,6 +26,51 @@ import { linking } from "./linking";
 import { routes } from "./src/navigation/routes";
 
 const Stack = createNativeStackNavigator();
+const scrollbarStyleId = "oneta-thin-scrollbar";
+
+function GlobalScrollbarStyle() {
+  React.useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") {
+      return undefined;
+    }
+
+    if (document.getElementById(scrollbarStyleId)) {
+      return undefined;
+    }
+
+    const style = document.createElement("style");
+
+    style.id = scrollbarStyleId;
+    style.textContent = `
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: #B9C8D0 transparent;
+      }
+
+      *::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+      }
+
+      *::-webkit-scrollbar-thumb {
+        background-color: #B9C8D0;
+        border-radius: 999px;
+      }
+
+      *::-webkit-scrollbar-track {
+        background: transparent;
+      }
+    `;
+
+    document.head.appendChild(style);
+
+    return () => {
+      style.remove();
+    };
+  }, []);
+
+  return null;
+}
 
 function resetTo(navigation, name, params) {
   navigation.reset({
@@ -264,6 +310,7 @@ function FindPasswordRoute({ navigation }) {
 export default function App() {
   return (
     <SafeAreaProvider>
+      <GlobalScrollbarStyle />
       <NavigationContainer linking={linking}>
         <Stack.Navigator
           initialRouteName={routes.login}

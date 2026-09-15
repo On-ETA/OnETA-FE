@@ -76,7 +76,7 @@ export function FirstLastRouteDetailScreen({ onBackPress }) {
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator
       >
         <TimelineSummary items={routeDetail.timeline} />
         <PlaceRow place={routeDetail.origin} type="origin" />
