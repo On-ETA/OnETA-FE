@@ -14,6 +14,8 @@ Windows PowerShell에서 스크립트 실행 정책 오류가 발생하면 설�
 
 웹 브라우저로 바로 실행하려면 `pnpm dev --web`을 사용합니다.
 
+pnpm.cmd dev로 실행
+
 안드로이드로 바로 실행하려면 아래 명령어를 사용합니다.
 
 ```bash
