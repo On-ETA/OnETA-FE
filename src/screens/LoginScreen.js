@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   Alert,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,7 +19,7 @@ import {
   PrimaryButton,
   SocialLoginButtons,
 } from "../components";
-import OnetaLogo from "../../assets/images/on-eta_logo.png";
+import OnetaLogo from "../../assets/images/logo_t.svg";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";
 import VisibleIcon from "../../assets/images/icon_visible.svg";
 import { colors, layout, typography } from "../theme";
@@ -158,10 +157,10 @@ export function LoginScreen({
         style={styles.scroller}
       >
         <View style={[styles.content, responsiveLayout.content]}>
-          <Image
+          <OnetaLogo
             accessibilityLabel="온에타"
-            resizeMode="contain"
-            source={OnetaLogo}
+            width={responsiveLayout.logo.width}
+            height={responsiveLayout.logo.height}
             style={[styles.logo, responsiveLayout.logo]}
           />
 
@@ -339,6 +338,10 @@ const styles = StyleSheet.create({
   loginButton: {
     display: "flex",
     height: 54,
+    alignSelf: "stretch",
+    borderWidth: 1,
+    borderColor: colors.gray03,
+    borderRadius: 8,
   },
   loginButtonText: {
     ...typography.body01Sb,
