@@ -26,7 +26,6 @@ import { Header } from "../components";
 import { colors, typography } from "../theme";
 
 const MAX_ADDRESS_COUNT = 5;
-const DEFAULT_ADDRESS_DETAIL = "마포구 와우산로94 홍익대학교 제2기숙사";
 
 function isAuthError(error) {
   return (

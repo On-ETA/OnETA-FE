@@ -398,7 +398,7 @@ export function HomeScreen({
                 activeHomeTab={activeHomeTab}
                 addressLabel={
                   currentAddressLabel ||
-                  (activeHomeTab === "firstLast" ? "주소 등록하기" : "우리집")
+                  (activeHomeTab === "firstLast" ? "주소 등록하기" : "주소 등록하기")
                 }
                 notificationCount={notificationCount}
                 onAddressPress={() => {
