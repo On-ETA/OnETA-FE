@@ -17,6 +17,20 @@ export function SocialLoginButtons({
   return (
     <View style={[styles.socials, style]}>
       <Pressable
+        accessibilityLabel="네이버로 로그인"
+        style={[styles.naver, buttonStyle]}
+      >
+        <NaverLogo height={iconSize} width={iconSize} />
+      </Pressable>
+
+      <Pressable
+        accessibilityLabel="카카오로 로그인"
+        style={[styles.kakao, buttonStyle]}
+      >
+        <KakaoTalkLogo height={kakaoIconSize} width={kakaoIconSize} />
+      </Pressable>
+
+      <Pressable
         accessibilityLabel="구글로 로그인"
         accessibilityRole="button"
         accessibilityState={{ disabled: isGoogleLoading }}
@@ -31,19 +45,6 @@ export function SocialLoginButtons({
         <GoogleLogo height={iconSize} width={iconSize} />
       </Pressable>
 
-      <Pressable
-        accessibilityLabel="네이버로 로그인"
-        style={[styles.naver, buttonStyle]}
-      >
-        <NaverLogo height={iconSize} width={iconSize} />
-      </Pressable>
-
-      <Pressable
-        accessibilityLabel="카카오로 로그인"
-        style={[styles.kakao, buttonStyle]}
-      >
-        <KakaoTalkLogo height={kakaoIconSize} width={kakaoIconSize} />
-      </Pressable>
     </View>
   );
 }

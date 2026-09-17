@@ -50,9 +50,9 @@ export function LoginScreen({
   const layoutScale = Math.min(Math.max(availableHeight / 760, 0.78), 1);
   const verticalScale = isShortHeight ? layoutScale * 0.65 : layoutScale;
   const logoScale = isWideRoomy ? 1.32 : 1;
-  const socialButtonSize = Math.round(Math.max(42, 54 * layoutScale));
-  const socialIconSize = Math.round(32 * layoutScale);
-  const kakaoSocialIconSize = Math.round(34 * layoutScale);
+  const socialButtonSize = 44;
+  const socialIconSize = 42;
+  const kakaoSocialIconSize = 42;
   const controlHeight = Math.round(Math.max(42, 54 * layoutScale));
   const verticalPadding = Math.round(
     Math.max(
@@ -96,7 +96,7 @@ export function LoginScreen({
     },
     social: {
       marginTop: Math.round(isWideRoomy ? 18 : Math.max(10, 24 * verticalScale)),
-      gap: Math.round(Math.max(18, 36 * layoutScale)),
+      gap: 20,
       transform: [{ translateY: isWideRoomy ? -4 : 0 }],
     },
     socialButton: {
