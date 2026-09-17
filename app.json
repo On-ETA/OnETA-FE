@@ -9,7 +9,8 @@
       "**/*"
     ],
     "android": {
-      "package": "com.audmean.service.oneta"
+      "package": "com.oneta.app",
+      "googleServicesFile": "./google-services.json"
     },
     "ios": {
       "supportsTablet": false

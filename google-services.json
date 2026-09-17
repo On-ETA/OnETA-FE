@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "288162115701",
-    "project_id": "on-eta",
-    "storage_bucket": "on-eta.firebasestorage.app"
+    "project_number": "1062044983325",
+    "project_id": "on-eta-bc036",
+    "storage_bucket": "on-eta-bc036.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:288162115701:android:359da13d45a1d484a9083c",
+        "mobilesdk_app_id": "1:1062044983325:android:2b364a644e589fff3c66f4",
         "android_client_info": {
-          "package_name": "com.airulus.oneta"
+          "package_name": "com.oneta.app"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDi4KXEcKY67VJHz2d15_6ffYSM3WsiRgI"
+          "current_key": "AIzaSyDz0JvfKc-Eh1odWdatDPyLXyZ9QO7Jrq4"
         }
       ],
       "services": {

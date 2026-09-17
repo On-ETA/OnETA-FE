@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
-import { searchAddresses } from "../../../api/addresses";
+import { searchAddresses } from "../../../api/address/search";
 import { createArrivalNotification } from "../../../api/notifications/arrival";
 import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
