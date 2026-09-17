@@ -1,0 +1,10 @@
+export const supportsFcm = false;
+export const requestNotificationPermission = async () => false;
+export const getFcmToken = async () => null;
+export const deleteFcmToken = async () => {};
+export const getInitialFcmNotification = async () => null;
+export const isHeadlessLaunch = async () => false;
+export const registerBackgroundFcmHandler = () => {};
+export const listenForegroundMessage = () => () => {};
+export const listenTokenRefresh = () => () => {};
+export const listenNotificationOpen = () => () => {};

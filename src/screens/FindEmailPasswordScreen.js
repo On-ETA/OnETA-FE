@@ -16,7 +16,6 @@ import { login } from "../api/auth/login";
 import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
 import { verifyEmailCode } from "../api/auth/email/verify";
 import { resetPassword } from "../api/reset";
-import { registerSavedDeviceToken } from "../notifications/deviceTokenRegistration";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";
 import VisibleIcon from "../../assets/images/icon_visible.svg";
 import BackIcon from "../../assets/images/L.svg";
@@ -247,9 +246,6 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
       const authTokens = extractAuthTokens(loginResponse);
 
       setAuthTokens(authTokens);
-      registerSavedDeviceToken({
-        accessToken: authTokens.accessToken,
-      }).catch(() => {});
 
       onConfirmPress?.({
         email: trimmedEmail,

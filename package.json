@@ -4,17 +4,25 @@
   "private": true,
   "main": "index.js",
   "scripts": {
+    "test": "node --test tests/*.test.cjs",
     "dev": "expo start",
     "start": "expo start",
     "build": "expo export -p web",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
+    "@mj-studio/react-native-naver-map": "^2.9.0",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-firebase/app": "^26.4.0",
+    "@react-native-firebase/installations": "^26.4.0",
+    "@react-native-firebase/messaging": "^26.4.0",
     "@react-navigation/native": "^7.3.5",
     "@react-navigation/native-stack": "^7.17.7",
     "expo": "^54.0.0",
+    "expo-build-properties": "~1.0.10",
+    "expo-dev-client": "~6.0.21",
     "expo-status-bar": "~3.0.8",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -26,7 +34,9 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@types/react": "~19.1.10",
     "babel-preset-expo": "^54.0.0",
-    "react-native-svg-transformer": "^1.5.3"
+    "react-native-svg-transformer": "^1.5.3",
+    "typescript": "~5.9.2"
   }
 }

@@ -25,6 +25,8 @@ import {
 import { linking } from "./linking";
 import { routes } from "./src/navigation/routes";
 import { blurActiveElement } from "./src/utils/accessibility";
+import { PushNotifications } from "./src/notifications/PushNotifications";
+import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
 
 const Stack = createNativeStackNavigator();
 const scrollbarStyleId = "oneta-thin-scrollbar";
@@ -320,7 +322,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <GlobalScrollbarStyle />
-      <NavigationContainer linking={linking}>
+      <NavigationContainer
+        linking={linking}
+        ref={notificationNavigationRef}
+        onReady={flushNotificationNavigation}
+        onStateChange={flushNotificationNavigation}
+      >
         <Stack.Navigator
           initialRouteName={routes.login}
           screenOptions={{
@@ -367,6 +374,7 @@ export default function App() {
           <Stack.Screen component={FindPasswordRoute} name={routes.findPassword} />
         </Stack.Navigator>
       </NavigationContainer>
+      <PushNotifications />
     </SafeAreaProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { getAccessToken } from "../auth/tokens";
+import { getAccessToken, getAuthSessionId } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
 
@@ -27,6 +27,7 @@ function createBusinessError(response, fallbackMessage) {
 }
 
 async function requestDeviceTokenJson(options) {
+  const sessionId = getAuthSessionId();
   const fallbackMessage =
     options.errorMessage ?? "디바이스 토큰 등록에 실패했습니다.";
 
@@ -40,7 +41,7 @@ async function requestDeviceTokenJson(options) {
 
     return response;
   } catch (error) {
-    if (!isAuthError(error)) {
+    if (!isAuthError(error) || options.signal?.aborted || sessionId !== getAuthSessionId()) {
       throw error;
     }
 
@@ -54,6 +55,8 @@ async function requestDeviceTokenJson(options) {
     } catch {
       throw error;
     }
+
+    if (options.signal?.aborted || sessionId !== getAuthSessionId()) throw error;
 
     const response = await requestJson({
       ...options,
@@ -69,6 +72,15 @@ async function requestDeviceTokenJson(options) {
   }
 }
 
+/**
+ * @param {object} [options]
+ * @param {string} [options.token]
+ * @param {string} [options.deviceToken]
+ * @param {string} [options.platform]
+ * @param {Record<string, unknown>} [options.payload]
+ * @param {string | null} [options.accessToken]
+ * @param {AbortSignal} [options.signal]
+ */
 export async function registerDeviceToken({
   token,
   deviceToken = token,

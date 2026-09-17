@@ -22,6 +22,7 @@ import {
   clearAuthTokens,
   extractAuthTokens,
   getAuthTokens,
+  getAuthSessionId,
   setAuthTokens,
 } from "./tokens";
 
@@ -31,6 +32,7 @@ export async function reissueAuthTokens({
   refreshToken = getAuthTokens().refreshToken,
   signal,
 } = {}) {
+  const sessionId = getAuthSessionId();
   if (!refreshToken) {
     const error = new Error("Refresh Token이 없습니다.");
     error.code = "C005";
@@ -49,14 +51,20 @@ export async function reissueAuthTokens({
     });
     const nextTokens = extractAuthTokens(response);
 
-    setAuthTokens(nextTokens);
+    if (sessionId !== getAuthSessionId() || signal?.aborted) {
+      const error = new Error("Authentication session changed");
+      error.name = "AbortError";
+      throw error;
+    }
+
+    setAuthTokens(nextTokens, { isRefresh: true });
 
     return {
       response,
       ...nextTokens,
     };
   } catch (error) {
-    if (error?.status === 403) {
+    if (error?.status === 403 && sessionId === getAuthSessionId()) {
       clearAuthTokens();
     }
 

@@ -18,10 +18,10 @@ import {
   deleteAddress as deleteAddressRequest,
   getAddresses,
   normalizeAddress,
-  searchAddresses,
   setCurrentAddress,
   updateAddress as updateAddressRequest,
 } from "../api/addresses";
+import { searchAddresses } from "../api/address/search";
 import { Header } from "../components";
 import { colors, typography } from "../theme";
 

@@ -46,12 +46,7 @@ function loadNaverMapsScript(clientId) {
   return naverMapsScriptPromise;
 }
 
-export function NaverMapView({
-  center = NAVER_MAP_DEFAULT_CENTER,
-  clientId = NAVER_MAP_CLIENT_ID,
-  level = 15,
-  style,
-}) {
+function WebNaverMapView({ center, clientId, level, style }) {
   const [errorMessage, setErrorMessage] = useState("");
   const mapId = useMemo(() => {
     naverMapIdSeed += 1;
@@ -59,10 +54,6 @@ export function NaverMapView({
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== "web") {
-      return undefined;
-    }
-
     let isActive = true;
 
     loadNaverMapsScript(clientId)
@@ -101,17 +92,6 @@ export function NaverMapView({
     };
   }, [center.latitude, center.longitude, clientId, level, mapId]);
 
-  if (Platform.OS !== "web") {
-    return (
-      <View style={[styles.fallback, style]}>
-        <Text style={styles.fallbackTitle}>네이버 지도 연결 완료</Text>
-        <Text style={styles.fallbackText}>
-          Android 패키지 com.audmean.service.oneta에 client id가 설정되어 있습니다.
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, style]}>
       <div id={mapId} style={styles.webMap} />
@@ -125,6 +105,60 @@ export function NaverMapView({
   );
 }
 
+function NativeNaverMap({ center, level, style }) {
+  const {
+    NaverMapMarkerOverlay,
+    NaverMapView: NativeNaverMapView,
+  } = require("@mj-studio/react-native-naver-map");
+
+  return (
+    <NativeNaverMapView
+      initialCamera={{
+        latitude: center.latitude,
+        longitude: center.longitude,
+        zoom: level,
+      }}
+      isShowCompass={false}
+      isShowLocationButton={false}
+      isShowScaleBar={false}
+      isShowZoomControls={false}
+      locale="ko"
+      style={[styles.container, style]}
+    >
+      <NaverMapMarkerOverlay
+        latitude={center.latitude}
+        longitude={center.longitude}
+      />
+    </NativeNaverMapView>
+  );
+}
+
+export function NaverMapView({
+  center = NAVER_MAP_DEFAULT_CENTER,
+  clientId = NAVER_MAP_CLIENT_ID,
+  level = 15,
+  style,
+}) {
+  if (Platform.OS === "web") {
+    return (
+      <WebNaverMapView
+        center={center}
+        clientId={clientId}
+        level={level}
+        style={style}
+      />
+    );
+  }
+
+  return (
+    <NativeNaverMap
+      center={center}
+      level={level}
+      style={style}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -132,13 +166,6 @@ const styles = StyleSheet.create({
   webMap: {
     width: "100%",
     height: "100%",
-  },
-  fallback: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 32,
-    backgroundColor: "#E8E2D6",
   },
   fallbackTitle: {
     ...typography.body01Sb,
