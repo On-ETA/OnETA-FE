@@ -10,14 +10,49 @@
     ],
     "android": {
       "package": "com.oneta.app",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ],
       "googleServicesFile": "./google-services.json"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      },
+      "entitlements": {
+        "aps-environment": "development"
+      }
     },
     "plugins": [
+      [
+        "@mj-studio/react-native-naver-map",
+        {
+          "client_id": "uuph97c3rz"
+        }
+      ],
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
-    ]
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "https://repository.map.naver.com/archive/maven"
+            ]
+          },
+          "ios": {
+            "useFrameworks": "dynamic"
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7248a197-0699-4d0f-993b-c8a50cd0bbce"
+      }
+    }
   }
 }

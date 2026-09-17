@@ -1,5 +1,16 @@
 const ACCESS_TOKEN_KEY = "oneta.accessToken";
 const REFRESH_TOKEN_KEY = "oneta.refreshToken";
+const listeners = new Set();
+let sessionId = 0;
+
+export function getAuthSessionId() {
+  return sessionId;
+}
+
+export function subscribeAuthTokens(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
 
 let memoryTokens = {
   accessToken: null,
@@ -25,7 +36,11 @@ export function extractAuthTokens(response) {
   };
 }
 
-export function setAuthTokens({ accessToken, refreshToken } = {}) {
+export function setAuthTokens(
+  { accessToken, refreshToken } = {},
+  { isRefresh = false } = {},
+) {
+  if (!isRefresh) sessionId += 1;
   memoryTokens = {
     accessToken: accessToken ?? null,
     refreshToken: refreshToken ?? null,
@@ -33,21 +48,21 @@ export function setAuthTokens({ accessToken, refreshToken } = {}) {
 
   const storage = getStorage();
 
-  if (!storage) {
-    return;
+  if (storage) {
+    if (accessToken) {
+      storage.setItem(ACCESS_TOKEN_KEY, accessToken);
+    } else {
+      storage.removeItem(ACCESS_TOKEN_KEY);
+    }
+
+    if (refreshToken) {
+      storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    } else {
+      storage.removeItem(REFRESH_TOKEN_KEY);
+    }
   }
 
-  if (accessToken) {
-    storage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  } else {
-    storage.removeItem(ACCESS_TOKEN_KEY);
-  }
-
-  if (refreshToken) {
-    storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  } else {
-    storage.removeItem(REFRESH_TOKEN_KEY);
-  }
+  listeners.forEach((listener) => listener(memoryTokens));
 }
 
 export function getAuthTokens() {

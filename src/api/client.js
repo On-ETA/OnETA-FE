@@ -65,13 +65,14 @@ function createRequestSignal({ signal, timeoutMs }) {
     ? setTimeout(() => controller.abort(), timeoutMs)
     : null;
 
-  if (signal) {
-    signal.addEventListener("abort", () => controller.abort(), { once: true });
-  }
+  const onAbort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", onAbort, { once: true });
 
   return {
     signal: controller.signal,
     clear: () => {
+      signal?.removeEventListener("abort", onAbort);
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
@@ -114,6 +115,7 @@ export async function requestJson({
     });
   } catch (error) {
     if (error?.name === "AbortError") {
+      if (signal?.aborted) throw error;
       throw new Error(timeoutMessage);
     }
 

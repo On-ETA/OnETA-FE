@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { memo, useCallback, useRef, useState } from "react";
+import { AppState, FlatList, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 
 import BackIcon from "../../assets/images/L.svg";
 import SettingIcon from "../../assets/images/setting.svg";
 import { getNotifications } from "../api/notifications/list";
 import { AppScreen, Header } from "../components";
 import { colors, typography } from "../theme";
+import { subscribeNotifications } from "../notifications/events";
 
 export function NotificationsScreen({
   notifications,
@@ -18,47 +20,65 @@ export function NotificationsScreen({
   const [notificationsErrorMessage, setNotificationsErrorMessage] =
     useState("");
 
-  useEffect(() => {
+  const refreshRef = useRef(() => {});
+
+  useFocusEffect(useCallback(() => {
     if (notifications) {
       return undefined;
     }
 
     let isActive = true;
-    const controller = new AbortController();
+    let controller;
+    let refreshTimer;
 
     async function loadNotifications() {
+      controller?.abort();
+      const requestController = new AbortController();
+      controller = requestController;
       setIsLoadingNotifications(true);
       setNotificationsErrorMessage("");
 
       try {
         const nextNotifications = await getNotifications({
-          signal: controller.signal,
+          signal: requestController.signal,
         });
 
-        if (isActive) {
+        if (isActive && !requestController.signal.aborted) {
           setServerNotifications(nextNotifications);
         }
       } catch (error) {
-        if (isActive && error?.name !== "AbortError") {
-          setServerNotifications([]);
+        if (isActive && !requestController.signal.aborted) {
           setNotificationsErrorMessage(
             error?.message ?? "알림을 불러오지 못했습니다.",
           );
         }
       } finally {
-        if (isActive) {
+        if (isActive && !requestController.signal.aborted) {
           setIsLoadingNotifications(false);
         }
       }
     }
 
+    function scheduleRefresh() {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(loadNotifications, 300);
+    }
+    const unsubscribe = subscribeNotifications(scheduleRefresh);
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") scheduleRefresh();
+    });
+    refreshRef.current = loadNotifications;
     loadNotifications();
 
     return () => {
       isActive = false;
-      controller.abort();
+      clearTimeout(refreshTimer);
+      controller?.abort();
+      unsubscribe();
+      appStateSubscription.remove();
+      refreshRef.current = () => {};
     };
-  }, [notifications]);
+  }, [notifications]));
 
   const notificationItems = notifications ?? serverNotifications;
   const shouldShowNotificationsError =
@@ -78,46 +98,47 @@ export function NotificationsScreen({
           backButtonStyle={styles.backButton}
           backIconStyle={styles.backIcon}
           headerStyle={styles.headerBox}
-          rightAccessory={
+          rightAccessory={onSettingsPress || Platform.OS !== "web" ? (
             <Pressable
               accessibilityLabel="알림 설정"
               accessibilityRole="button"
               hitSlop={12}
-              onPress={onSettingsPress}
+              onPress={onSettingsPress ?? (() => Linking.openSettings().catch(() => {}))}
               style={styles.settingButton}
             >
               <SettingIcon height={24} width={24} />
             </Pressable>
-          }
+          ) : null}
           titleStyle={styles.headerTitle}
           onBackPress={onBackPress}
         />
 
-        <ScrollView
+        <FlatList
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator
           style={styles.scroller}
-        >
-          {isLoadingNotifications ? (
-            <StatusBox text="알림을 불러오는 중입니다." />
-          ) : null}
-
-          {shouldShowNotificationsError ? (
+          data={notificationItems}
+          keyExtractor={(item) => String(item.id)}
+          refreshing={isLoadingNotifications}
+          onRefresh={notifications ? undefined : () => refreshRef.current()}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          ListHeaderComponent={shouldShowNotificationsError ? (
             <StatusBox text={notificationsErrorMessage} />
           ) : null}
-
-          {shouldShowEmptyState ? (
+          ListEmptyComponent={isLoadingNotifications ? (
+            <StatusBox text="알림을 불러오는 중입니다." />
+          ) : shouldShowEmptyState ? (
             <StatusBox text="받은 알림이 없습니다." />
           ) : null}
-
-          {notificationItems.map((item) => (
+          renderItem={({ item }) => (
             <NotificationCard
               item={item}
-              key={item.id}
-              onPress={() => onNotificationPress?.(item)}
+              onPress={onNotificationPress}
             />
-          ))}
-        </ScrollView>
+          )}
+        />
       </View>
     </AppScreen>
   );
@@ -131,13 +152,13 @@ function StatusBox({ text }) {
   );
 }
 
-function NotificationCard({ item, onPress }) {
+const NotificationCard = memo(function NotificationCard({ item, onPress }) {
   const isDanger = item.type === "danger";
 
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={onPress}
+      onPress={() => onPress?.(item)}
       style={[styles.card, isDanger ? styles.cardDanger : styles.cardSuccess]}
     >
       <View style={styles.cardTopRow}>
@@ -165,7 +186,7 @@ function NotificationCard({ item, onPress }) {
       ) : null}
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
