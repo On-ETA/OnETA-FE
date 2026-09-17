@@ -47,6 +47,7 @@ export function AddressManagementScreen({
   onAuthRequired,
   onBackPress,
   onCurrentAddressChange,
+  onAddressSelect,
 }) {
   const [screenMode, setScreenMode] = useState("list");
   const [addresses, setAddresses] = useState([]);
@@ -349,14 +350,18 @@ export function AddressManagementScreen({
             address={address}
             isSettingCurrent={settingCurrentAddressId !== null}
             key={address.id ?? address.addressId}
-            onCurrentPress={() => handleCurrentAddressPress(address)}
+            selectionOnly={Boolean(onAddressSelect)}
+            onCurrentPress={() => onAddressSelect ? onAddressSelect(address) : handleCurrentAddressPress(address)}
             onEditPress={() => {
               setEditingAddress(address);
               setScreenMode("edit");
             }}
           />
         ))}
-        {addresses.length < MAX_ADDRESS_COUNT ? (
+        {onAddressSelect && !isLoadingAddresses && !addressLoadError && addresses.length === 0 ? (
+          <Text style={styles.statusText}>등록된 주소가 없습니다.</Text>
+        ) : null}
+        {!onAddressSelect && addresses.length < MAX_ADDRESS_COUNT ? (
           <Pressable
             accessibilityLabel="주소 추가"
             accessibilityRole="button"
@@ -550,6 +555,8 @@ function ScreenHeader({ onBackPress, title }) {
       backButtonStyle={styles.backButton}
       backIconStyle={styles.backIcon}
       headerStyle={styles.headerBox}
+      topSpacerStyle={styles.headerTopSpacer}
+      showRightPlaceholder={false}
       onBackPress={onBackPress}
       title={title}
       titleStyle={styles.headerTitle}
@@ -560,13 +567,14 @@ function ScreenHeader({ onBackPress, title }) {
 
 function AddressCard({
   address,
+  selectionOnly = false,
   isSettingCurrent = false,
   onCurrentPress,
   onEditPress,
 }) {
   return (
     <Pressable
-      accessibilityLabel={`${address.name} 현재 주소로 설정`}
+      accessibilityLabel={`${address.name} ${selectionOnly ? "선택" : "현재 주소로 설정"}`}
       accessibilityRole="button"
       disabled={isSettingCurrent}
       onPress={onCurrentPress}
@@ -590,7 +598,7 @@ function AddressCard({
           {address.detail}
         </Text>
       </View>
-      <Pressable
+      {!selectionOnly ? <Pressable
         accessibilityLabel={`${address.name} 수정`}
         accessibilityRole="button"
         hitSlop={8}
@@ -598,7 +606,7 @@ function AddressCard({
         style={styles.addressEditButton}
       >
         <MemoIcon height={26} style={styles.addressMemoIcon} width={26} />
-      </Pressable>
+      </Pressable> : null}
     </Pressable>
   );
 }
@@ -667,14 +675,21 @@ function CloseIcon() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.gray01 },
   headerBox: {
-    height: 64,
-    paddingHorizontal: 24,
+    display: "flex",
+    width: 360,
+    maxWidth: "100%",
+    height: 54,
+    paddingVertical: 0,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignSelf: "center",
     alignItems: "center",
     gap: 12,
     borderBottomColor: colors.gray03,
-    backgroundColor: colors.gray01,
+    backgroundColor: "#FCFDFE",
   },
-  headerTitle: { ...typography.head01Sb, color: colors.gray08 },
+  headerTopSpacer: { height: 0 },
+  headerTitle: { fontFamily: "SUIT", fontSize: 18, fontWeight: "600", color: colors.gray08 },
   backButton: { width: 24, height: 24 },
   backIcon: { width: 24, height: 24, aspectRatio: 1 },
   content: {

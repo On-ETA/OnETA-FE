@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,6 +19,13 @@ import {
   View,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import RouteBackIcon from "../../../../assets/images/L.svg";
+import RouteArrowIcon from "../../../../assets/images/R_g.svg";
+import RouteClearIcon from "../../../../assets/images/x.svg";
+import BigBusAsset from "../../../../assets/images/bigbus.svg";
+import SmallBusAsset from "../../../../assets/images/smallbus.svg";
+import WalkAsset from "../../../../assets/images/man.svg";
+import StopLineAsset from "../../../../assets/images/line.svg";
 
 import { getAddresses } from "../../../api/addresses";
 import { searchAddresses } from "../../../api/address/search";
@@ -25,6 +33,7 @@ import { createArrivalNotification } from "../../../api/notifications/arrival";
 import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { NaverMapView } from "../../../components/NaverMapView";
+import { RoutePlaceSetupScreen } from "../first-last/RoutePlaceSetupScreen";
 import { colors, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 
@@ -299,6 +308,10 @@ export function ScheduleAlarmAddScreen({
   ] = useState("");
 
   useEffect(() => {
+    if (initialStep === "route") {
+      setIsLoadingCurrentAddress(false);
+      return;
+    }
     let isActive = true;
 
     const controller =
@@ -434,6 +447,18 @@ export function ScheduleAlarmAddScreen({
   };
 
   if (step === "route") {
+    if (initialStep === "route") {
+      return (
+        <RoutePlaceSetupScreen
+          initialPlaces={routePlaces}
+          onBackPress={handleBackPress}
+          onConfirm={(places) => {
+            setRoutePlaces(places);
+            setStep("routeResult");
+          }}
+        />
+      );
+    }
     return (
       <ScheduleRouteMapStep
         title={mapTitle}
@@ -1418,6 +1443,17 @@ export function ScheduleRouteResultStep({
   onBackPress,
   onRouteSelect,
 }) {
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatClockTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  };
   const [
     origin,
     setOrigin,
@@ -1438,6 +1474,9 @@ export function ScheduleRouteResultStep({
 
   const [routes, setRoutes] =
     useState([]);
+  const minimumDuration = Math.min(...routes.map((route) =>
+    route.realTimeDurationMinutes ?? route.totalDurationMinutes ?? Infinity,
+  ));
 
   const [
     isLoadingRoutes,
@@ -1448,24 +1487,6 @@ export function ScheduleRouteResultStep({
     routeError,
     setRouteError,
   ] = useState("");
-
-  const selectedRoute =
-    routes[0] ?? null;
-
-  const primarySegment =
-    useMemo(
-      () =>
-        getPrimaryTransitSegment(
-          selectedRoute,
-        ),
-
-      [selectedRoute],
-    );
-
-  const displayDuration =
-    selectedRoute?.realTimeDurationMinutes ??
-    selectedRoute?.totalDurationMinutes ??
-    0;
 
   useEffect(() => {
     let isActive = true;
@@ -1579,7 +1600,7 @@ export function ScheduleRouteResultStep({
             styles.resultBackButton
           }
         >
-          <HeaderBackIcon />
+          <RouteBackIcon width={24} height={24} />
         </Pressable>
 
         <View
@@ -1606,7 +1627,7 @@ export function ScheduleRouteResultStep({
             }
           />
 
-          <ChevronRightIcon />
+          <RouteArrowIcon width={20} height={20} />
 
           <TextInput
             numberOfLines={1}
@@ -1627,7 +1648,7 @@ export function ScheduleRouteResultStep({
             }
           />
 
-          <CloseIcon />
+          <RouteClearIcon width={20} height={20} />
         </View>
       </View>
 
@@ -1647,11 +1668,7 @@ export function ScheduleRouteResultStep({
         </Text>
       </View>
 
-      <View
-        style={
-          styles.routeResultContent
-        }
-      >
+      <ScrollView style={styles.routeResultContent} contentContainerStyle={styles.routeResultList}>
         {isLoadingRoutes ? (
           <View
             style={
@@ -1668,7 +1685,7 @@ export function ScheduleRouteResultStep({
             </Text>
           </View>
         ) : routeError ||
-          !selectedRoute ? (
+          routes.length === 0 ? (
           <View
             style={
               styles.routeStatusBox
@@ -1684,49 +1701,41 @@ export function ScheduleRouteResultStep({
             </Text>
           </View>
         ) : (
-          <>
-            <View
-              style={
-                styles.optionBadges
-              }
-            >
-              <View
-                style={
-                  styles.optionBadge
-                }
-              >
-                <Text
-                  style={
-                    styles.optionBadgeText
-                  }
-                >
-                  최적
-                </Text>
+          routes.map((selectedRoute, routeIndex) => {
+            const primarySegment = getPrimaryTransitSegment(selectedRoute);
+            const displayDuration = selectedRoute.realTimeDurationMinutes ?? selectedRoute.totalDurationMinutes ?? 0;
+            return (
+          <View key={selectedRoute.id ?? `route-${routeIndex}`} style={styles.routeResultCard}>
+            {routeIndex === 0 || displayDuration === minimumDuration ? (
+              <View style={styles.optionBadges}>
+                {routeIndex === 0 ? (
+                  <View style={styles.optionBadge}>
+                    <Text style={styles.optionBadgeText}>최적</Text>
+                  </View>
+                ) : null}
+                {displayDuration === minimumDuration ? (
+                  <View style={styles.optionBadge}>
+                    <Text style={styles.optionBadgeText}>최소 시간</Text>
+                  </View>
+                ) : null}
               </View>
-
-              <View
-                style={
-                  styles.optionBadge
-                }
-              >
-                <Text
-                  style={
-                    styles.optionBadgeText
-                  }
-                >
-                  환승{" "}
-                  {selectedRoute.transferCount ??
-                    0}
-                  회
-                </Text>
-              </View>
-            </View>
+            ) : null}
 
             <View
               style={
                 styles.totalTimeRow
               }
             >
+              <View style={styles.routeClockRow}>
+                <Text accessibilityLabel={`현재 시각 ${formatClockTime(currentTime)}`} style={styles.routeDepartureTime}>
+                  {formatClockTime(currentTime)}
+                </Text>
+                <RouteArrowIcon width={20} height={20} />
+                <Text accessibilityLabel={`예상 도착 시각 ${formatClockTime(currentTime + displayDuration * 60000)}`} style={styles.routeArrivalTime}>
+                  {formatClockTime(currentTime + displayDuration * 60000)}
+                </Text>
+              </View>
+              <View style={styles.routeDurationRow}>
               <Text
                 style={
                   styles.totalTimeNumber
@@ -1744,6 +1753,7 @@ export function ScheduleRouteResultStep({
               >
                 분
               </Text>
+              </View>
             </View>
 
             <RouteTimeline
@@ -1769,7 +1779,7 @@ export function ScheduleRouteResultStep({
                   styles.routeBusBadge
                 }
               >
-                <BusIconPlain />
+                <BigBusAsset width={9} height={10} />
               </View>
 
               <Text
@@ -1797,6 +1807,7 @@ export function ScheduleRouteResultStep({
                 styles.routeStops
               }
             >
+              <StopLineAsset width={1} height={34} style={styles.resultStopLine} />
               <StopRow
                 active
                 label="승차"
@@ -1862,9 +1873,11 @@ export function ScheduleRouteResultStep({
                 {actionLabel}
               </Text>
             </Pressable>
-          </>
+          </View>
+            );
+          })
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -2602,8 +2615,11 @@ function ReminderModal({
 }
 
 function RouteTimeline({
-  segments = [],
+  segments: routeSegments = [],
 }) {
+  const segments = routeSegments.filter(
+    (segment) => segment.transitType !== "WALK" || Number(segment.durationMinutes ?? 0) > 0,
+  );
   if (
     segments.length === 0
   ) {
@@ -2647,7 +2663,7 @@ function RouteTimeline({
               segment.durationMinutes ??
                 0,
 
-              1,
+              0,
             );
 
           return (
@@ -2664,15 +2680,13 @@ function RouteTimeline({
                   : styles.routeWalkSegment,
 
                 {
-                  flex:
-                    duration /
-                    totalDuration,
+                  flexGrow: 1 + Math.sqrt(Math.max(duration, 1) / totalDuration),
+                  flexBasis: 0,
+                  flexShrink: 1,
                 },
               ]}
             >
-              {index ===
-                0 ||
-              isTransit ? (
+              {isTransit || index === 0 ? (
                 <View
                   style={
                     isTransit
@@ -2681,9 +2695,9 @@ function RouteTimeline({
                   }
                 >
                   {isTransit ? (
-                    <BusIconPlain />
+                    <SmallBusAsset width={7} height={8} />
                   ) : (
-                    <WalkIcon />
+                    <WalkAsset width={6} height={10} />
                   )}
                 </View>
               ) : null}
@@ -2694,6 +2708,9 @@ function RouteTimeline({
                 }
               >
                 <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
                   style={
                     isTransit
                       ? styles.routeTimelineTextOn
@@ -2735,7 +2752,9 @@ function StopRow({
             active &&
               styles.stopInnerActive,
           ]}
-        />
+        >
+          <View style={styles.stopCenter} />
+        </View>
       </View>
 
       <Text
@@ -3732,30 +3751,35 @@ const styles =
     },
 
     resultHeader: {
-      height: 80,
-      paddingTop: 16,
-      paddingHorizontal: 20,
+      display: "flex",
+      paddingVertical: 12,
+      paddingHorizontal: 16,
       flexDirection: "row",
       alignItems: "center",
+      gap: 10,
+      alignSelf: "stretch",
       backgroundColor:
         colors.gray01,
     },
 
     resultBackButton: {
-      width: 30,
-      height: 44,
-      marginRight: 8,
+      width: 24,
+      height: 24,
       alignItems: "center",
       justifyContent:
         "center",
     },
 
     routeSummaryPill: {
-      flex: 1,
-      height: 52,
-      paddingHorizontal: 16,
+      display: "flex",
+      flexGrow: 1,
+      flexShrink: 0,
+      flexBasis: 0,
+      height: 48,
+      padding: 16,
       flexDirection: "row",
       alignItems: "center",
+      gap: 8,
       borderWidth: 1,
       borderColor:
         colors.gray04,
@@ -3766,7 +3790,7 @@ const styles =
 
     routeSummaryInput: {
       flex: 1,
-      height: "100%",
+      height: 24,
       minWidth: 0,
       paddingVertical: 0,
       textAlign: "center",
@@ -3778,19 +3802,26 @@ const styles =
     },
 
     resultNotice: {
-      height: 48,
-      paddingHorizontal: 20,
-      justifyContent:
-        "center",
+      display: "flex",
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      alignSelf: "stretch",
+      borderRadius: 4,
       backgroundColor:
         colors.gray02,
     },
 
     resultNoticeText: {
+      flexShrink: 1,
       fontFamily: "SUIT",
       fontSize: 12,
-      fontWeight: "600",
-      lineHeight: 16.8,
+      fontStyle: "normal",
+      fontWeight: "500",
+      lineHeight: 19.2,
+      letterSpacing: -0.12,
       color: colors.gray07,
     },
 
@@ -3801,6 +3832,9 @@ const styles =
       backgroundColor:
         colors.white,
     },
+    routeResultList: { paddingBottom: 24, gap: 16 },
+    routeResultCard: { paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: colors.gray04 },
+    resultStopLine: { position: "absolute", left: 11, top: 11.5 },
 
     routeStatusBox: {
       minHeight: 180,
@@ -3824,48 +3858,62 @@ const styles =
     },
 
     optionBadge: {
-      paddingVertical: 4,
-      paddingHorizontal: 10,
-      borderRadius: 12,
-      backgroundColor:
-        "#D9E7FF",
+      display: "flex",
+      height: 20,
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 10,
+      borderRadius: 100,
+      backgroundColor: "#D4E2FF",
     },
 
     optionBadgeText: {
-      fontFamily: "SUIT",
+      fontFamily: "Pretendard",
       fontSize: 12,
-      fontWeight: "800",
+      fontStyle: "normal",
+      fontWeight: "500",
       lineHeight: 16.8,
-      color: "#3478F6",
+      color: "#2E6AE2",
+      ...Platform.select({ web: { fontFeatureSettings: '"ss05" on' } }),
     },
 
     totalTimeRow: {
       marginTop: 12,
       flexDirection: "row",
-      alignItems:
-        "flex-end",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
     },
+    routeClockRow: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
+    routeDepartureTime: { fontFamily: "SUIT", fontSize: 24, fontStyle: "normal", fontWeight: "700", lineHeight: 24, letterSpacing: -0.24, textAlign: "center", color: colors.gray09 },
+    routeArrivalTime: { fontFamily: "SUIT", fontSize: 24, fontStyle: "normal", fontWeight: "500", lineHeight: 24, letterSpacing: -0.24, textAlign: "center", color: colors.gray09 },
+    routeDurationRow: { flexDirection: "row", alignItems: "flex-end", flexShrink: 0 },
 
     totalTimeNumber: {
       fontFamily: "SUIT",
-      fontSize: 28,
+      fontSize: 24,
+      fontStyle: "normal",
       fontWeight: "700",
-      lineHeight: 34,
+      lineHeight: 24,
+      letterSpacing: -0.24,
       color: colors.gray09,
     },
 
     totalTimeUnit: {
-      marginBottom: 3,
       marginLeft: 4,
       fontFamily: "SUIT",
-      fontSize: 14,
-      fontWeight: "600",
-      lineHeight: 19.6,
-      color: colors.gray09,
+      fontSize: 16,
+      fontStyle: "normal",
+      fontWeight: "500",
+      lineHeight: 22.4,
+      letterSpacing: -0.16,
+      color: colors.gray08,
     },
 
     routeTimeline: {
-      height: 18,
+      height: 16,
       marginTop: 14,
       flexDirection: "row",
       alignItems: "center",
@@ -3925,17 +3973,23 @@ const styles =
 
     routeTimelineText: {
       fontFamily: "SUIT",
-      fontSize: 13,
-      fontWeight: "700",
-      lineHeight: 18,
+      fontSize: 12,
+      fontStyle: "normal",
+      fontWeight: "500",
+      lineHeight: 19.2,
+      letterSpacing: -0.12,
+      textAlign: "center",
       color: colors.gray07,
     },
 
     routeTimelineTextOn: {
       fontFamily: "SUIT",
-      fontSize: 13,
-      fontWeight: "700",
-      lineHeight: 18,
+      fontSize: 12,
+      fontStyle: "normal",
+      fontWeight: "500",
+      lineHeight: 19.2,
+      letterSpacing: -0.12,
+      textAlign: "center",
       color: colors.white,
     },
 
@@ -3967,16 +4021,20 @@ const styles =
     routeBusNumber: {
       fontFamily: "SUIT",
       fontSize: 18,
-      fontWeight: "700",
-      lineHeight: 25.2,
+      fontStyle: "normal",
+      fontWeight: "600",
+      lineHeight: 18,
+      letterSpacing: -0.18,
       color: colors.gray09,
     },
 
     routeBusDirection: {
       fontFamily: "SUIT",
-      fontSize: 14,
-      fontWeight: "700",
-      lineHeight: 19.6,
+      fontSize: 13,
+      fontStyle: "normal",
+      fontWeight: "500",
+      lineHeight: 18.2,
+      letterSpacing: -0.13,
       color: colors.gray06,
     },
 
@@ -4009,24 +4067,38 @@ const styles =
     },
 
     stopInner: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
+      width: 16,
+      height: 16,
+      borderRadius: 100,
+      alignItems: "center",
+      justifyContent: "center",
       backgroundColor:
         colors.gray06,
     },
 
     stopInnerActive: {
       backgroundColor:
-        colors.bus,
+        colors.main,
+    },
+    stopCenter: {
+      display: "flex",
+      width: 6,
+      height: 6,
+      flexDirection: "column",
+      alignItems: "flex-start",
+      flexShrink: 0,
+      borderRadius: 100,
+      backgroundColor: colors.white,
     },
 
     stopLabel: {
       width: 42,
       fontFamily: "SUIT",
       fontSize: 14,
+      fontStyle: "normal",
       fontWeight: "600",
       lineHeight: 19.6,
+      letterSpacing: -0.14,
       color: colors.gray07,
     },
 
@@ -4034,12 +4106,16 @@ const styles =
       flex: 1,
       fontFamily: "SUIT",
       fontSize: 14,
-      fontWeight: "700",
+      fontStyle: "normal",
+      fontWeight: "600",
       lineHeight: 19.6,
+      letterSpacing: -0.14,
       color: colors.gray08,
     },
 
     routeAlarmButton: {
+      flexDirection: "row",
+      gap: 8,
       height: 46,
       marginTop: 22,
       alignItems: "center",
@@ -4056,8 +4132,11 @@ const styles =
     routeAlarmButtonText: {
       fontFamily: "SUIT",
       fontSize: 14,
-      fontWeight: "700",
+      fontStyle: "normal",
+      fontWeight: "500",
       lineHeight: 19.6,
+      letterSpacing: -0.14,
+      textAlign: "center",
       color: colors.gray08,
     },
 
