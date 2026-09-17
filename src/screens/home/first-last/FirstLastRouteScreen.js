@@ -2,7 +2,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
-import ArrowRightIcon from "../../../../assets/images/R.svg";
+import ArrowRightIcon from "../../../../assets/images/R_w.svg";
 import ChangeIcon from "../../../../public/images/change.svg";
 import CloseIcon from "../../../../public/images/close.svg";
 import LoadIcon from "../../../../public/images/load.svg";
@@ -57,14 +57,16 @@ export function FirstLastRouteScreen({
       style={styles.homeBody}
     >
       <View style={styles.routeCard}>
-        <View style={styles.routeCardPanel}>
+        <View
+          style={[
+            styles.routeCardPanel,
+            !hasConfiguredRoute && styles.emptyRouteCardPanel,
+          ]}
+        >
           <View style={styles.routeCardTop}>
             <View style={styles.routeTitleGroup}>
               <Text
-                style={[
-                  styles.routeTitle,
-                  isLastRouteFirst && styles.routeTitleMuted,
-                ]}
+                style={isLastRouteFirst ? styles.routeTitleMuted : styles.routeTitle}
               >
                 첫차
               </Text>
@@ -78,10 +80,7 @@ export function FirstLastRouteScreen({
                 <ChangeIcon height={17} width={17} />
               </Pressable>
               <Text
-                style={[
-                  styles.routeTitleMuted,
-                  isLastRouteFirst && styles.routeTitle,
-                ]}
+                style={isLastRouteFirst ? styles.routeTitle : styles.routeTitleMuted}
               >
                 막차
               </Text>
@@ -349,6 +348,14 @@ const styles = StyleSheet.create({
     borderColor: colors.gray04,
     backgroundColor: colors.white,
   },
+  emptyRouteCardPanel: {
+    display: "flex",
+    paddingTop: 16,
+    paddingBottom: 16,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+  },
   routeCardTop: {
     width: "100%",
     flexDirection: "row",
@@ -362,16 +369,20 @@ const styles = StyleSheet.create({
   },
   routeTitle: {
     fontFamily: "SUIT",
-    fontSize: 18,
-    fontWeight: "700",
-    lineHeight: 25.2,
-    color: colors.gray09,
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 22.4,
+    letterSpacing: -0.16,
+    color: colors.gray08,
   },
   routeTitleMuted: {
     fontFamily: "SUIT",
-    fontSize: 18,
-    fontWeight: "700",
-    lineHeight: 25.2,
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 22.4,
+    letterSpacing: -0.16,
     color: colors.gray05,
   },
   changeButton: {
@@ -394,8 +405,11 @@ const styles = StyleSheet.create({
   resetText: {
     fontFamily: "SUIT",
     fontSize: 14,
-    fontWeight: "600",
+    fontStyle: "normal",
+    fontWeight: "500",
     lineHeight: 19.6,
+    letterSpacing: -0.14,
+    textAlign: "center",
     color: colors.gray07,
   },
   routeSectionDivider: {
@@ -404,15 +418,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray03,
   },
   emptyRouteState: {
-    minHeight: 75,
+    display: "flex",
+    padding: 10,
+    gap: 10,
+    alignSelf: "stretch",
     alignItems: "center",
     justifyContent: "center",
   },
   emptyRouteText: {
     fontFamily: "SUIT",
-    fontSize: 15,
-    fontWeight: "700",
-    lineHeight: 21,
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.6,
+    letterSpacing: -0.14,
     color: colors.gray06,
   },
   summaryRow: {
@@ -623,33 +642,36 @@ const styles = StyleSheet.create({
   routeActionText: {
     fontFamily: "SUIT",
     fontSize: 16,
-    fontWeight: "700",
+    fontStyle: "normal",
+    fontWeight: "600",
     lineHeight: 22.4,
+    letterSpacing: -0.16,
     color: colors.white,
   },
   routeActionIcon: {
     color: colors.white,
   },
   noticeBubble: {
-    width: 328,
-    maxWidth: "100%",
-    minHeight: 66,
+    display: "flex",
+    alignSelf: "stretch",
     marginTop: 18,
-    paddingHorizontal: 16,
+    padding: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: colors.gray04,
+    borderColor: colors.gray03,
     borderRadius: 8,
     backgroundColor: colors.gray02,
   },
   noticeText: {
     flex: 1,
     fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19.6,
+    fontSize: 13,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 18.2,
+    letterSpacing: -0.13,
     color: colors.gray08,
   },
   noticeSettingButton: {

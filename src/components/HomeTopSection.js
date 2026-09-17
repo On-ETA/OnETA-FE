@@ -6,7 +6,7 @@ import BellNoneIcon from "../../assets/images/icon_bell_none.svg";
 import BackIcon from "../../assets/images/L.svg";
 import MyPageIcon from "../../assets/images/icon_mypage.svg";
 import ArrowRightIcon from "../../assets/images/R.svg";
-import MapIcon from "../../public/images/map.svg";
+import HomeIcon from "../../assets/images/icon_home.svg";
 import { colors, typography } from "../theme";
 
 const homeBackground = colors.gray01;
@@ -30,8 +30,8 @@ export function HomeTopSection({
 
   return (
     <>
-      <View style={styles.topSpacer} />
-      <View style={styles.homeTopSection}>
+      {!showTabs && <View style={styles.topSpacer} />}
+      <View style={[styles.homeTopSection, showTabs && styles.homeTopSectionWithTabs]}>
         <View style={styles.homeHeader}>
           {showAddress ? (
             <Pressable
@@ -39,7 +39,7 @@ export function HomeTopSection({
               onPress={onAddressPress}
               style={styles.addressButton}
             >
-              <MapIcon height={26} style={styles.addressMapIcon} width={26} />
+              <HomeIcon height={20} style={styles.addressHomeIcon} width={20} />
               <Text style={styles.addressText}>{addressLabel}</Text>
               <ArrowRightIcon
                 height={21}
@@ -150,6 +150,13 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 22,
   },
+  homeTopSectionWithTabs: {
+    display: "flex",
+    alignSelf: "stretch",
+    width: "auto",
+    paddingTop: 16,
+    gap: 16,
+  },
   homeHeader: {
     width: "100%",
     flexDirection: "row",
@@ -162,14 +169,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  addressMapIcon: {
-    marginRight: 6,
+  addressHomeIcon: {
+    marginRight: 4,
   },
   addressText: {
-    ...typography.head01Sb,
     color: colors.gray08,
-    fontSize: 22,
-    lineHeight: 24,
+    fontFamily: "SUIT",
+    fontSize: 20,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 20,
+    letterSpacing: -0.2,
   },
   titleText: {
     ...typography.head01Sb,
@@ -188,7 +198,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   addressArrowIcon: {
-    marginLeft: 8,
+    marginLeft: 7,
     opacity: 0.65,
   },
   emptyLeft: {

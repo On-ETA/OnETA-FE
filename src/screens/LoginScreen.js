@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   Alert,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,7 +19,7 @@ import {
   PrimaryButton,
   SocialLoginButtons,
 } from "../components";
-import OnetaLogo from "../../assets/images/on-eta_logo.png";
+import OnetaLogo from "../../assets/images/logo_t.svg";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";
 import VisibleIcon from "../../assets/images/icon_visible.svg";
 import { colors, layout, typography } from "../theme";
@@ -51,9 +50,9 @@ export function LoginScreen({
   const layoutScale = Math.min(Math.max(availableHeight / 760, 0.78), 1);
   const verticalScale = isShortHeight ? layoutScale * 0.65 : layoutScale;
   const logoScale = isWideRoomy ? 1.32 : 1;
-  const socialButtonSize = Math.round(Math.max(42, 54 * layoutScale));
-  const socialIconSize = Math.round(32 * layoutScale);
-  const kakaoSocialIconSize = Math.round(34 * layoutScale);
+  const socialButtonSize = 44;
+  const socialIconSize = 42;
+  const kakaoSocialIconSize = 42;
   const controlHeight = Math.round(Math.max(42, 54 * layoutScale));
   const verticalPadding = Math.round(
     Math.max(
@@ -97,7 +96,7 @@ export function LoginScreen({
     },
     social: {
       marginTop: Math.round(isWideRoomy ? 18 : Math.max(10, 24 * verticalScale)),
-      gap: Math.round(Math.max(18, 36 * layoutScale)),
+      gap: 20,
       transform: [{ translateY: isWideRoomy ? -4 : 0 }],
     },
     socialButton: {
@@ -158,10 +157,10 @@ export function LoginScreen({
         style={styles.scroller}
       >
         <View style={[styles.content, responsiveLayout.content]}>
-          <Image
+          <OnetaLogo
             accessibilityLabel="온에타"
-            resizeMode="contain"
-            source={OnetaLogo}
+            width={responsiveLayout.logo.width}
+            height={responsiveLayout.logo.height}
             style={[styles.logo, responsiveLayout.logo]}
           />
 
@@ -339,6 +338,10 @@ const styles = StyleSheet.create({
   loginButton: {
     display: "flex",
     height: 54,
+    alignSelf: "stretch",
+    borderWidth: 1,
+    borderColor: colors.gray03,
+    borderRadius: 8,
   },
   loginButtonText: {
     ...typography.body01Sb,
