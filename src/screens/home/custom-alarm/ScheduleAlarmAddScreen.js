@@ -1,4 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Animated,
   Alert,
@@ -14,6 +19,7 @@ import {
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
+import { getAddresses } from "../../../api/addresses";
 import { searchAddresses } from "../../../api/address/search";
 import { createArrivalNotification } from "../../../api/notifications/arrival";
 import { searchTransitRoutes } from "../../../api/transit/routes";
@@ -30,35 +36,33 @@ const DEFAULT_TIME = {
 
 const TIME_PICKER_ITEM_HEIGHT = 58;
 const TIME_PICKER_VISIBLE_ITEMS = 3;
+
 const PERIOD_OPTIONS = ["오전", "오후"];
+
 const HOUR_OPTIONS = Array.from(
   { length: 12 },
   (_, index) =>
     String(index + 1).padStart(2, "0"),
 );
+
 const MINUTE_OPTIONS = Array.from(
   { length: 60 },
-  (_, index) => String(index).padStart(2, "0"),
+  (_, index) =>
+    String(index).padStart(2, "0"),
 );
-
-const DEFAULT_ORIGIN_POINT = {
-  x: 126.9256,
-  y: 37.5515,
-};
-
-const DEFAULT_DESTINATION_POINT = {
-  x: 126.9368,
-  y: 37.5552,
-};
 
 function getPrimaryTransitSegment(route) {
   return route?.segments?.find(
-    (segment) => segment.transitType !== "WALK",
+    (segment) =>
+      segment.transitType !== "WALK",
   );
 }
 
 function createRoutePlace(place) {
-  if (typeof place === "object" && place !== null) {
+  if (
+    typeof place === "object" &&
+    place !== null
+  ) {
     const label =
       place.label ||
       place.name ||
@@ -68,9 +72,12 @@ function createRoutePlace(place) {
 
     return {
       ...place,
+
       label,
+
       address:
         place.address ||
+        place.detail ||
         place.roadAddress ||
         label,
     };
@@ -85,21 +92,79 @@ function createRoutePlace(place) {
   };
 }
 
-function createRoutePlaceFromSearchResult(result) {
+function createRoutePlaceFromSearchResult(
+  result,
+) {
   return createRoutePlace({
     label:
       result?.name ||
       result?.address ||
       result?.roadAddress ||
       "",
+
     name: result?.name,
+
     address:
       result?.address ||
       result?.roadAddress ||
       "",
+
     x: result?.x,
     y: result?.y,
-    raw: result?.raw ?? result,
+
+    raw:
+      result?.raw ??
+      result,
+  });
+}
+
+function createRoutePlaceFromSavedAddress(savedAddress) {
+  if (!savedAddress) {
+    return createRoutePlace("");
+  }
+
+  const name =
+    savedAddress.name ??
+    "";
+
+  const address =
+    savedAddress.address ||
+    savedAddress.detail ||
+    savedAddress.roadAddress ||
+    savedAddress.jibunAddress ||
+    "";
+
+  return createRoutePlace({
+    // 화면에 보여주는 기본값
+    label: name,
+
+    // 주소 별칭
+    name,
+
+    // 실제 경로 검색에 사용할 주소
+    address,
+
+    // 실제 경로 검색 좌표
+    x: savedAddress.x,
+    y: savedAddress.y,
+
+    addressId:
+      savedAddress.addressId ??
+      savedAddress.id,
+
+    current:
+      savedAddress.current ??
+      savedAddress.isCurrent ??
+      false,
+
+    isCurrent:
+      savedAddress.isCurrent ??
+      savedAddress.current ??
+      false,
+
+    raw:
+      savedAddress.raw ??
+      savedAddress,
   });
 }
 
@@ -108,12 +173,19 @@ function getRoutePlaceText(place) {
 }
 
 function getRoutePlaceAddress(place) {
-  const routePlace = createRoutePlace(place);
+  const routePlace =
+    createRoutePlace(place);
 
-  return routePlace.address || routePlace.label;
+  return (
+    routePlace.address ||
+    routePlace.label
+  );
 }
 
-function getSegmentStopName(segment, edge) {
+function getSegmentStopName(
+  segment,
+  edge,
+) {
   if (!segment) {
     return "";
   }
@@ -136,20 +208,26 @@ function getSegmentStopName(segment, edge) {
 }
 
 function toTargetArrivalTime(time) {
-  const hourNumber = Number(time.hour);
-  const minuteNumber = Number(time.minute);
+  const hourNumber =
+    Number(time.hour);
+
+  const minuteNumber =
+    Number(time.minute);
 
   const normalizedHour =
-    time.period === "오후" && hourNumber < 12
+    time.period === "오후" &&
+    hourNumber < 12
       ? hourNumber + 12
-      : time.period === "오전" && hourNumber === 12
+      : time.period === "오전" &&
+          hourNumber === 12
         ? 0
         : hourNumber;
 
-  return `${String(normalizedHour).padStart(
-    2,
-    "0",
-  )}:${String(minuteNumber).padStart(2, "0")}:00`;
+  return `${String(
+    normalizedHour,
+  ).padStart(2, "0")}:${String(
+    minuteNumber,
+  ).padStart(2, "0")}:00`;
 }
 
 function mapDayToApiValue(day) {
@@ -166,7 +244,9 @@ function mapDayToApiValue(day) {
   return dayMap[day];
 }
 
-function pickReminderOffsets(reminders) {
+function pickReminderOffsets(
+  reminders,
+) {
   return Object.entries(reminders)
     .filter(([, selected]) => selected)
     .map(([minute]) => Number(minute))
@@ -179,25 +259,148 @@ export function ScheduleAlarmAddScreen({
   onBackPress,
   onRouteConfigured,
 }) {
-  const [routeName, setRouteName] = useState("");
+  const [routeName, setRouteName] =
+    useState("");
 
-  const [arrivalTime, setArrivalTime] =
-    useState(DEFAULT_TIME);
+  const [
+    arrivalTime,
+    setArrivalTime,
+  ] = useState(DEFAULT_TIME);
 
   const [
     isTimePickerVisible,
     setIsTimePickerVisible,
   ] = useState(false);
 
-  const [step, setStep] = useState(initialStep);
+  const [step, setStep] =
+    useState(initialStep);
 
-  const [selectedRoute, setSelectedRoute] =
-    useState(null);
+  const [
+    selectedRoute,
+    setSelectedRoute,
+  ] = useState(null);
 
-  const [routePlaces, setRoutePlaces] = useState({
-    origin: createRoutePlace("마포구 와우산로 94"),
-    destination: createRoutePlace("우리집"),
+  const [
+    routePlaces,
+    setRoutePlaces,
+  ] = useState({
+    origin: createRoutePlace(""),
+    destination: createRoutePlace(""),
   });
+
+  const [
+    isLoadingCurrentAddress,
+    setIsLoadingCurrentAddress,
+  ] = useState(true);
+
+  const [
+    currentAddressError,
+    setCurrentAddressError,
+  ] = useState("");
+
+  useEffect(() => {
+    let isActive = true;
+
+    const controller =
+      new AbortController();
+
+    async function loadCurrentAddress() {
+      setIsLoadingCurrentAddress(true);
+      setCurrentAddressError("");
+
+      try {
+        /*
+         * getAddresses 내부에서
+         *
+         * GET /api/addresses
+         *
+         * 요청
+         */
+        const addresses =
+          await getAddresses({
+            signal:
+              controller.signal,
+          });
+
+        if (!isActive) {
+          return;
+        }
+
+        /*
+         * normalizeAddress() 때문에
+         *
+         * current
+         * isCurrent
+         *
+         * 둘 다 대응
+         */
+        const currentAddress =
+          addresses.find(
+            (address) =>
+              address?.isCurrent ===
+                true ||
+              address?.current ===
+                true,
+          );
+
+        if (!currentAddress) {
+          setCurrentAddressError(
+            "현재 사용 중인 주소가 없습니다.",
+          );
+
+          return;
+        }
+
+        const currentPlace =
+          createRoutePlaceFromSavedAddress(
+            currentAddress,
+          );
+
+        /*
+         * 출발지 / 목적지 모두
+         * 현재 사용 중 주소로 초기 설정
+         */
+        setRoutePlaces({
+          origin: currentPlace,
+
+          destination: {
+            ...currentPlace,
+          },
+        });
+      } catch (error) {
+        if (
+          !isActive ||
+          error?.name ===
+            "AbortError"
+        ) {
+          return;
+        }
+
+        console.error(
+          "현재 주소 조회 실패:",
+          error,
+        );
+
+        setCurrentAddressError(
+          error?.message ??
+            "현재 주소를 불러오지 못했습니다.",
+        );
+      } finally {
+        if (isActive) {
+          setIsLoadingCurrentAddress(
+            false,
+          );
+        }
+      }
+    }
+
+    loadCurrentAddress();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, []);
 
   const formattedTime =
     `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
@@ -234,7 +437,21 @@ export function ScheduleAlarmAddScreen({
     return (
       <ScheduleRouteMapStep
         title={mapTitle}
-        onBackPress={handleBackPress}
+        initialDestination={
+          routePlaces.destination
+        }
+        initialOrigin={
+          routePlaces.origin
+        }
+        isLoadingCurrentAddress={
+          isLoadingCurrentAddress
+        }
+        currentAddressError={
+          currentAddressError
+        }
+        onBackPress={
+          handleBackPress
+        }
         onConfirm={(places) => {
           setRoutePlaces(places);
           setStep("routeResult");
@@ -249,11 +466,22 @@ export function ScheduleAlarmAddScreen({
         initialDestination={
           routePlaces.destination
         }
-        initialOrigin={routePlaces.origin}
-        onBackPress={handleBackPress}
-        onRouteSelect={(route, places) => {
+        initialOrigin={
+          routePlaces.origin
+        }
+        onBackPress={
+          handleBackPress
+        }
+        onRouteSelect={(
+          route,
+          places,
+        ) => {
           if (onRouteConfigured) {
-            onRouteConfigured(route, places);
+            onRouteConfigured(
+              route,
+              places,
+            );
+
             return;
           }
 
@@ -267,14 +495,24 @@ export function ScheduleAlarmAddScreen({
   if (step === "alarmFinal") {
     return (
       <ScheduleAlarmFinalStep
-        arrivalTime={arrivalTime}
-        onBackPress={handleBackPress}
+        arrivalTime={
+          arrivalTime
+        }
+        onBackPress={
+          handleBackPress
+        }
         onPrevPress={() =>
           setStep("routeResult")
         }
-        onSavePress={onBackPress}
-        route={selectedRoute}
-        routeName={routeName}
+        onSavePress={
+          onBackPress
+        }
+        route={
+          selectedRoute
+        }
+        routeName={
+          routeName
+        }
       />
     );
   }
@@ -282,27 +520,41 @@ export function ScheduleAlarmAddScreen({
   return (
     <View style={styles.screen}>
       <Header
-        headerStyle={styles.header}
-        onBackPress={handleBackPress}
+        headerStyle={
+          styles.header
+        }
+        onBackPress={
+          handleBackPress
+        }
         title="알림 추가"
-        titleStyle={styles.headerTitle}
+        titleStyle={
+          styles.headerTitle
+        }
         type="back"
       />
 
       <View style={styles.content}>
         <Text style={styles.heading}>
-          매일 이용하는 경로를 등록해주세요
+          매일 이용하는 경로를
+          등록해주세요
         </Text>
 
         <Text style={styles.label}>
-          경로 이름을 입력해주세요 (선택)
+          경로 이름을 입력해주세요
+          (선택)
         </Text>
 
         <TextInput
-          onChangeText={setRouteName}
+          onChangeText={
+            setRouteName
+          }
           placeholder="경로 01"
-          placeholderTextColor={colors.gray06}
-          style={styles.textInput}
+          placeholderTextColor={
+            colors.gray06
+          }
+          style={
+            styles.textInput
+          }
           value={routeName}
         />
 
@@ -312,18 +564,28 @@ export function ScheduleAlarmAddScreen({
             styles.timeLabel,
           ]}
         >
-          몇 시까지 도착하고 싶으신가요?
+          몇 시까지 도착하고
+          싶으신가요?
         </Text>
 
         <Pressable
           accessibilityRole="button"
           onPress={() => {
             blurActiveElement();
-            setIsTimePickerVisible(true);
+
+            setIsTimePickerVisible(
+              true,
+            );
           }}
-          style={styles.timeInput}
+          style={
+            styles.timeInput
+          }
         >
-          <Text style={styles.timeInputText}>
+          <Text
+            style={
+              styles.timeInputText
+            }
+          >
             {formattedTime}
           </Text>
 
@@ -335,19 +597,33 @@ export function ScheduleAlarmAddScreen({
         <Pressable
           accessibilityRole="button"
           onPress={onBackPress}
-          style={styles.cancelButton}
+          style={
+            styles.cancelButton
+          }
         >
-          <Text style={styles.cancelButtonText}>
+          <Text
+            style={
+              styles.cancelButtonText
+            }
+          >
             취소
           </Text>
         </Pressable>
 
         <Pressable
           accessibilityRole="button"
-          onPress={handleNextPress}
-          style={styles.nextButton}
+          onPress={
+            handleNextPress
+          }
+          style={
+            styles.nextButton
+          }
         >
-          <Text style={styles.nextButtonText}>
+          <Text
+            style={
+              styles.nextButtonText
+            }
+          >
             다음
           </Text>
         </Pressable>
@@ -356,68 +632,135 @@ export function ScheduleAlarmAddScreen({
       <TimePickerSheet
         onClose={() => {
           blurActiveElement();
-          setIsTimePickerVisible(false);
+
+          setIsTimePickerVisible(
+            false,
+          );
         }}
         onConfirm={(time) => {
           blurActiveElement();
+
           setArrivalTime(time);
-          setIsTimePickerVisible(false);
+
+          setIsTimePickerVisible(
+            false,
+          );
         }}
         value={arrivalTime}
-        visible={isTimePickerVisible}
+        visible={
+          isTimePickerVisible
+        }
       />
     </View>
   );
 }
 
 function ScheduleRouteMapStep({
+  initialDestination,
+  initialOrigin,
+  isLoadingCurrentAddress,
+  currentAddressError,
   onBackPress,
   onConfirm,
 }) {
-  const { height } = useWindowDimensions();
+  const { height } =
+    useWindowDimensions();
 
-  /*
-   * 접혔을 때 핸들만 남기는 높이
-   */
-  const SHEET_COLLAPSED_VISIBLE_HEIGHT = 36;
+  const SHEET_COLLAPSED_VISIBLE_HEIGHT =
+    36;
 
-  /*
-   * 바텀 시트 전체 높이
-   */
-  const sheetHeight = Math.round(
-    (height * 3) / 8,
-  );
+  const sheetHeight =
+    Math.round(
+      (height * 3) / 8,
+    );
 
-  /*
-   * 0 = 완전히 펼쳐짐
-   */
   const SHEET_EXPANDED_OFFSET = 0;
 
+  const SHEET_COLLAPSED_OFFSET =
+    Math.max(
+      sheetHeight -
+        SHEET_COLLAPSED_VISIBLE_HEIGHT,
+      0,
+    );
+
+  const [
+    placeKeyword,
+    setPlaceKeyword,
+  ] = useState("");
+
+  const placeSearchInputRef =
+    useRef(null);
+
   /*
-   * 아래로 내려갔을 때
-   * 36px만 남도록 계산
+   * 부모에서 가져온 현재 주소를
+   * 초기값으로 사용
    */
-  const SHEET_COLLAPSED_OFFSET = Math.max(
-    sheetHeight -
-      SHEET_COLLAPSED_VISIBLE_HEIGHT,
-    0,
+  const [
+    origin,
+    setOrigin,
+  ] = useState(() =>
+    createRoutePlace(
+      initialOrigin,
+    ),
   );
 
-  const [placeKeyword, setPlaceKeyword] =
-    useState("");
-
-  const [origin, setOrigin] = useState(
-    createRoutePlace("마포구 와우산로 94"),
+  const [
+    destination,
+    setDestination,
+  ] = useState(() =>
+    createRoutePlace(
+      initialDestination,
+    ),
   );
 
-  const [destination, setDestination] =
-    useState(createRoutePlace("우리집"));
+  /*
+   * 주소 API가 비동기로 완료되기 때문에
+   * initialOrigin / initialDestination
+   * 변경 시 state 동기화
+   */
+  const hasEditedOrigin =
+    useRef(false);
 
-  const [activePlaceType, setActivePlaceType] =
-    useState("origin");
+  const hasEditedDestination =
+    useRef(false);
 
-  const [placeResults, setPlaceResults] =
-    useState([]);
+  useEffect(() => {
+    if (
+      hasEditedOrigin.current
+    ) {
+      return;
+    }
+
+    setOrigin(
+      createRoutePlace(
+        initialOrigin,
+      ),
+    );
+  }, [initialOrigin]);
+
+  useEffect(() => {
+    if (
+      hasEditedDestination.current
+    ) {
+      return;
+    }
+
+    setDestination(
+      createRoutePlace(
+        initialDestination,
+      ),
+    );
+  }, [initialDestination]);
+
+  const [
+    activePlaceType,
+    setActivePlaceType,
+  ] = useState("origin");
+
+  const [
+    placeResults,
+    setPlaceResults,
+  ] = useState([]);
 
   const [
     isSearchingPlaces,
@@ -433,194 +776,291 @@ function ScheduleRouteMapStep({
     placeKeyword.trim();
 
   const hasPlaceKeyword =
-    trimmedPlaceKeyword.length > 0;
+    trimmedPlaceKeyword.length >
+    0;
+
+  const focusPlaceSearch = (
+    type,
+  ) => {
+    setActivePlaceType(type);
+    setPlaceKeyword("");
+    setPlaceResults([]);
+    setPlaceSearchError("");
+
+    requestAnimationFrame(() => {
+      placeSearchInputRef.current?.focus?.();
+    });
+  };
+
+  const sheetTranslateY =
+    useRef(
+      new Animated.Value(
+        SHEET_EXPANDED_OFFSET,
+      ),
+    ).current;
+
+  const lastSheetOffset =
+    useRef(
+      SHEET_EXPANDED_OFFSET,
+    );
+
+  const panResponder =
+    useRef(
+      PanResponder.create({
+        onMoveShouldSetPanResponder:
+          (
+            _,
+            gestureState,
+          ) =>
+            Math.abs(
+              gestureState.dy,
+            ) > 4,
+
+        onPanResponderMove: (
+          _,
+          gestureState,
+        ) => {
+          const nextOffset =
+            Math.min(
+              Math.max(
+                lastSheetOffset.current +
+                  gestureState.dy,
+
+                SHEET_EXPANDED_OFFSET,
+              ),
+
+              SHEET_COLLAPSED_OFFSET,
+            );
+
+          sheetTranslateY.setValue(
+            nextOffset,
+          );
+        },
+
+        onPanResponderRelease: (
+          _,
+          gestureState,
+        ) => {
+          const releasedOffset =
+            Math.min(
+              Math.max(
+                lastSheetOffset.current +
+                  gestureState.dy,
+
+                SHEET_EXPANDED_OFFSET,
+              ),
+
+              SHEET_COLLAPSED_OFFSET,
+            );
+
+          const snapMiddle =
+            (SHEET_EXPANDED_OFFSET +
+              SHEET_COLLAPSED_OFFSET) /
+            2;
+
+          const nextOffset =
+            releasedOffset <
+            snapMiddle
+              ? SHEET_EXPANDED_OFFSET
+              : SHEET_COLLAPSED_OFFSET;
+
+          lastSheetOffset.current =
+            nextOffset;
+
+          Animated.spring(
+            sheetTranslateY,
+            {
+              toValue:
+                nextOffset,
+
+              useNativeDriver:
+                false,
+            },
+          ).start();
+        },
+
+        onPanResponderTerminate: (
+          _,
+          gestureState,
+        ) => {
+          const releasedOffset =
+            Math.min(
+              Math.max(
+                lastSheetOffset.current +
+                  gestureState.dy,
+
+                SHEET_EXPANDED_OFFSET,
+              ),
+
+              SHEET_COLLAPSED_OFFSET,
+            );
+
+          const snapMiddle =
+            (SHEET_EXPANDED_OFFSET +
+              SHEET_COLLAPSED_OFFSET) /
+            2;
+
+          const nextOffset =
+            releasedOffset <
+            snapMiddle
+              ? SHEET_EXPANDED_OFFSET
+              : SHEET_COLLAPSED_OFFSET;
+
+          lastSheetOffset.current =
+            nextOffset;
+
+          Animated.spring(
+            sheetTranslateY,
+            {
+              toValue:
+                nextOffset,
+
+              useNativeDriver:
+                false,
+            },
+          ).start();
+        },
+      }),
+    ).current;
 
   /*
-   * 처음 화면 진입 시
-   * 바텀시트가 올라와 있는 상태
+   * 장소 검색
    */
-  const sheetTranslateY = useRef(
-    new Animated.Value(
-      SHEET_EXPANDED_OFFSET,
-    ),
-  ).current;
-
-  const lastSheetOffset = useRef(
-    SHEET_EXPANDED_OFFSET,
-  );
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (
-        _,
-        gestureState,
-      ) =>
-        Math.abs(gestureState.dy) > 4,
-
-      onPanResponderMove: (
-        _,
-        gestureState,
-      ) => {
-        const nextOffset = Math.min(
-          Math.max(
-            lastSheetOffset.current +
-              gestureState.dy,
-            SHEET_EXPANDED_OFFSET,
-          ),
-          SHEET_COLLAPSED_OFFSET,
-        );
-
-        sheetTranslateY.setValue(
-          nextOffset,
-        );
-      },
-
-      onPanResponderRelease: (
-        _,
-        gestureState,
-      ) => {
-        const releasedOffset = Math.min(
-          Math.max(
-            lastSheetOffset.current +
-              gestureState.dy,
-            SHEET_EXPANDED_OFFSET,
-          ),
-          SHEET_COLLAPSED_OFFSET,
-        );
-
-        const snapMiddle =
-          (SHEET_EXPANDED_OFFSET +
-            SHEET_COLLAPSED_OFFSET) /
-          2;
-
-        const nextOffset =
-          releasedOffset < snapMiddle
-            ? SHEET_EXPANDED_OFFSET
-            : SHEET_COLLAPSED_OFFSET;
-
-        lastSheetOffset.current =
-          nextOffset;
-
-        Animated.spring(
-          sheetTranslateY,
-          {
-            toValue: nextOffset,
-            useNativeDriver: false,
-          },
-        ).start();
-      },
-
-      onPanResponderTerminate: (
-        _,
-        gestureState,
-      ) => {
-        const releasedOffset = Math.min(
-          Math.max(
-            lastSheetOffset.current +
-              gestureState.dy,
-            SHEET_EXPANDED_OFFSET,
-          ),
-          SHEET_COLLAPSED_OFFSET,
-        );
-
-        const snapMiddle =
-          (SHEET_EXPANDED_OFFSET +
-            SHEET_COLLAPSED_OFFSET) /
-          2;
-
-        const nextOffset =
-          releasedOffset < snapMiddle
-            ? SHEET_EXPANDED_OFFSET
-            : SHEET_COLLAPSED_OFFSET;
-
-        lastSheetOffset.current =
-          nextOffset;
-
-        Animated.spring(
-          sheetTranslateY,
-          {
-            toValue: nextOffset,
-            useNativeDriver: false,
-          },
-        ).start();
-      },
-    }),
-  ).current;
-
   useEffect(() => {
-    if (!hasPlaceKeyword) {
+    if (
+      !hasPlaceKeyword
+    ) {
       setPlaceResults([]);
       setPlaceSearchError("");
-      setIsSearchingPlaces(false);
+      setIsSearchingPlaces(
+        false,
+      );
+
       return undefined;
     }
 
     let isActive = true;
-    const controller = new AbortController();
 
-    const debounceId = setTimeout(async () => {
-      setIsSearchingPlaces(true);
-      setPlaceSearchError("");
+    const controller =
+      new AbortController();
 
-      try {
-        const nextResults =
-          await searchAddresses({
-            keyword: trimmedPlaceKeyword,
-            signal: controller.signal,
-          });
-
-        if (isActive) {
-          setPlaceResults(
-            Array.isArray(nextResults)
-              ? nextResults
-              : [],
+    const debounceId =
+      setTimeout(
+        async () => {
+          setIsSearchingPlaces(
+            true,
           );
-        }
-      } catch (error) {
-        if (
-          isActive &&
-          error?.name !== "AbortError"
-        ) {
-          setPlaceResults([]);
-          setPlaceSearchError(
-            error?.message ??
-              "장소 검색에 실패했습니다.",
-          );
-        }
-      } finally {
-        if (isActive) {
-          setIsSearchingPlaces(false);
-        }
-      }
-    }, 300);
+
+          setPlaceSearchError("");
+
+          try {
+            const nextResults =
+              await searchAddresses({
+                keyword:
+                  trimmedPlaceKeyword,
+
+                signal:
+                  controller.signal,
+              });
+
+            if (isActive) {
+              setPlaceResults(
+                Array.isArray(
+                  nextResults,
+                )
+                  ? nextResults
+                  : [],
+              );
+            }
+          } catch (error) {
+            if (
+              isActive &&
+              error?.name !==
+                "AbortError"
+            ) {
+              setPlaceResults(
+                [],
+              );
+
+              setPlaceSearchError(
+                error?.message ??
+                  "장소 검색에 실패했습니다.",
+              );
+            }
+          } finally {
+            if (isActive) {
+              setIsSearchingPlaces(
+                false,
+              );
+            }
+          }
+        },
+        300,
+      );
 
     return () => {
       isActive = false;
-      clearTimeout(debounceId);
+
+      clearTimeout(
+        debounceId,
+      );
+
       controller.abort();
     };
-  }, [hasPlaceKeyword, trimmedPlaceKeyword]);
+  }, [
+    hasPlaceKeyword,
+    trimmedPlaceKeyword,
+  ]);
 
-  const updateTypedPlace = (type, value) => {
-    const nextPlace = createRoutePlace(value);
+  const updateTypedPlace = (
+    type,
+    value,
+  ) => {
+    const nextPlace =
+      createRoutePlace(value);
 
     if (type === "origin") {
+      hasEditedOrigin.current =
+        true;
+
       setOrigin(nextPlace);
+
       return;
     }
+
+    hasEditedDestination.current =
+      true;
 
     setDestination(nextPlace);
   };
 
-  const selectPlaceResult = (result) => {
+  const selectPlaceResult = (
+    result,
+  ) => {
     const nextPlace =
-      createRoutePlaceFromSearchResult(result);
+      createRoutePlaceFromSearchResult(
+        result,
+      );
 
-    if (activePlaceType === "origin") {
+    if (
+      activePlaceType ===
+      "origin"
+    ) {
+      hasEditedOrigin.current =
+        true;
+
       setOrigin(nextPlace);
-      setActivePlaceType("destination");
+
+      setActivePlaceType(
+        "destination",
+      );
     } else {
-      setDestination(nextPlace);
+      hasEditedDestination.current =
+        true;
+
+      setDestination(
+        nextPlace,
+      );
     }
 
     setPlaceKeyword("");
@@ -629,22 +1069,36 @@ function ScheduleRouteMapStep({
   };
 
   return (
-    <View style={styles.mapScreen}>
+    <View
+      style={
+        styles.mapScreen
+      }
+    >
       <NaverMapView />
 
       <View
-        style={styles.mapHeaderLayer}
+        style={
+          styles.mapHeaderLayer
+        }
       >
         <Header
-          headerStyle={styles.mapHeader}
-          onBackPress={onBackPress}
+          headerStyle={
+            styles.mapHeader
+          }
+          onBackPress={
+            onBackPress
+          }
           title="알림 추가"
-          titleStyle={styles.headerTitle}
+          titleStyle={
+            styles.headerTitle
+          }
           type="back"
         />
 
         <View
-          style={styles.placeSearchBox}
+          style={
+            styles.placeSearchBox
+          }
         >
           <SearchIcon />
 
@@ -653,7 +1107,8 @@ function ScheduleRouteMapStep({
               setPlaceKeyword
             }
             placeholder={
-              activePlaceType === "origin"
+              activePlaceType ===
+              "origin"
                 ? "출발지 장소 검색"
                 : "도착지 장소 검색"
             }
@@ -663,13 +1118,17 @@ function ScheduleRouteMapStep({
             style={
               styles.placeSearchInput
             }
-            value={placeKeyword}
+            value={
+              placeKeyword
+            }
           />
         </View>
 
         {hasPlaceKeyword ? (
           <View
-            style={styles.placeResultPanel}
+            style={
+              styles.placeResultPanel
+            }
           >
             {isSearchingPlaces ? (
               <Text
@@ -677,7 +1136,8 @@ function ScheduleRouteMapStep({
                   styles.placeResultStatus
                 }
               >
-                장소를 검색하는 중입니다.
+                장소를 검색하는
+                중입니다.
               </Text>
             ) : placeSearchError ? (
               <Text
@@ -685,15 +1145,19 @@ function ScheduleRouteMapStep({
                   styles.placeResultStatus
                 }
               >
-                {placeSearchError}
+                {
+                  placeSearchError
+                }
               </Text>
-            ) : placeResults.length === 0 ? (
+            ) : placeResults.length ===
+              0 ? (
               <Text
                 style={
                   styles.placeResultStatus
                 }
               >
-                검색 결과가 없습니다.
+                검색 결과가
+                없습니다.
               </Text>
             ) : (
               <ScrollView
@@ -705,40 +1169,50 @@ function ScheduleRouteMapStep({
                   styles.placeResultList
                 }
               >
-                {placeResults.map((result) => (
-                  <Pressable
-                    accessibilityRole="button"
-                    key={
-                      result.id ??
-                      `${result.name}-${result.address}-${result.roadAddress}`
-                    }
-                    onPress={() =>
-                      selectPlaceResult(result)
-                    }
-                    style={
-                      styles.placeResultRow
-                    }
-                  >
-                    <Text
-                      numberOfLines={1}
+                {placeResults.map(
+                  (result) => (
+                    <Pressable
+                      accessibilityRole="button"
+                      key={
+                        result.id ??
+                        `${result.name}-${result.address}-${result.roadAddress}`
+                      }
+                      onPress={() =>
+                        selectPlaceResult(
+                          result,
+                        )
+                      }
                       style={
-                        styles.placeResultName
+                        styles.placeResultRow
                       }
                     >
-                      {result.name}
-                    </Text>
+                      <Text
+                        numberOfLines={
+                          1
+                        }
+                        style={
+                          styles.placeResultName
+                        }
+                      >
+                        {
+                          result.name
+                        }
+                      </Text>
 
-                    <Text
-                      numberOfLines={1}
-                      style={
-                        styles.placeResultAddress
-                      }
-                    >
-                      {result.roadAddress ||
-                        result.address}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Text
+                        numberOfLines={
+                          1
+                        }
+                        style={
+                          styles.placeResultAddress
+                        }
+                      >
+                        {result.roadAddress ||
+                          result.address}
+                      </Text>
+                    </Pressable>
+                  ),
+                )}
               </ScrollView>
             )}
           </View>
@@ -748,9 +1222,12 @@ function ScheduleRouteMapStep({
       <Animated.View
         style={[
           styles.routeSheet,
+
           {
-            height: sheetHeight,
+            height:
+              sheetHeight,
           },
+
           {
             transform: [
               {
@@ -768,7 +1245,9 @@ function ScheduleRouteMapStep({
           {...panResponder.panHandlers}
         >
           <View
-            style={styles.sheetHandle}
+            style={
+              styles.sheetHandle
+            }
           />
         </View>
 
@@ -788,34 +1267,50 @@ function ScheduleRouteMapStep({
           <Pressable
             accessibilityRole="button"
             onPress={() =>
-              setActivePlaceType("origin")
+              setActivePlaceType(
+                "origin",
+              )
             }
             style={[
               styles.routeField,
-              activePlaceType === "origin" &&
+
+              activePlaceType ===
+                "origin" &&
                 styles.routeFieldActive,
             ]}
           >
             <TextInput
-              onChangeText={(value) =>
+              onChangeText={(
+                value,
+              ) =>
                 updateTypedPlace(
                   "origin",
                   value,
                 )
               }
               onFocus={() =>
-                setActivePlaceType("origin")
+                setActivePlaceType(
+                  "origin",
+                )
               }
-              placeholder="출발지 입력"
+              placeholder={
+                isLoadingCurrentAddress
+                  ? "현재 주소 불러오는 중..."
+                  : currentAddressError
+                    ? "출발지 입력"
+                    : "출발지 입력"
+              }
               placeholderTextColor={
                 colors.gray06
               }
               style={
                 styles.routeFieldInput
               }
-              value={getRoutePlaceText(
-                origin,
-              )}
+              value={
+                getRoutePlaceText(
+                  origin,
+                )
+              }
             />
           </Pressable>
 
@@ -836,36 +1331,59 @@ function ScheduleRouteMapStep({
             }
             style={[
               styles.routeField,
+
               activePlaceType ===
                 "destination" &&
                 styles.routeFieldActive,
             ]}
           >
             <TextInput
-              onChangeText={
-                (value) =>
-                  updateTypedPlace(
-                    "destination",
-                    value,
-                  )
+              onChangeText={(
+                value,
+              ) =>
+                updateTypedPlace(
+                  "destination",
+                  value,
+                )
               }
               onFocus={() =>
                 setActivePlaceType(
                   "destination",
                 )
               }
-              placeholder="도착지 입력"
+              placeholder={
+                isLoadingCurrentAddress
+                  ? "현재 주소 불러오는 중..."
+                  : "도착지 입력"
+              }
               placeholderTextColor={
                 colors.gray06
               }
               style={
                 styles.routeFieldInput
               }
-              value={getRoutePlaceText(
-                destination,
-              )}
+              value={
+                getRoutePlaceText(
+                  destination,
+                )
+              }
             />
           </Pressable>
+
+          {currentAddressError &&
+          !getRoutePlaceText(
+            origin,
+          ) ? (
+            <Text
+              style={
+                styles.currentAddressError
+              }
+            >
+              {
+                currentAddressError
+              }
+            </Text>
+          ) : null}
         </View>
 
         <Pressable
@@ -900,14 +1418,22 @@ export function ScheduleRouteResultStep({
   onBackPress,
   onRouteSelect,
 }) {
-  const [origin, setOrigin] =
-    useState(createRoutePlace(initialOrigin));
+  const [
+    origin,
+    setOrigin,
+  ] = useState(
+    createRoutePlace(
+      initialOrigin,
+    ),
+  );
 
   const [
     destination,
     setDestination,
   ] = useState(
-    createRoutePlace(initialDestination),
+    createRoutePlace(
+      initialDestination,
+    ),
   );
 
   const [routes, setRoutes] =
@@ -926,13 +1452,15 @@ export function ScheduleRouteResultStep({
   const selectedRoute =
     routes[0] ?? null;
 
-  const primarySegment = useMemo(
-    () =>
-      getPrimaryTransitSegment(
-        selectedRoute,
-      ),
-    [selectedRoute],
-  );
+  const primarySegment =
+    useMemo(
+      () =>
+        getPrimaryTransitSegment(
+          selectedRoute,
+        ),
+
+      [selectedRoute],
+    );
 
   const displayDuration =
     selectedRoute?.realTimeDurationMinutes ??
@@ -951,38 +1479,37 @@ export function ScheduleRouteResultStep({
 
       try {
         const nextRoutes =
-          await searchTransitRoutes({
-            originX:
-              origin.x ??
-              DEFAULT_ORIGIN_POINT.x,
-            originY:
-              origin.y ??
-              DEFAULT_ORIGIN_POINT.y,
-            originAddress:
-              getRoutePlaceAddress(origin),
+        await searchTransitRoutes({
+          originX: origin.x,
+          originY: origin.y,
 
-            destX:
-              destination.x ??
-              DEFAULT_DESTINATION_POINT.x,
-            destY:
-              destination.y ??
-              DEFAULT_DESTINATION_POINT.y,
-            destAddress:
-              getRoutePlaceAddress(destination),
+          originAddress:
+            getRoutePlaceAddress(origin),
 
-            signal:
-              controller.signal,
-          });
+          destX: destination.x,
+          destY: destination.y,
+
+          destAddress:
+            getRoutePlaceAddress(destination),
+
+          signal: controller.signal,
+        });
 
         if (isActive) {
           setRoutes(
-            Array.isArray(nextRoutes)
+            Array.isArray(
+              nextRoutes,
+            )
               ? nextRoutes
               : [],
           );
         }
       } catch (error) {
-        if (isActive) {
+        if (
+          isActive &&
+          error?.name !==
+            "AbortError"
+        ) {
           setRoutes([]);
 
           setRouteError(
@@ -992,7 +1519,9 @@ export function ScheduleRouteResultStep({
         }
       } finally {
         if (isActive) {
-          setIsLoadingRoutes(false);
+          setIsLoadingRoutes(
+            false,
+          );
         }
       }
     }
@@ -1003,24 +1532,49 @@ export function ScheduleRouteResultStep({
       isActive = false;
       controller.abort();
     };
-  }, [destination, origin]);
+  }, [
+    destination,
+    origin,
+  ]);
 
-  const updateOriginText = (value) => {
-    setOrigin(createRoutePlace(value));
+  const updateOriginText = (
+    value,
+  ) => {
+    setOrigin(
+      createRoutePlace(
+        value,
+      ),
+    );
   };
 
-  const updateDestinationText = (value) => {
-    setDestination(createRoutePlace(value));
+  const updateDestinationText = (
+    value,
+  ) => {
+    setDestination(
+      createRoutePlace(
+        value,
+      ),
+    );
   };
 
   return (
-    <View style={styles.resultScreen}>
-      <View style={styles.resultHeader}>
+    <View
+      style={
+        styles.resultScreen
+      }
+    >
+      <View
+        style={
+          styles.resultHeader
+        }
+      >
         <Pressable
           accessibilityLabel="뒤로가기"
           accessibilityRole="button"
           hitSlop={12}
-          onPress={onBackPress}
+          onPress={
+            onBackPress
+          }
           style={
             styles.resultBackButton
           }
@@ -1035,7 +1589,9 @@ export function ScheduleRouteResultStep({
         >
           <TextInput
             numberOfLines={1}
-            onChangeText={updateOriginText}
+            onChangeText={
+              updateOriginText
+            }
             placeholder="출발지"
             placeholderTextColor={
               colors.gray06
@@ -1043,7 +1599,11 @@ export function ScheduleRouteResultStep({
             style={
               styles.routeSummaryInput
             }
-            value={getRoutePlaceText(origin)}
+            value={
+              getRoutePlaceText(
+                origin,
+              )
+            }
           />
 
           <ChevronRightIcon />
@@ -1060,9 +1620,11 @@ export function ScheduleRouteResultStep({
             style={
               styles.routeSummaryInput
             }
-            value={getRoutePlaceText(
-              destination,
-            )}
+            value={
+              getRoutePlaceText(
+                destination,
+              )
+            }
           />
 
           <CloseIcon />
@@ -1070,15 +1632,18 @@ export function ScheduleRouteResultStep({
       </View>
 
       <View
-        style={styles.resultNotice}
+        style={
+          styles.resultNotice
+        }
       >
         <Text
           style={
             styles.resultNoticeText
           }
         >
-          도로 상황에 따라 실제 도착 시간은
-          달라질 수 있어요.
+          도로 상황에 따라 실제
+          도착 시간은 달라질 수
+          있어요.
         </Text>
       </View>
 
@@ -1098,7 +1663,8 @@ export function ScheduleRouteResultStep({
                 styles.routeStatusText
               }
             >
-              경로를 검색하는 중입니다.
+              경로를 검색하는
+              중입니다.
             </Text>
           </View>
         ) : routeError ||
@@ -1166,7 +1732,9 @@ export function ScheduleRouteResultStep({
                   styles.totalTimeNumber
                 }
               >
-                {displayDuration}
+                {
+                  displayDuration
+                }
               </Text>
 
               <Text
@@ -1225,7 +1793,9 @@ export function ScheduleRouteResultStep({
             </View>
 
             <View
-              style={styles.routeStops}
+              style={
+                styles.routeStops
+              }
             >
               <StopRow
                 active
@@ -1235,7 +1805,9 @@ export function ScheduleRouteResultStep({
                     primarySegment,
                     "start",
                   ) ||
-                  getRoutePlaceText(origin)
+                  getRoutePlaceText(
+                    origin,
+                  )
                 }
               />
 
@@ -1258,16 +1830,21 @@ export function ScheduleRouteResultStep({
               onPress={() =>
                 onRouteSelect?.(
                   selectedRoute,
+
                   {
                     origin:
                       getRoutePlaceText(
                         origin,
                       ),
+
                     destination:
                       getRoutePlaceText(
                         destination,
                       ),
-                    originPlace: origin,
+
+                    originPlace:
+                      origin,
+
                     destinationPlace:
                       destination,
                   },
@@ -1315,16 +1892,18 @@ function ScheduleAlarmFinalStep({
     setIsReminderModalVisible,
   ] = useState(false);
 
-  const [reminders, setReminders] =
-    useState({
-      1: false,
-      3: false,
-      5: true,
-      10: true,
-      15: false,
-      30: true,
-      60: false,
-    });
+  const [
+    reminders,
+    setReminders,
+  ] = useState({
+    1: false,
+    3: false,
+    5: true,
+    10: true,
+    15: false,
+    30: true,
+    60: false,
+  });
 
   const days = [
     "월",
@@ -1337,10 +1916,14 @@ function ScheduleAlarmFinalStep({
   ];
 
   const primarySegment =
-    getPrimaryTransitSegment(route);
+    getPrimaryTransitSegment(
+      route,
+    );
 
   const selectedReminderOffsets =
-    pickReminderOffsets(reminders);
+    pickReminderOffsets(
+      reminders,
+    );
 
   const selectedRouteName =
     routeName.trim() ||
@@ -1353,8 +1936,10 @@ function ScheduleAlarmFinalStep({
     "경로1";
 
   const targetArrivalTime =
-    toTargetArrivalTime(arrivalTime);
-
+    toTargetArrivalTime(
+      arrivalTime,
+    );
+  
   const formattedArrivalTime =
     `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
 
@@ -1362,113 +1947,206 @@ function ScheduleAlarmFinalStep({
     route?.realTimeDurationMinutes ??
     route?.totalDurationMinutes ??
     0;
+  const getFormattedStartTime = (
+    arrivalTime,
+    durationMinutes,
+  ) => {
+    let hour = Number(arrivalTime.hour);
+    const minute = Number(arrivalTime.minute);
 
+    // 12시간제 → 24시간제
+    if (arrivalTime.period === "오후" && hour !== 12) {
+      hour += 12;
+    }
+
+    if (arrivalTime.period === "오전" && hour === 12) {
+      hour = 0;
+    }
+
+    let totalMinutes =
+      hour * 60 +
+      minute -
+      Number(durationMinutes || 0);
+
+    // 자정을 넘어 전날로 가는 경우
+    totalMinutes =
+      ((totalMinutes % 1440) + 1440) % 1440;
+
+    const startHour24 =
+      Math.floor(totalMinutes / 60);
+
+    const startMinute =
+      totalMinutes % 60;
+
+    const period =
+      startHour24 >= 12
+        ? "오후"
+        : "오전";
+
+    let startHour12 =
+      startHour24 % 12;
+
+    if (startHour12 === 0) {
+      startHour12 = 12;
+    }
+
+    return `${period} ${String(startHour12).padStart(
+      2,
+      "0",
+    )} : ${String(startMinute).padStart(2, "0")}`;
+  };
+
+  const formattedStartTime =
+    getFormattedStartTime(
+      arrivalTime,
+      displayDuration,
+    );
   const toggleDay = (day) => {
-    setSelectedDays((current) =>
-      current.includes(day)
-        ? current.filter(
-            (selectedDay) =>
-              selectedDay !== day,
-          )
-        : [...current, day],
+    setSelectedDays(
+      (current) =>
+        current.includes(day)
+          ? current.filter(
+              (
+                selectedDay,
+              ) =>
+                selectedDay !==
+                day,
+            )
+          : [
+              ...current,
+              day,
+            ],
     );
   };
 
-  const toggleReminder = (key) => {
-    setReminders((current) => ({
-      ...current,
-      [key]: !current[key],
-    }));
+  const toggleReminder = (
+    key,
+  ) => {
+    setReminders(
+      (current) => ({
+        ...current,
+
+        [key]:
+          !current[key],
+      }),
+    );
   };
 
-  const saveAlarm = async () => {
-    if (isSubmitting) {
-      return;
-    }
+  const saveAlarm =
+    async () => {
+      if (isSubmitting) {
+        return;
+      }
 
-    if (!route) {
-      Alert.alert(
-        "알림 등록 실패",
-        "등록할 경로 정보를 찾지 못했습니다.",
-      );
+      if (!route) {
+        Alert.alert(
+          "알림 등록 실패",
+          "등록할 경로 정보를 찾지 못했습니다.",
+        );
 
-      return;
-    }
+        return;
+      }
 
-    if (
-      selectedReminderOffsets.length ===
-      0
-    ) {
-      Alert.alert(
-        "알림 등록 실패",
-        "출발 전 알림 시간을 선택해주세요.",
-      );
+      if (
+        selectedReminderOffsets.length ===
+        0
+      ) {
+        Alert.alert(
+          "알림 등록 실패",
+          "출발 전 알림 시간을 선택해주세요.",
+        );
 
-      return;
-    }
+        return;
+      }
 
-    setIsSubmitting(true);
+      setIsSubmitting(true);
 
-    try {
-      await createArrivalNotification({
-        payload: {
-          routeName:
-            selectedRouteName,
+      try {
+        await createArrivalNotification(
+          {
+            payload: {
+              routeName:
+                selectedRouteName,
 
-          scheduleType: "NORMAL",
+              scheduleType:
+                "NORMAL",
 
-          targetArrivalTime,
+              targetArrivalTime,
 
-          reminderOffsetMinutes:
-            selectedReminderOffsets,
+              reminderOffsetMinutes:
+                selectedReminderOffsets,
 
-          repeatDays: selectedDays
-            .map(mapDayToApiValue)
-            .filter(Boolean),
+              repeatDays:
+                selectedDays
+                  .map(
+                    mapDayToApiValue,
+                  )
+                  .filter(Boolean),
 
-          routeDetails:
-            JSON.stringify(
-              route.raw ?? route,
-            ),
-        },
-      });
+              routeDetails:
+                JSON.stringify(
+                  route.raw ??
+                    route,
+                ),
+            },
+          },
+        );
 
-      onSavePress?.();
-    } catch (error) {
-      Alert.alert(
-        "알림 등록 실패",
-        error?.message ??
-          "내 일정 알림 등록에 실패했습니다.",
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+        onSavePress?.();
+      } catch (error) {
+        Alert.alert(
+          "알림 등록 실패",
+
+          error?.message ??
+            "내 일정 알림 등록에 실패했습니다.",
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
 
   return (
-    <View style={styles.finalScreen}>
+    <View
+      style={
+        styles.finalScreen
+      }
+    >
       <Header
-        headerStyle={styles.header}
-        onBackPress={onBackPress}
+        headerStyle={
+          styles.header
+        }
+        onBackPress={
+          onBackPress
+        }
         title="알림 추가"
-        titleStyle={styles.headerTitle}
+        titleStyle={
+          styles.headerTitle
+        }
         type="back"
       />
 
       <View
-        style={styles.finalRouteHeader}
+        style={
+          styles.finalRouteHeader
+        }
       >
         <View
-          style={styles.finalBusInfo}
+          style={
+            styles.finalBusInfo
+          }
         >
           <View
-            style={styles.routeBusBadge}
+            style={
+              styles.routeBusBadge
+            }
           >
             <BusIconPlain />
           </View>
 
           <Text
-            style={styles.routeBusNumber}
+            style={
+              styles.routeBusNumber
+            }
           >
             {primarySegment?.transitName ||
               "대중교통"}
@@ -1486,7 +2164,9 @@ function ScheduleAlarmFinalStep({
         </View>
 
         <View
-          style={styles.finalTotalTime}
+          style={
+            styles.finalTotalTime
+          }
         >
           <Text
             style={
@@ -1507,10 +2187,14 @@ function ScheduleAlarmFinalStep({
       </View>
 
       <View
-        style={styles.finalContent}
+        style={
+          styles.finalContent
+        }
       >
         <View
-          style={styles.timeSummaryRow}
+          style={
+            styles.timeSummaryRow
+          }
         >
           <View
             style={
@@ -1518,20 +2202,26 @@ function ScheduleAlarmFinalStep({
             }
           >
             <Text
-              style={styles.finalLabel}
+              style={
+                styles.finalLabel
+              }
             >
               출발 적정 시간
             </Text>
 
             <View
-              style={styles.timeCard}
+              style={
+                styles.timeCard
+              }
             >
               <Text
                 style={
                   styles.timeCardText
                 }
               >
-                경로 기준 계산
+                {
+                  formattedStartTime
+                }
               </Text>
             </View>
           </View>
@@ -1544,20 +2234,26 @@ function ScheduleAlarmFinalStep({
             }
           >
             <Text
-              style={styles.finalLabel}
+              style={
+                styles.finalLabel
+              }
             >
               도착 예정 시간
             </Text>
 
             <View
-              style={styles.timeCard}
+              style={
+                styles.timeCard
+              }
             >
               <Text
                 style={
                   styles.timeCardText
                 }
               >
-                {formattedArrivalTime}
+                {
+                  formattedArrivalTime
+                }
               </Text>
             </View>
           </View>
@@ -1580,23 +2276,33 @@ function ScheduleAlarmFinalStep({
       </View>
 
       <View
-        style={styles.finalDivider}
+        style={
+          styles.finalDivider
+        }
       />
 
       <View
-        style={styles.finalContent}
+        style={
+          styles.finalContent
+        }
       >
         <Text
-          style={styles.questionText}
+          style={
+            styles.questionText
+          }
         >
-          출발 시간 몇 분 전에 알려드릴까요?
+          출발 시간 몇 분 전에
+          알려드릴까요?
         </Text>
 
         <Pressable
           accessibilityRole="button"
           onPress={() => {
             blurActiveElement();
-            setIsReminderModalVisible(true);
+
+            setIsReminderModalVisible(
+              true,
+            );
           }}
           style={
             styles.reminderSelect
@@ -1618,70 +2324,98 @@ function ScheduleAlarmFinalStep({
           <ChevronDownIcon />
         </Pressable>
 
-        <View style={styles.dayRow}>
-          {days.map((day) => {
-            const selected =
-              selectedDays.includes(day);
+        <View
+          style={
+            styles.dayRow
+          }
+        >
+          {days.map(
+            (day) => {
+              const selected =
+                selectedDays.includes(
+                  day,
+                );
 
-            return (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{
-                  selected,
-                }}
-                key={day}
-                onPress={() =>
-                  toggleDay(day)
-                }
-                style={[
-                  styles.dayButton,
-                  selected &&
-                    styles.dayButtonSelected,
-                ]}
-              >
-                <Text
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    selected,
+                  }}
+                  key={day}
+                  onPress={() =>
+                    toggleDay(
+                      day,
+                    )
+                  }
                   style={[
-                    styles.dayButtonText,
+                    styles.dayButton,
+
                     selected &&
-                      styles.dayButtonTextSelected,
+                      styles.dayButtonSelected,
                   ]}
                 >
-                  {day}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Text
+                    style={[
+                      styles.dayButtonText,
+
+                      selected &&
+                        styles.dayButtonTextSelected,
+                    ]}
+                  >
+                    {day}
+                  </Text>
+                </Pressable>
+              );
+            },
+          )}
         </View>
       </View>
 
       <View
-        style={styles.finalFooter}
+        style={
+          styles.finalFooter
+        }
       >
         <View
-          style={styles.finalInfoBox}
+          style={
+            styles.finalInfoBox
+          }
         >
           <Text
-            style={styles.finalInfoText}
+            style={
+              styles.finalInfoText
+            }
           >
-            {formattedArrivalTime}까지
-            도착하실 수 있도록,
+            {formattedArrivalTime}
+            까지 도착하실 수
+            있도록,
           </Text>
 
           <Text
-            style={styles.finalInfoText}
+            style={
+              styles.finalInfoText
+            }
           >
-            선택한 출발 전 알림 시간에
-            맞춰 알려드릴게요.
+            선택한 출발 전 알림
+            시간에 맞춰
+            알려드릴게요.
           </Text>
         </View>
 
         <View
-          style={styles.finalButtonRow}
+          style={
+            styles.finalButtonRow
+          }
         >
           <Pressable
             accessibilityRole="button"
-            onPress={onPrevPress}
-            style={styles.prevButton}
+            onPress={
+              onPrevPress
+            }
+            style={
+              styles.prevButton
+            }
           >
             <Text
               style={
@@ -1694,10 +2428,15 @@ function ScheduleAlarmFinalStep({
 
           <Pressable
             accessibilityRole="button"
-            disabled={isSubmitting}
-            onPress={saveAlarm}
+            disabled={
+              isSubmitting
+            }
+            onPress={
+              saveAlarm
+            }
             style={[
               styles.saveButton,
+
               isSubmitting &&
                 styles.saveButtonDisabled,
             ]}
@@ -1718,10 +2457,17 @@ function ScheduleAlarmFinalStep({
       <ReminderModal
         onClose={() => {
           blurActiveElement();
-          setIsReminderModalVisible(false);
+
+          setIsReminderModalVisible(
+            false,
+          );
         }}
-        onToggle={toggleReminder}
-        reminders={reminders}
+        onToggle={
+          toggleReminder
+        }
+        reminders={
+          reminders
+        }
         visible={
           isReminderModalVisible
         }
@@ -1749,15 +2495,21 @@ function ReminderModal({
   return (
     <Modal
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={
+        onClose
+      }
       transparent
       visible={visible}
     >
       <View
-        style={styles.reminderOverlay}
+        style={
+          styles.reminderOverlay
+        }
       >
         <View
-          style={styles.reminderCard}
+          style={
+            styles.reminderCard
+          }
         >
           <View
             style={
@@ -1776,7 +2528,9 @@ function ReminderModal({
               accessibilityLabel="미리 알림 설정 닫기"
               accessibilityRole="button"
               hitSlop={10}
-              onPress={onClose}
+              onPress={
+                onClose
+              }
               style={
                 styles.reminderCloseButton
               }
@@ -1786,10 +2540,15 @@ function ReminderModal({
           </View>
 
           <View
-            style={styles.reminderList}
+            style={
+              styles.reminderList
+            }
           >
             {options.map(
-              ([key, label]) => (
+              ([
+                key,
+                label,
+              ]) => (
                 <View
                   key={key}
                   style={
@@ -1808,14 +2567,21 @@ function ReminderModal({
                     accessibilityRole="switch"
                     accessibilityState={{
                       checked:
-                        reminders[key],
+                        reminders[
+                          key
+                        ],
                     }}
                     onPress={() =>
-                      onToggle(key)
+                      onToggle(
+                        key,
+                      )
                     }
                     style={[
                       styles.reminderSwitch,
-                      reminders[key] &&
+
+                      reminders[
+                        key
+                      ] &&
                         styles.reminderSwitchOn,
                     ]}
                   >
@@ -1838,37 +2604,51 @@ function ReminderModal({
 function RouteTimeline({
   segments = [],
 }) {
-  if (segments.length === 0) {
+  if (
+    segments.length === 0
+  ) {
     return null;
   }
 
   const totalDuration =
     segments.reduce(
-      (sum, segment) =>
+      (
+        sum,
+        segment,
+      ) =>
         sum +
         Math.max(
           segment.durationMinutes ??
             0,
+
           1,
         ),
+
       0,
     );
 
   return (
     <View
-      style={styles.routeTimeline}
+      style={
+        styles.routeTimeline
+      }
     >
       {segments.map(
-        (segment, index) => {
+        (
+          segment,
+          index,
+        ) => {
           const isTransit =
             segment.transitType !==
             "WALK";
 
-          const duration = Math.max(
-            segment.durationMinutes ??
-              0,
-            1,
-          );
+          const duration =
+            Math.max(
+              segment.durationMinutes ??
+                0,
+
+              1,
+            );
 
           return (
             <View
@@ -1878,9 +2658,11 @@ function RouteTimeline({
               }
               style={[
                 styles.routeTimelineSegment,
+
                 isTransit
                   ? styles.routeBusSegment
                   : styles.routeWalkSegment,
+
                 {
                   flex:
                     duration /
@@ -1888,7 +2670,8 @@ function RouteTimeline({
                 },
               ]}
             >
-              {index === 0 ||
+              {index ===
+                0 ||
               isTransit ? (
                 <View
                   style={
@@ -1934,10 +2717,13 @@ function StopRow({
   name,
 }) {
   return (
-    <View style={styles.stopRow}>
+    <View
+      style={styles.stopRow}
+    >
       <View
         style={[
           styles.stopOuter,
+
           active &&
             styles.stopOuterActive,
         ]}
@@ -1945,17 +2731,26 @@ function StopRow({
         <View
           style={[
             styles.stopInner,
+
             active &&
               styles.stopInnerActive,
           ]}
         />
       </View>
 
-      <Text style={styles.stopLabel}>
+      <Text
+        style={
+          styles.stopLabel
+        }
+      >
         {label}
       </Text>
 
-      <Text style={styles.stopName}>
+      <Text
+        style={
+          styles.stopName
+        }
+      >
         {name}
       </Text>
     </View>
@@ -1968,8 +2763,10 @@ function TimePickerSheet({
   value,
   visible,
 }) {
-  const [draftTime, setDraftTime] =
-    useState(value);
+  const [
+    draftTime,
+    setDraftTime,
+  ] = useState(value);
 
   useEffect(() => {
     if (visible) {
@@ -1977,53 +2774,87 @@ function TimePickerSheet({
     }
   }, [value, visible]);
 
-  const selectTime = (patch) => {
-    setDraftTime((current) => ({
-      ...current,
-      ...patch,
-    }));
+  const selectTime = (
+    patch,
+  ) => {
+    setDraftTime(
+      (current) => ({
+        ...current,
+        ...patch,
+      }),
+    );
   };
 
   return (
     <Modal
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={
+        onClose
+      }
       transparent
       visible={visible}
     >
       <View
-        style={styles.sheetOverlay}
+        style={
+          styles.sheetOverlay
+        }
       >
         <Pressable
-          style={styles.sheetDim}
-          onPress={onClose}
+          style={
+            styles.sheetDim
+          }
+          onPress={
+            onClose
+          }
         />
 
-        <View style={styles.sheet}>
+        <View
+          style={styles.sheet}
+        >
           <View
-            style={styles.sheetHandle}
+            style={
+              styles.sheetHandle
+            }
           />
 
           <View
-            style={styles.pickerRows}
+            style={
+              styles.pickerRows
+            }
           >
             <WheelPickerColumn
               accessibilityLabel="오전 오후 선택"
-              onChange={(period) =>
-                selectTime({ period })
+              onChange={(
+                period,
+              ) =>
+                selectTime({
+                  period,
+                })
               }
-              options={PERIOD_OPTIONS}
-              value={draftTime.period}
+              options={
+                PERIOD_OPTIONS
+              }
+              value={
+                draftTime.period
+              }
               visible={visible}
             />
 
             <WheelPickerColumn
               accessibilityLabel="시 선택"
-              onChange={(hour) =>
-                selectTime({ hour })
+              onChange={(
+                hour,
+              ) =>
+                selectTime({
+                  hour,
+                })
               }
-              options={HOUR_OPTIONS}
-              value={draftTime.hour}
+              options={
+                HOUR_OPTIONS
+              }
+              value={
+                draftTime.hour
+              }
               visible={visible}
             />
 
@@ -2037,11 +2868,19 @@ function TimePickerSheet({
 
             <WheelPickerColumn
               accessibilityLabel="분 선택"
-              onChange={(minute) =>
-                selectTime({ minute })
+              onChange={(
+                minute,
+              ) =>
+                selectTime({
+                  minute,
+                })
               }
-              options={MINUTE_OPTIONS}
-              value={draftTime.minute}
+              options={
+                MINUTE_OPTIONS
+              }
+              value={
+                draftTime.minute
+              }
               visible={visible}
             />
           </View>
@@ -2049,7 +2888,9 @@ function TimePickerSheet({
           <Pressable
             accessibilityRole="button"
             onPress={() =>
-              onConfirm(draftTime)
+              onConfirm(
+                draftTime,
+              )
             }
             style={
               styles.confirmButton
@@ -2076,20 +2917,28 @@ function WheelPickerColumn({
   value,
   visible,
 }) {
-  const scrollRef = useRef(null);
-  const selectedIndex = Math.max(
-    options.indexOf(value),
-    0,
-  );
+  const scrollRef =
+    useRef(null);
+
+  const selectedIndex =
+    Math.max(
+      options.indexOf(value),
+      0,
+    );
 
   const scrollToIndex = (
     index,
     animated = true,
   ) => {
-    scrollRef.current?.scrollTo({
-      animated,
-      y: index * TIME_PICKER_ITEM_HEIGHT,
-    });
+    scrollRef.current?.scrollTo(
+      {
+        animated,
+
+        y:
+          index *
+          TIME_PICKER_ITEM_HEIGHT,
+      },
+    );
   };
 
   useEffect(() => {
@@ -2097,41 +2946,70 @@ function WheelPickerColumn({
       return undefined;
     }
 
-    const scrollTimer = setTimeout(() => {
-      scrollToIndex(selectedIndex, false);
-    }, 0);
+    const scrollTimer =
+      setTimeout(() => {
+        scrollToIndex(
+          selectedIndex,
+          false,
+        );
+      }, 0);
 
     return () => {
-      clearTimeout(scrollTimer);
+      clearTimeout(
+        scrollTimer,
+      );
     };
-  }, [selectedIndex, visible]);
+  }, [
+    selectedIndex,
+    visible,
+  ]);
 
-  const handleScrollEnd = (event) => {
+  const handleScrollEnd = (
+    event,
+  ) => {
     const offsetY =
-      event.nativeEvent.contentOffset?.y ?? 0;
-    const nextIndex = Math.min(
-      Math.max(
-        Math.round(
-          offsetY / TIME_PICKER_ITEM_HEIGHT,
+      event.nativeEvent
+        .contentOffset?.y ??
+      0;
+
+    const nextIndex =
+      Math.min(
+        Math.max(
+          Math.round(
+            offsetY /
+              TIME_PICKER_ITEM_HEIGHT,
+          ),
+          0,
         ),
-        0,
-      ),
-      options.length - 1,
+
+        options.length - 1,
+      );
+
+    const nextValue =
+      options[nextIndex];
+
+    scrollToIndex(
+      nextIndex,
     );
-    const nextValue = options[nextIndex];
 
-    scrollToIndex(nextIndex);
-
-    if (nextValue !== value) {
+    if (
+      nextValue !== value
+    ) {
       onChange(nextValue);
     }
   };
 
   return (
-    <View style={styles.pickerColumn}>
+    <View
+      style={
+        styles.pickerColumn
+      }
+    >
       <View
         pointerEvents="none"
-        style={styles.pickerSelection}
+        style={
+          styles.pickerSelection
+        }
       />
 
       <ScrollView
@@ -2146,12 +3024,18 @@ function WheelPickerColumn({
         onScrollEndDrag={
           handleScrollEnd
         }
-        ref={scrollRef}
-        showsVerticalScrollIndicator={false}
+        ref={
+          scrollRef
+        }
+        showsVerticalScrollIndicator={
+          false
+        }
         snapToInterval={
           TIME_PICKER_ITEM_HEIGHT
         }
-        style={styles.pickerScroll}
+        style={
+          styles.pickerScroll
+        }
       >
         <View
           style={
@@ -2159,39 +3043,49 @@ function WheelPickerColumn({
           }
         />
 
-        {options.map((option) => {
-          const selected =
-            option === value;
+        {options.map(
+          (option) => {
+            const selected =
+              option === value;
 
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{
-                selected,
-              }}
-              key={option}
-              onPress={() => {
-                onChange(option);
-                scrollToIndex(
-                  options.indexOf(option),
-                );
-              }}
-              style={
-                styles.pickerOption
-              }
-            >
-              <Text
-                style={[
-                  styles.pickerOptionText,
-                  selected &&
-                    styles.pickerOptionTextSelected,
-                ]}
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{
+                  selected,
+                }}
+                key={
+                  option
+                }
+                onPress={() => {
+                  onChange(
+                    option,
+                  );
+
+                  scrollToIndex(
+                    options.indexOf(
+                      option,
+                    ),
+                  );
+                }}
+                style={
+                  styles.pickerOption
+                }
               >
-                {option}
-              </Text>
-            </Pressable>
-          );
-        })}
+                <Text
+                  style={[
+                    styles.pickerOptionText,
+
+                    selected &&
+                      styles.pickerOptionTextSelected,
+                  ]}
+                >
+                  {option}
+                </Text>
+              </Pressable>
+            );
+          },
+        )}
 
         <View
           style={
@@ -2213,7 +3107,9 @@ function ChevronDownIcon() {
       <Path
         d="M5.5 7.5 10 12l4.5-4.5"
         fill="none"
-        stroke={colors.gray06}
+        stroke={
+          colors.gray06
+        }
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={1.8}
@@ -2232,7 +3128,9 @@ function HeaderBackIcon() {
       <Path
         d="M15 5 8 12l7 7"
         fill="none"
-        stroke={colors.gray07}
+        stroke={
+          colors.gray07
+        }
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={2.2}
@@ -2251,7 +3149,9 @@ function ChevronRightIcon() {
       <Path
         d="m8 5 5 5-5 5"
         fill="none"
-        stroke={colors.gray05}
+        stroke={
+          colors.gray05
+        }
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={1.8}
@@ -2270,7 +3170,9 @@ function CloseIcon() {
       <Path
         d="m5.5 5.5 9 9M14.5 5.5l-9 9"
         fill="none"
-        stroke={colors.gray05}
+        stroke={
+          colors.gray05
+        }
         strokeLinecap="round"
         strokeWidth={1.8}
       />
@@ -2288,7 +3190,9 @@ function SearchIcon() {
       <Path
         d="M12.1 12.1 15 15M8 13.5A5.5 5.5 0 1 0 8 2.5a5.5 5.5 0 0 0 0 11Z"
         fill="none"
-        stroke={colors.gray05}
+        stroke={
+          colors.gray05
+        }
         strokeLinecap="round"
         strokeWidth={1.6}
       />
@@ -2305,7 +3209,9 @@ function WalkIcon() {
     >
       <Path
         d="M6 3.5a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8Zm-.6.6L3.7 6.1c-.2.2-.2.6.1.8.2.2.6.2.8-.1l.9-1.1.8 1.1-1.3 3c-.1.3 0 .7.3.8.3.1.7 0 .8-.3l1.1-2.5 1.2 1.5c.2.3.6.3.8.1.3-.2.3-.6.1-.8L7.8 6.7 7 4.8l.9.6c.3.2.6.1.8-.1.2-.3.1-.6-.1-.8L7 3.4c-.5-.3-1.1-.1-1.6.7Z"
-        fill={colors.white}
+        fill={
+          colors.white
+        }
       />
     </Svg>
   );
@@ -2320,1061 +3226,1197 @@ function BusIconPlain() {
     >
       <Path
         d="M4.2 1.5h7.6c1.1 0 2 .9 2 2v7.4c0 .9-.6 1.7-1.4 1.9v1.1c0 .3-.3.6-.6.6h-.7c-.3 0-.6-.3-.6-.6v-1H5.5v1c0 .3-.3.6-.6.6h-.7c-.3 0-.6-.3-.6-.6v-1.1c-.8-.3-1.4-1-1.4-1.9V3.5c0-1.1.9-2 2-2Zm.4 2.2v3.7h6.8V3.7H4.6Zm1 7.4a1.1 1.1 0 1 0 0-2.2 1.1 1.1 0 0 0 0 2.2Zm4.8-1.1a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 0 0-2.2 0Z"
-        fill={colors.white}
+        fill={
+          colors.white
+        }
       />
     </Svg>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-
-  mapScreen: {
-    flex: 1,
-    overflow: "hidden",
-    backgroundColor: colors.gray03,
-  },
-
-  header: {
-    borderBottomColor: colors.gray04,
-  },
-
-  mapHeaderLayer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 2,
-  },
-
-  mapHeader: {
-    borderBottomWidth: 0,
-    backgroundColor: "transparent",
-  },
-
-  headerTitle: {
-    ...typography.head01Sb,
-    color: colors.black,
-  },
-
-  content: {
-    flex: 1,
-    paddingTop: 28,
-    paddingHorizontal: 20,
-  },
-
-  heading: {
-    fontFamily: "SUIT",
-    fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 28,
-    color: colors.gray09,
-  },
-
-  label: {
-    marginTop: 32,
-    fontFamily: "SUIT",
-    fontSize: 15,
-    fontWeight: "600",
-    lineHeight: 21,
-    color: colors.gray08,
-  },
-
-  timeLabel: {
-    marginTop: 32,
-  },
-
-  textInput: {
-    height: 64,
-    marginTop: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.gray09,
-  },
-
-  timeInput: {
-    height: 64,
-    marginTop: 12,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-
-  timeInputText: {
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22.4,
-    color: colors.gray09,
-  },
-
-  footer: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-    flexDirection: "row",
-    gap: 14,
-    backgroundColor: colors.white,
-  },
-
-  cancelButton: {
-    flex: 1,
-    height: 64,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.gray05,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-
-  cancelButtonText: {
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22.4,
-    color: colors.gray08,
-  },
-
-  nextButton: {
-    flex: 1,
-    height: 64,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: colors.main,
-  },
-
-  nextButtonText: {
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "800",
-    lineHeight: 22.4,
-    color: colors.white,
-  },
-
-  sheetOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-
-  sheetDim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor:
-      "rgba(52, 56, 59, 0.32)",
-  },
-
-  sheet: {
-    paddingTop: 18,
-    paddingHorizontal: 20,
-    paddingBottom: 28,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    backgroundColor: colors.white,
-  },
-
-  sheetHandle: {
-    alignSelf: "center",
-    width: 62,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.gray05,
-  },
-
-  pickerRows: {
-    marginTop: 28,
-    height:
-      TIME_PICKER_ITEM_HEIGHT *
-      TIME_PICKER_VISIBLE_ITEMS,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  pickerColumn: {
-    flex: 1,
-    height:
-      TIME_PICKER_ITEM_HEIGHT *
-      TIME_PICKER_VISIBLE_ITEMS,
-  },
-
-  pickerSelection: {
-    position: "absolute",
-    top: TIME_PICKER_ITEM_HEIGHT,
-    left: 0,
-    right: 0,
-    height: TIME_PICKER_ITEM_HEIGHT,
-    borderRadius: 4,
-    backgroundColor: colors.gray03,
-  },
-
-  pickerScroll: {
-    height:
-      TIME_PICKER_ITEM_HEIGHT *
-      TIME_PICKER_VISIBLE_ITEMS,
-  },
-
-  pickerColumnSpacer: {
-    height: TIME_PICKER_ITEM_HEIGHT,
-  },
-
-  pickerOption: {
-    height: TIME_PICKER_ITEM_HEIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  pickerOptionText: {
-    fontFamily: "SUIT",
-    fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 28,
-    color: colors.gray05,
-  },
-
-  pickerOptionTextSelected: {
-    color: colors.gray09,
-  },
-
-  pickerSeparator: {
-    width: 12,
-    textAlign: "center",
-    fontFamily: "SUIT",
-    fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 28,
-    color: colors.gray09,
-  },
-
-  confirmButton: {
-    height: 64,
-    marginTop: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: colors.main,
-  },
-
-  confirmButtonText: {
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "800",
-    lineHeight: 22.4,
-    color: colors.white,
-  },
-
-  placeSearchBox: {
-    height: 46,
-    marginTop: 8,
-    marginHorizontal: 24,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 4,
-    backgroundColor: colors.white,
-    shadowColor: "#3D445E",
-    shadowOffset: {
-      width: 0,
-      height: 2,
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor:
+        colors.white,
     },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-  },
 
-  placeSearchInput: {
-    flex: 1,
-    height: "100%",
-    marginLeft: 10,
-    paddingVertical: 0,
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.gray09,
-  },
+    mapScreen: {
+      flex: 1,
+      overflow: "hidden",
+      backgroundColor:
+        colors.gray03,
+    },
 
-  placeResultPanel: {
-    maxHeight: 214,
-    marginTop: 8,
-    marginHorizontal: 24,
-    borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 8,
-    overflow: "hidden",
-    backgroundColor: colors.white,
-    shadowColor: "#3D445E",
-    shadowOffset: {
-      width: 0,
+    header: {
+      borderBottomColor:
+        colors.gray04,
+    },
+
+    mapHeaderLayer: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 2,
+    },
+
+    mapHeader: {
+      borderBottomWidth: 0,
+      backgroundColor:
+        "transparent",
+    },
+
+    headerTitle: {
+      ...typography.head01Sb,
+      color: colors.black,
+    },
+
+    content: {
+      flex: 1,
+      paddingTop: 28,
+      paddingHorizontal: 20,
+    },
+
+    heading: {
+      fontFamily: "SUIT",
+      fontSize: 20,
+      fontWeight: "700",
+      lineHeight: 28,
+      color: colors.gray09,
+    },
+
+    label: {
+      marginTop: 32,
+      fontFamily: "SUIT",
+      fontSize: 15,
+      fontWeight: "600",
+      lineHeight: 21,
+      color: colors.gray08,
+    },
+
+    timeLabel: {
+      marginTop: 32,
+    },
+
+    textInput: {
+      height: 64,
+      marginTop: 12,
+      paddingHorizontal: 16,
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.gray09,
+    },
+
+    timeInput: {
+      height: 64,
+      marginTop: 12,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    timeInputText: {
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "700",
+      lineHeight: 22.4,
+      color: colors.gray09,
+    },
+
+    footer: {
+      paddingHorizontal: 20,
+      paddingBottom: 30,
+      flexDirection: "row",
+      gap: 14,
+      backgroundColor:
+        colors.white,
+    },
+
+    cancelButton: {
+      flex: 1,
+      height: 64,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderWidth: 1,
+      borderColor:
+        colors.gray05,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    cancelButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "700",
+      lineHeight: 22.4,
+      color: colors.gray08,
+    },
+
+    nextButton: {
+      flex: 1,
+      height: 64,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderRadius: 8,
+      backgroundColor:
+        colors.main,
+    },
+
+    nextButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "800",
+      lineHeight: 22.4,
+      color: colors.white,
+    },
+
+    sheetOverlay: {
+      flex: 1,
+      justifyContent:
+        "flex-end",
+    },
+
+    sheetDim: {
+      ...StyleSheet.absoluteFillObject,
+
+      backgroundColor:
+        "rgba(52, 56, 59, 0.32)",
+    },
+
+    sheet: {
+      paddingTop: 18,
+      paddingHorizontal: 20,
+      paddingBottom: 28,
+      borderTopLeftRadius:
+        16,
+      borderTopRightRadius:
+        16,
+      backgroundColor:
+        colors.white,
+    },
+
+    sheetHandle: {
+      alignSelf: "center",
+      width: 62,
       height: 4,
+      borderRadius: 2,
+      backgroundColor:
+        colors.gray05,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-
-  placeResultList: {
-    maxHeight: 214,
-  },
-
-  placeResultRow: {
-    minHeight: 64,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    justifyContent: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray03,
-  },
-
-  placeResultName: {
-    fontFamily: "SUIT",
-    fontSize: 15,
-    fontWeight: "800",
-    lineHeight: 21,
-    color: colors.gray09,
-  },
-
-  placeResultAddress: {
-    marginTop: 3,
-    fontFamily: "SUIT",
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 16.8,
-    color: colors.gray07,
-  },
-
-  placeResultStatus: {
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19.6,
-    color: colors.gray07,
-  },
-
-  /*
-   * 중요:
-   * overflow hidden으로 접혔을 때
-   * 출발지 / 도착지 내용이 밖으로 나오지 않게 함
-   */
-  routeSheet: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-
-    backgroundColor: colors.white,
-
-    overflow: "hidden",
-  },
-
-  /*
-   * 접힌 상태에서 이 36px만 보임
-   */
-  routeSheetHandleArea: {
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  routeSheetContent: {
-    flex: 1,
-    minHeight: 0,
-  },
-
-  routeFieldLabel: {
-    marginTop: 0,
-    marginBottom: 4,
-    fontFamily: "SUIT",
-    fontSize: 11,
-    fontWeight: "700",
-    lineHeight: 15.4,
-    color: colors.gray07,
-  },
-
-  routeField: {
-    height: 46,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-
-  routeFieldActive: {
-    borderColor: colors.main,
-  },
-
-  routeFieldInput: {
-    height: "100%",
-    paddingHorizontal: 14,
-    paddingVertical: 0,
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19.6,
-    color: colors.gray09,
-  },
-
-  mapConfirmButton: {
-    height: 46,
-    marginTop: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: colors.main,
-  },
-
-  mapConfirmButtonText: {
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "800",
-    lineHeight: 19.6,
-    color: colors.white,
-  },
-
-  resultScreen: {
-    flex: 1,
-    backgroundColor: colors.gray01,
-  },
-
-  resultHeader: {
-    height: 80,
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.gray01,
-  },
-
-  resultBackButton: {
-    width: 30,
-    height: 44,
-    marginRight: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  routeSummaryPill: {
-    flex: 1,
-    height: 52,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-
-  routeSummaryInput: {
-    flex: 1,
-    height: "100%",
-    minWidth: 0,
-    paddingVertical: 0,
-    textAlign: "center",
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22.4,
-    color: colors.gray09,
-  },
-
-  resultNotice: {
-    height: 48,
-    paddingHorizontal: 20,
-    justifyContent: "center",
-    backgroundColor: colors.gray02,
-  },
-
-  resultNoticeText: {
-    fontFamily: "SUIT",
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 16.8,
-    color: colors.gray07,
-  },
-
-  routeResultContent: {
-    flex: 1,
-    paddingTop: 18,
-    paddingHorizontal: 20,
-    backgroundColor: colors.white,
-  },
-
-  routeStatusBox: {
-    minHeight: 180,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  routeStatusText: {
-    textAlign: "center",
-    fontFamily: "SUIT",
-    fontSize: 15,
-    fontWeight: "700",
-    lineHeight: 21,
-    color: colors.gray06,
-  },
-
-  optionBadges: {
-    flexDirection: "row",
-    gap: 8,
-  },
-
-  optionBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: "#D9E7FF",
-  },
-
-  optionBadgeText: {
-    fontFamily: "SUIT",
-    fontSize: 12,
-    fontWeight: "800",
-    lineHeight: 16.8,
-    color: "#3478F6",
-  },
-
-  totalTimeRow: {
-    marginTop: 12,
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
-
-  totalTimeNumber: {
-    fontFamily: "SUIT",
-    fontSize: 28,
-    fontWeight: "700",
-    lineHeight: 34,
-    color: colors.gray09,
-  },
-
-  totalTimeUnit: {
-    marginBottom: 3,
-    marginLeft: 4,
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 19.6,
-    color: colors.gray09,
-  },
-
-  routeTimeline: {
-    height: 18,
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    overflow: "hidden",
-    borderRadius: 10,
-    backgroundColor: colors.gray04,
-  },
-
-  routeTimelineSegment: {
-    height: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    minWidth: 0,
-  },
-
-  routeWalkSegment: {
-    flex: 1.1,
-  },
-
-  routeBusSegment: {
-    flex: 1.05,
-    borderRadius: 10,
-    backgroundColor: colors.bus,
-  },
-
-  routeWalkIcon: {
-    width: 18,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 9,
-    backgroundColor: colors.gray06,
-  },
-
-  routeBusIcon: {
-    width: 18,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 9,
-    backgroundColor: colors.bus,
-  },
-
-  routeTimelineTextWrap: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  routeTimelineText: {
-    fontFamily: "SUIT",
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 18,
-    color: colors.gray07,
-  },
-
-  routeTimelineTextOn: {
-    fontFamily: "SUIT",
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 18,
-    color: colors.white,
-  },
-
-  routeDivider: {
-    height: 1,
-    marginTop: 14,
-    marginBottom: 14,
-    backgroundColor: colors.gray03,
-  },
-
-  routeBusInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  routeBusBadge: {
-    width: 22,
-    height: 22,
-    marginRight: 7,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 11,
-    backgroundColor: colors.bus,
-  },
-
-  routeBusNumber: {
-    fontFamily: "SUIT",
-    fontSize: 18,
-    fontWeight: "700",
-    lineHeight: 25.2,
-    color: colors.gray09,
-  },
-
-  routeBusDirection: {
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19.6,
-    color: colors.gray06,
-  },
-
-  routeStops: {
-    marginTop: 12,
-    gap: 11,
-  },
-
-  stopRow: {
-    height: 23,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  stopOuter: {
-    width: 23,
-    height: 23,
-    marginRight: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    backgroundColor: colors.gray04,
-  },
-
-  stopOuterActive: {
-    backgroundColor: colors.sub,
-  },
-
-  stopInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.gray06,
-  },
-
-  stopInnerActive: {
-    backgroundColor: colors.bus,
-  },
-
-  stopLabel: {
-    width: 42,
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 19.6,
-    color: colors.gray07,
-  },
-
-  stopName: {
-    flex: 1,
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19.6,
-    color: colors.gray08,
-  },
-
-  routeAlarmButton: {
-    height: 46,
-    marginTop: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-
-  routeAlarmButtonText: {
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19.6,
-    color: colors.gray08,
-  },
-
-  finalScreen: {
-    flex: 1,
-    backgroundColor: colors.gray01,
-  },
-
-  finalRouteHeader: {
-    height: 64,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.gray02,
-  },
-
-  finalBusInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  finalTotalTime: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
-
-  finalTotalTimeNumber: {
-    fontFamily: "SUIT",
-    fontSize: 24,
-    fontWeight: "800",
-    lineHeight: 30,
-    color: colors.gray09,
-  },
-
-  finalTotalTimeUnit: {
-    marginBottom: 2,
-    marginLeft: 3,
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19.6,
-    color: colors.gray09,
-  },
-
-  finalContent: {
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    backgroundColor: colors.white,
-  },
-
-  timeSummaryRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 12,
-  },
-
-  timeSummaryBlock: {
-    flex: 1,
-  },
-
-  finalLabel: {
-    marginBottom: 8,
-    fontFamily: "SUIT",
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 18.2,
-    color: colors.gray07,
-  },
-
-  timeCard: {
-    height: 64,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-
-  timeCardText: {
-    fontFamily: "SUIT",
-    fontSize: 18,
-    fontWeight: "700",
-    lineHeight: 25.2,
-    color: colors.gray07,
-  },
-
-  resetRouteButton: {
-    height: 46,
-    marginTop: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-
-  resetRouteButtonText: {
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19.6,
-    color: colors.gray08,
-  },
-
-  finalDivider: {
-    height: 16,
-    backgroundColor: colors.gray02,
-  },
-
-  questionText: {
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22.4,
-    color: colors.gray09,
-  },
-
-  reminderSelect: {
-    height: 64,
-    marginTop: 16,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-
-  reminderSelectText: {
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22.4,
-    color: colors.gray08,
-  },
-
-  dayRow: {
-    marginTop: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-
-  dayButton: {
-    flex: 1,
-    height: 46,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-
-  dayButtonSelected: {
-    borderColor: colors.main,
-    backgroundColor: colors.sub,
-  },
-
-  dayButtonText: {
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19.6,
-    color: colors.gray07,
-  },
-
-  dayButtonTextSelected: {
-    color: colors.main,
-  },
-
-  finalFooter: {
-    marginTop: "auto",
-    paddingHorizontal: 20,
-    paddingBottom: 28,
-    backgroundColor: colors.white,
-  },
-
-  finalInfoBox: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 4,
-    backgroundColor: colors.gray02,
-  },
-
-  finalInfoText: {
-    fontFamily: "SUIT",
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    color: colors.gray07,
-  },
-
-  finalButtonRow: {
-    marginTop: 14,
-    flexDirection: "row",
-    gap: 14,
-  },
-
-  prevButton: {
-    flex: 1,
-    height: 64,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.gray05,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-  },
-
-  prevButtonText: {
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22.4,
-    color: colors.gray08,
-  },
-
-  saveButton: {
-    flex: 1,
-    height: 64,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: colors.main,
-  },
-
-  saveButtonDisabled: {
-    backgroundColor: colors.gray05,
-  },
-
-  saveButtonText: {
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "800",
-    lineHeight: 22.4,
-    color: colors.white,
-  },
-
-  reminderOverlay: {
-    flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: "center",
-    backgroundColor:
-      "rgba(52, 56, 59, 0.32)",
-  },
-
-  reminderCard: {
-    paddingTop: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 26,
-    borderRadius: 16,
-    backgroundColor: colors.white,
-  },
-
-  reminderHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  reminderTitle: {
-    fontFamily: "SUIT",
-    fontSize: 16,
-    fontWeight: "800",
-    lineHeight: 22.4,
-    color: colors.gray07,
-  },
-
-  reminderCloseButton: {
-    width: 30,
-    height: 30,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  reminderList: {
-    marginTop: 22,
-    gap: 21,
-  },
-
-  reminderRow: {
-    minHeight: 35,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  reminderOptionText: {
-    fontFamily: "SUIT",
-    fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 28,
-    color: colors.gray08,
-  },
-
-  reminderSwitch: {
-    width: 44,
-    height: 26,
-    padding: 3,
-    justifyContent: "center",
-    borderRadius: 13,
-    backgroundColor: colors.gray05,
-  },
-
-  reminderSwitchOn: {
-    alignItems: "flex-end",
-    backgroundColor: colors.main,
-  },
-
-  reminderSwitchThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.white,
-  },
-});
+
+    pickerRows: {
+      marginTop: 28,
+
+      height:
+        TIME_PICKER_ITEM_HEIGHT *
+        TIME_PICKER_VISIBLE_ITEMS,
+
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+
+    pickerColumn: {
+      flex: 1,
+
+      height:
+        TIME_PICKER_ITEM_HEIGHT *
+        TIME_PICKER_VISIBLE_ITEMS,
+    },
+
+    pickerSelection: {
+      position: "absolute",
+      top:
+        TIME_PICKER_ITEM_HEIGHT,
+      left: 0,
+      right: 0,
+      height:
+        TIME_PICKER_ITEM_HEIGHT,
+
+      borderRadius: 4,
+
+      backgroundColor:
+        colors.gray03,
+    },
+
+    pickerScroll: {
+      height:
+        TIME_PICKER_ITEM_HEIGHT *
+        TIME_PICKER_VISIBLE_ITEMS,
+    },
+
+    pickerColumnSpacer: {
+      height:
+        TIME_PICKER_ITEM_HEIGHT,
+    },
+
+    pickerOption: {
+      height:
+        TIME_PICKER_ITEM_HEIGHT,
+
+      alignItems: "center",
+
+      justifyContent:
+        "center",
+    },
+
+    pickerOptionText: {
+      fontFamily: "SUIT",
+      fontSize: 20,
+      fontWeight: "700",
+      lineHeight: 28,
+      color: colors.gray05,
+    },
+
+    pickerOptionTextSelected: {
+      color: colors.gray09,
+    },
+
+    pickerSeparator: {
+      width: 12,
+      textAlign: "center",
+      fontFamily: "SUIT",
+      fontSize: 20,
+      fontWeight: "700",
+      lineHeight: 28,
+      color: colors.gray09,
+    },
+
+    confirmButton: {
+      height: 64,
+      marginTop: 30,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderRadius: 8,
+      backgroundColor:
+        colors.main,
+    },
+
+    confirmButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "800",
+      lineHeight: 22.4,
+      color: colors.white,
+    },
+
+    placeSearchBox: {
+      height: 46,
+      marginTop: 8,
+      marginHorizontal: 24,
+      paddingHorizontal: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: 4,
+      backgroundColor:
+        colors.white,
+      shadowColor:
+        "#3D445E",
+
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+
+    placeSearchInput: {
+      flex: 1,
+      height: "100%",
+      marginLeft: 10,
+      paddingVertical: 0,
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.gray09,
+    },
+
+    placeResultPanel: {
+      maxHeight: 214,
+      marginTop: 8,
+      marginHorizontal: 24,
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      overflow: "hidden",
+      backgroundColor:
+        colors.white,
+      shadowColor:
+        "#3D445E",
+
+      shadowOffset: {
+        width: 0,
+        height: 4,
+      },
+
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      elevation: 3,
+    },
+
+    placeResultList: {
+      maxHeight: 214,
+    },
+
+    placeResultRow: {
+      minHeight: 64,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      justifyContent:
+        "center",
+      borderBottomWidth: 1,
+      borderBottomColor:
+        colors.gray03,
+    },
+
+    placeResultName: {
+      fontFamily: "SUIT",
+      fontSize: 15,
+      fontWeight: "800",
+      lineHeight: 21,
+      color: colors.gray09,
+    },
+
+    placeResultAddress: {
+      marginTop: 3,
+      fontFamily: "SUIT",
+      fontSize: 12,
+      fontWeight: "600",
+      lineHeight: 16.8,
+      color: colors.gray07,
+    },
+
+    placeResultStatus: {
+      paddingHorizontal: 16,
+      paddingVertical: 18,
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      lineHeight: 19.6,
+      color: colors.gray07,
+    },
+
+    routeSheet: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+
+      paddingHorizontal: 20,
+      paddingBottom: 16,
+
+      borderTopLeftRadius:
+        16,
+
+      borderTopRightRadius:
+        16,
+
+      backgroundColor:
+        colors.white,
+
+      overflow: "hidden",
+    },
+
+    routeSheetHandleArea: {
+      height: 36,
+
+      alignItems: "center",
+
+      justifyContent:
+        "center",
+    },
+
+    routeSheetContent: {
+      flex: 1,
+      minHeight: 0,
+    },
+
+    routeFieldLabel: {
+      marginTop: 0,
+      marginBottom: 4,
+      fontFamily: "SUIT",
+      fontSize: 11,
+      fontWeight: "700",
+      lineHeight: 15.4,
+      color: colors.gray07,
+    },
+
+    routeField: {
+      height: 46,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    routeFieldActive: {
+      borderColor:
+        colors.main,
+    },
+
+    routeFieldInput: {
+      height: "100%",
+      paddingHorizontal: 14,
+      paddingVertical: 0,
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      lineHeight: 19.6,
+      color: colors.gray09,
+    },
+
+    /*
+     * 현재 주소 API 오류 표시
+     */
+    currentAddressError: {
+      marginTop: 0,
+      marginBottom: 6,
+      fontFamily: "SUIT",
+      fontSize: 11,
+      fontWeight: "600",
+      lineHeight: 15.4,
+      color: "#D14343",
+    },
+
+    mapConfirmButton: {
+      height: 46,
+      marginTop: 8,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderRadius: 8,
+      backgroundColor:
+        colors.main,
+    },
+
+    mapConfirmButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "800",
+      lineHeight: 19.6,
+      color: colors.white,
+    },
+
+    resultScreen: {
+      flex: 1,
+      backgroundColor:
+        colors.gray01,
+    },
+
+    resultHeader: {
+      height: 80,
+      paddingTop: 16,
+      paddingHorizontal: 20,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor:
+        colors.gray01,
+    },
+
+    resultBackButton: {
+      width: 30,
+      height: 44,
+      marginRight: 8,
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
+
+    routeSummaryPill: {
+      flex: 1,
+      height: 52,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    routeSummaryInput: {
+      flex: 1,
+      height: "100%",
+      minWidth: 0,
+      paddingVertical: 0,
+      textAlign: "center",
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "700",
+      lineHeight: 22.4,
+      color: colors.gray09,
+    },
+
+    resultNotice: {
+      height: 48,
+      paddingHorizontal: 20,
+      justifyContent:
+        "center",
+      backgroundColor:
+        colors.gray02,
+    },
+
+    resultNoticeText: {
+      fontFamily: "SUIT",
+      fontSize: 12,
+      fontWeight: "600",
+      lineHeight: 16.8,
+      color: colors.gray07,
+    },
+
+    routeResultContent: {
+      flex: 1,
+      paddingTop: 18,
+      paddingHorizontal: 20,
+      backgroundColor:
+        colors.white,
+    },
+
+    routeStatusBox: {
+      minHeight: 180,
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
+
+    routeStatusText: {
+      textAlign: "center",
+      fontFamily: "SUIT",
+      fontSize: 15,
+      fontWeight: "700",
+      lineHeight: 21,
+      color: colors.gray06,
+    },
+
+    optionBadges: {
+      flexDirection: "row",
+      gap: 8,
+    },
+
+    optionBadge: {
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      backgroundColor:
+        "#D9E7FF",
+    },
+
+    optionBadgeText: {
+      fontFamily: "SUIT",
+      fontSize: 12,
+      fontWeight: "800",
+      lineHeight: 16.8,
+      color: "#3478F6",
+    },
+
+    totalTimeRow: {
+      marginTop: 12,
+      flexDirection: "row",
+      alignItems:
+        "flex-end",
+    },
+
+    totalTimeNumber: {
+      fontFamily: "SUIT",
+      fontSize: 28,
+      fontWeight: "700",
+      lineHeight: 34,
+      color: colors.gray09,
+    },
+
+    totalTimeUnit: {
+      marginBottom: 3,
+      marginLeft: 4,
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "600",
+      lineHeight: 19.6,
+      color: colors.gray09,
+    },
+
+    routeTimeline: {
+      height: 18,
+      marginTop: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      overflow: "hidden",
+      borderRadius: 10,
+      backgroundColor:
+        colors.gray04,
+    },
+
+    routeTimelineSegment: {
+      height: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      minWidth: 0,
+    },
+
+    routeWalkSegment: {
+      flex: 1.1,
+    },
+
+    routeBusSegment: {
+      flex: 1.05,
+      borderRadius: 10,
+      backgroundColor:
+        colors.bus,
+    },
+
+    routeWalkIcon: {
+      width: 18,
+      height: 18,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderRadius: 9,
+      backgroundColor:
+        colors.gray06,
+    },
+
+    routeBusIcon: {
+      width: 18,
+      height: 18,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderRadius: 9,
+      backgroundColor:
+        colors.bus,
+    },
+
+    routeTimelineTextWrap: {
+      flex: 1,
+      minWidth: 0,
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
+
+    routeTimelineText: {
+      fontFamily: "SUIT",
+      fontSize: 13,
+      fontWeight: "700",
+      lineHeight: 18,
+      color: colors.gray07,
+    },
+
+    routeTimelineTextOn: {
+      fontFamily: "SUIT",
+      fontSize: 13,
+      fontWeight: "700",
+      lineHeight: 18,
+      color: colors.white,
+    },
+
+    routeDivider: {
+      height: 1,
+      marginTop: 14,
+      marginBottom: 14,
+      backgroundColor:
+        colors.gray03,
+    },
+
+    routeBusInfo: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    routeBusBadge: {
+      width: 22,
+      height: 22,
+      marginRight: 7,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderRadius: 11,
+      backgroundColor:
+        colors.bus,
+    },
+
+    routeBusNumber: {
+      fontFamily: "SUIT",
+      fontSize: 18,
+      fontWeight: "700",
+      lineHeight: 25.2,
+      color: colors.gray09,
+    },
+
+    routeBusDirection: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      lineHeight: 19.6,
+      color: colors.gray06,
+    },
+
+    routeStops: {
+      marginTop: 12,
+      gap: 11,
+    },
+
+    stopRow: {
+      height: 23,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    stopOuter: {
+      width: 23,
+      height: 23,
+      marginRight: 9,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderRadius: 12,
+      backgroundColor:
+        colors.gray04,
+    },
+
+    stopOuterActive: {
+      backgroundColor:
+        colors.sub,
+    },
+
+    stopInner: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor:
+        colors.gray06,
+    },
+
+    stopInnerActive: {
+      backgroundColor:
+        colors.bus,
+    },
+
+    stopLabel: {
+      width: 42,
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "600",
+      lineHeight: 19.6,
+      color: colors.gray07,
+    },
+
+    stopName: {
+      flex: 1,
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      lineHeight: 19.6,
+      color: colors.gray08,
+    },
+
+    routeAlarmButton: {
+      height: 46,
+      marginTop: 22,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    routeAlarmButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      lineHeight: 19.6,
+      color: colors.gray08,
+    },
+
+    finalScreen: {
+      flex: 1,
+      backgroundColor:
+        colors.gray01,
+    },
+
+    finalRouteHeader: {
+      height: 64,
+      paddingHorizontal: 20,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+      backgroundColor:
+        colors.gray02,
+    },
+
+    finalBusInfo: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    finalTotalTime: {
+      flexDirection: "row",
+      alignItems:
+        "flex-end",
+    },
+
+    finalTotalTimeNumber: {
+      fontFamily: "SUIT",
+      fontSize: 24,
+      fontWeight: "800",
+      lineHeight: 30,
+      color: colors.gray09,
+    },
+
+    finalTotalTimeUnit: {
+      marginBottom: 2,
+      marginLeft: 3,
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      lineHeight: 19.6,
+      color: colors.gray09,
+    },
+
+    finalContent: {
+      paddingHorizontal: 20,
+      paddingTop: 22,
+      backgroundColor:
+        colors.white,
+    },
+
+    timeSummaryRow: {
+      flexDirection: "row",
+      alignItems:
+        "flex-end",
+      gap: 12,
+    },
+
+    timeSummaryBlock: {
+      flex: 1,
+    },
+
+    finalLabel: {
+      marginBottom: 8,
+      fontFamily: "SUIT",
+      fontSize: 13,
+      fontWeight: "700",
+      lineHeight: 18.2,
+      color: colors.gray07,
+    },
+
+    timeCard: {
+      height: 64,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    timeCardText: {
+      fontFamily: "SUIT",
+      fontSize: 18,
+      fontWeight: "700",
+      lineHeight: 25.2,
+      color: colors.gray07,
+    },
+
+    resetRouteButton: {
+      height: 46,
+      marginTop: 16,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    resetRouteButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      lineHeight: 19.6,
+      color: colors.gray08,
+    },
+
+    finalDivider: {
+      height: 16,
+      backgroundColor:
+        colors.gray02,
+    },
+
+    questionText: {
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "700",
+      lineHeight: 22.4,
+      color: colors.gray09,
+    },
+
+    reminderSelect: {
+      height: 64,
+      marginTop: 16,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    reminderSelectText: {
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "700",
+      lineHeight: 22.4,
+      color: colors.gray08,
+    },
+
+    dayRow: {
+      marginTop: 10,
+      flexDirection: "row",
+      justifyContent:
+        "space-between",
+      gap: 8,
+    },
+
+    dayButton: {
+      flex: 1,
+      height: 46,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    dayButtonSelected: {
+      borderColor:
+        colors.main,
+      backgroundColor:
+        colors.sub,
+    },
+
+    dayButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      lineHeight: 19.6,
+      color: colors.gray07,
+    },
+
+    dayButtonTextSelected: {
+      color: colors.main,
+    },
+
+    finalFooter: {
+      marginTop: "auto",
+      paddingHorizontal: 20,
+      paddingBottom: 28,
+      backgroundColor:
+        colors.white,
+    },
+
+    finalInfoBox: {
+      paddingVertical: 14,
+      paddingHorizontal: 12,
+      borderRadius: 4,
+      backgroundColor:
+        colors.gray02,
+    },
+
+    finalInfoText: {
+      fontFamily: "SUIT",
+      fontSize: 12,
+      fontWeight: "600",
+      lineHeight: 18,
+      color: colors.gray07,
+    },
+
+    finalButtonRow: {
+      marginTop: 14,
+      flexDirection: "row",
+      gap: 14,
+    },
+
+    prevButton: {
+      flex: 1,
+      height: 64,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderWidth: 1,
+      borderColor:
+        colors.gray05,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    prevButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "700",
+      lineHeight: 22.4,
+      color: colors.gray08,
+    },
+
+    saveButton: {
+      flex: 1,
+      height: 64,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderRadius: 8,
+      backgroundColor:
+        colors.main,
+    },
+
+    saveButtonDisabled: {
+      backgroundColor:
+        colors.gray05,
+    },
+
+    saveButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "800",
+      lineHeight: 22.4,
+      color: colors.white,
+    },
+
+    reminderOverlay: {
+      flex: 1,
+      paddingHorizontal: 20,
+      justifyContent:
+        "center",
+      backgroundColor:
+        "rgba(52, 56, 59, 0.32)",
+    },
+
+    reminderCard: {
+      paddingTop: 24,
+      paddingHorizontal: 24,
+      paddingBottom: 26,
+      borderRadius: 16,
+      backgroundColor:
+        colors.white,
+    },
+
+    reminderHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+    },
+
+    reminderTitle: {
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "800",
+      lineHeight: 22.4,
+      color: colors.gray07,
+    },
+
+    reminderCloseButton: {
+      width: 30,
+      height: 30,
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
+
+    reminderList: {
+      marginTop: 22,
+      gap: 21,
+    },
+
+    reminderRow: {
+      minHeight: 35,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+    },
+
+    reminderOptionText: {
+      fontFamily: "SUIT",
+      fontSize: 20,
+      fontWeight: "700",
+      lineHeight: 28,
+      color: colors.gray08,
+    },
+
+    reminderSwitch: {
+      width: 44,
+      height: 26,
+      padding: 3,
+      justifyContent:
+        "center",
+      borderRadius: 13,
+      backgroundColor:
+        colors.gray05,
+    },
+
+    reminderSwitchOn: {
+      alignItems:
+        "flex-end",
+      backgroundColor:
+        colors.main,
+    },
+
+    reminderSwitchThumb: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor:
+        colors.white,
+    },
+  });
