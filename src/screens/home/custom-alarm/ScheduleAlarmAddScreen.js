@@ -23,8 +23,6 @@ import RouteBackIcon from "../../../../assets/images/L.svg";
 import RouteArrowIcon from "../../../../assets/images/R_g.svg";
 import RouteClearIcon from "../../../../assets/images/x.svg";
 import BigBusAsset from "../../../../assets/images/bigbus.svg";
-import SmallBusAsset from "../../../../assets/images/smallbus.svg";
-import WalkAsset from "../../../../assets/images/man.svg";
 import StopLineAsset from "../../../../assets/images/line.svg";
 
 import { searchAddresses } from "../../../api/address/search";
@@ -32,6 +30,7 @@ import { createArrivalNotification } from "../../../api/notifications/arrival";
 import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { NaverMapView } from "../../../components/NaverMapView";
+import { RouteTimeline } from "../../../components/RouteTimeline";
 import { RoutePlaceSetupScreen } from "../first-last/RoutePlaceSetupScreen";
 import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
@@ -1567,6 +1566,7 @@ export function ScheduleRouteResultStep({
             </View>
 
             <RouteTimeline
+              style={styles.routeTimeline}
               segments={
                 selectedRoute.segments ??
                 []
@@ -1653,6 +1653,7 @@ export function ScheduleRouteResultStep({
                   selectedRoute,
 
                   {
+                    departureTimestamp: currentTime,
                     origin:
                       getRoutePlaceText(
                         origin,
@@ -2421,120 +2422,6 @@ function ReminderModal({
         </View>
       </View>
     </Modal>
-  );
-}
-
-function RouteTimeline({
-  segments: routeSegments = [],
-}) {
-  const segments = routeSegments.filter(
-    (segment) => segment.transitType !== "WALK" || Number(segment.durationMinutes ?? 0) > 0,
-  );
-  if (
-    segments.length === 0
-  ) {
-    return null;
-  }
-
-  const totalDuration =
-    segments.reduce(
-      (
-        sum,
-        segment,
-      ) =>
-        sum +
-        Math.max(
-          segment.durationMinutes ??
-            0,
-
-          1,
-        ),
-
-      0,
-    );
-
-  return (
-    <View
-      style={
-        styles.routeTimeline
-      }
-    >
-      {segments.map(
-        (
-          segment,
-          index,
-        ) => {
-          const isTransit =
-            segment.transitType !==
-            "WALK";
-
-          const duration =
-            Math.max(
-              segment.durationMinutes ??
-                0,
-
-              0,
-            );
-
-          return (
-            <View
-              key={
-                segment.id ??
-                `${segment.transitType}-${index}`
-              }
-              style={[
-                styles.routeTimelineSegment,
-
-                isTransit
-                  ? styles.routeBusSegment
-                  : styles.routeWalkSegment,
-
-                {
-                  flexGrow: 1 + Math.sqrt(Math.max(duration, 1) / totalDuration),
-                  flexBasis: 0,
-                  flexShrink: 1,
-                },
-              ]}
-            >
-              {isTransit || index === 0 ? (
-                <View
-                  style={
-                    isTransit
-                      ? styles.routeBusIcon
-                      : styles.routeWalkIcon
-                  }
-                >
-                  {isTransit ? (
-                    <SmallBusAsset width={7} height={8} />
-                  ) : (
-                    <WalkAsset width={6} height={10} />
-                  )}
-                </View>
-              ) : null}
-
-              <View
-                style={
-                  styles.routeTimelineTextWrap
-                }
-              >
-                <Text
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.7}
-                  style={
-                    isTransit
-                      ? styles.routeTimelineTextOn
-                      : styles.routeTimelineText
-                  }
-                >
-                  {duration}분
-                </Text>
-              </View>
-            </View>
-          );
-        },
-      )}
-    </View>
   );
 }
 

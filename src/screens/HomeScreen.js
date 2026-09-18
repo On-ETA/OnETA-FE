@@ -22,164 +22,10 @@ import { FirstLastRouteScreen } from "./home/first-last/FirstLastRouteScreen";
 import { MyPageScreen } from "./MyPageScreen";
 import { colors, layout } from "../theme";
 import { blurActiveElement } from "../utils/accessibility";
+import { createFirstLastRouteSummary } from "../utils/firstLastRouteSummary";
 
 const homeBackground = colors.gray01;
 
-function getPrimaryTransitSegment(route) {
-  return route?.segments?.find((segment) => segment.transitType !== "WALK");
-}
-
-function getWalkSegments(route) {
-  return route?.segments?.filter((segment) => segment.transitType === "WALK") ?? [];
-}
-
-function getSegmentStopName(segment, edge) {
-  if (!segment) {
-    return "";
-  }
-
-  if (edge === "start") {
-    return segment.startStation || segment.stations?.[0]?.name || "";
-  }
-
-  return (
-    segment.endStation ||
-    segment.stations?.[segment.stations.length - 1]?.name ||
-    ""
-  );
-}
-
-function getRouteValue(source, key) {
-  return source?.[key] ?? source?.raw?.[key];
-}
-
-function getNumericRouteValue(source, key) {
-  const value = getRouteValue(source, key);
-  const number = Number(value);
-
-  return Number.isFinite(number) ? number : undefined;
-}
-
-function formatClockTime(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    return undefined;
-  }
-
-  return `${String(date.getHours()).padStart(2, "0")}:${String(
-    date.getMinutes(),
-  ).padStart(2, "0")}`;
-}
-
-function formatRouteTime(value) {
-  if (!value) {
-    return undefined;
-  }
-
-  if (typeof value === "string") {
-    const [hour, minute] = value.split(":");
-
-    return hour && minute
-      ? `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`
-      : value;
-  }
-
-  if (typeof value === "object") {
-    const hour = Number(value.hour);
-    const minute = Number(value.minute);
-
-    return Number.isFinite(hour) && Number.isFinite(minute)
-      ? `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
-      : undefined;
-  }
-
-  return undefined;
-}
-
-function getFirstLastRouteTimes({ firstWalk, primarySegment, route }) {
-  const now = new Date();
-  const realTimeArrivalSeconds = getNumericRouteValue(
-    primarySegment,
-    "realTimeArrivalSeconds",
-  );
-  const busMinutes = getNumericRouteValue(primarySegment, "durationMinutes");
-  const walkMinutes = getNumericRouteValue(firstWalk, "durationMinutes") ?? 0;
-  const boardingDate = Number.isFinite(realTimeArrivalSeconds)
-    ? new Date(now.getTime() + realTimeArrivalSeconds * 1000)
-    : null;
-  const departureDate = boardingDate
-    ? new Date(boardingDate.getTime() - walkMinutes * 60 * 1000)
-    : null;
-  const arrivalDate =
-    boardingDate && Number.isFinite(busMinutes)
-      ? new Date(boardingDate.getTime() + busMinutes * 60 * 1000)
-      : null;
-  const derivedRemainingMinutes = departureDate
-    ? Math.max(
-        0,
-        Math.ceil((departureDate.getTime() - now.getTime()) / 60000),
-      )
-    : undefined;
-
-  return {
-    remainingMinutes:
-      getNumericRouteValue(route, "remainingMinutes") ??
-      getNumericRouteValue(route, "remainingTimeMinutes") ??
-      derivedRemainingMinutes,
-    departureTime:
-      formatRouteTime(getRouteValue(route, "departureTime")) ??
-      formatRouteTime(getRouteValue(route, "startTime")) ??
-      formatClockTime(departureDate),
-    boardingTime:
-      formatRouteTime(getRouteValue(primarySegment, "boardingTime")) ??
-      formatRouteTime(getRouteValue(primarySegment, "startTime")) ??
-      formatClockTime(boardingDate),
-    arrivalTime:
-      formatRouteTime(getRouteValue(route, "arrivalTime")) ??
-      formatRouteTime(getRouteValue(primarySegment, "arrivalTime")) ??
-      formatRouteTime(getRouteValue(primarySegment, "endTime")) ??
-      formatClockTime(arrivalDate),
-  };
-}
-
-function createFirstLastRouteSummary(route, places = {}) {
-  const primarySegment = getPrimaryTransitSegment(route);
-  const walkSegments = getWalkSegments(route);
-  const firstWalk = walkSegments[0];
-  const lastWalk = walkSegments[walkSegments.length - 1];
-  const totalDuration =
-    route?.realTimeDurationMinutes ?? route?.totalDurationMinutes ?? 0;
-  const routeTimes = getFirstLastRouteTimes({
-    firstWalk,
-    primarySegment,
-    route,
-  });
-
-  return {
-    remainingMinutes: routeTimes.remainingMinutes,
-    departureTime: routeTimes.departureTime,
-    routeNumber: primarySegment?.transitName || "대중교통",
-    routeDirection: primarySegment?.endStation
-      ? `${primarySegment.endStation} 방면`
-      : `${places.destination ?? route?.destinationAddress ?? "도착지"} 방면`,
-    walkMinutes: firstWalk?.durationMinutes ?? 5,
-    busMinutes: primarySegment?.durationMinutes ?? (totalDuration || 4),
-    afterWalkMinutes: lastWalk?.durationMinutes ?? 8,
-    boardingStopName:
-      getSegmentStopName(primarySegment, "start") ||
-      places.origin ||
-      route?.originAddress ||
-      "출발정류장",
-    boardingTime: routeTimes.boardingTime,
-    arrivalStopName:
-      getSegmentStopName(primarySegment, "end") ||
-      places.destination ||
-      route?.destinationAddress ||
-      "도착정류장",
-    arrivalTime: routeTimes.arrivalTime,
-    preDepartureAlarmMinutes: 10,
-    route,
-  };
-}
 
 function getCurrentAddressLabel(addresses) {
   const currentAddress = addresses.find((address) => address.isCurrent);
@@ -353,7 +199,8 @@ export function HomeScreen({
                   blurActiveElement();
                   setFirstLastRouteSetupStep("map");
                 }}
-                onRouteSelect={() => {
+                onRouteSelect={(route, places) => {
+                  setFirstLastRouteSummary(createFirstLastRouteSummary(route, places));
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
                 }}
