@@ -72,7 +72,7 @@ export function AccountInfoScreen({ onBackPress, onConfirmPress }) {
   return (
     <AppScreen>
       <View style={styles.container}>
-        <Header
+        <Header topSpacerStyle={{ height: 0 }}
           type="back"
           title="닉네임 변경"
           BackIcon={BackIcon}
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.head01Sb,
     marginLeft: 0,
-    color: colors.black,
+    color: colors.gray08,
   },
   backButton: {
     width: 24,

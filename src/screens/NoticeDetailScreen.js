@@ -52,7 +52,7 @@ export function NoticeDetailScreen({ notice = FALLBACK_NOTICE, onBackPress }) {
   return (
     <AppScreen>
       <View style={styles.container}>
-        <Header type="back" title="공지사항" onBackPress={onBackPress} />
+        <Header topSpacerStyle={{ height: 0 }} type="back" title="공지사항" onBackPress={onBackPress} />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}

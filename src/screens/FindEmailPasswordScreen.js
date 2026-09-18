@@ -285,7 +285,7 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
 
   return (
     <AppScreen>
-      <Header
+      <Header topSpacerStyle={{ height: 0 }}
         type="back"
         title="비밀번호 찾기"
         BackIcon={BackIcon}
@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.head01Sb,
     marginLeft: 0,
-    color: colors.black,
+    color: colors.gray08,
   },
   backButton: {
     width: 24,

@@ -30,8 +30,10 @@ export function HomeTopSection({
 
   return (
     <>
-      {!showTabs && <View style={styles.topSpacer} />}
-      <View style={[styles.homeTopSection, showTabs && styles.homeTopSectionWithTabs]}>
+      <View style={[
+        styles.homeTopSection,
+        showTabs ? styles.homeTopSectionWithTabs : styles.pageTopSection,
+      ]}>
         <View style={styles.homeHeader}>
           {showAddress ? (
             <Pressable
@@ -48,7 +50,7 @@ export function HomeTopSection({
               />
             </Pressable>
           ) : title ? (
-            <View style={styles.titleGroup}>
+            <View style={[styles.titleGroup, !showTabs && styles.pageTitleGroup]}>
               {showBackButton ? (
                 <Pressable
                   accessibilityLabel="뒤로가기"
@@ -135,10 +137,6 @@ export function HomeTopSection({
 }
 
 const styles = StyleSheet.create({
-  topSpacer: {
-    height: 24,
-    backgroundColor: homeBackground,
-  },
   homeTopSection: {
     alignSelf: "center",
     width: 360,
@@ -156,6 +154,19 @@ const styles = StyleSheet.create({
     width: "auto",
     paddingTop: 16,
     gap: 16,
+  },
+  pageTopSection: {
+    display: "flex",
+    height: 54,
+    paddingVertical: 0,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    alignSelf: "stretch",
+    width: "auto",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray03,
   },
   homeHeader: {
     width: "100%",
@@ -190,6 +201,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  pageTitleGroup: {
+    gap: 12,
   },
   backButton: {
     width: 24,

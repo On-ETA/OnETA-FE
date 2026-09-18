@@ -120,6 +120,9 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.gray04,
   },
   backHeader: {
+    display: "flex",
+    alignSelf: "stretch",
+    paddingVertical: 0,
     height: 54,
     paddingHorizontal: 16,
     justifyContent: "flex-start",
@@ -157,6 +160,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 0,
     ...typography.head01Sb,
-    color: colors.black,
+    color: colors.gray08,
   },
 });

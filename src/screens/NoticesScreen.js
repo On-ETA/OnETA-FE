@@ -69,7 +69,7 @@ export function NoticesScreen({
   return (
     <AppScreen>
       <View style={styles.container}>
-        <Header type="back" title="공지사항" onBackPress={onBackPress} />
+        <Header topSpacerStyle={{ height: 0 }} type="back" title="공지사항" onBackPress={onBackPress} />
 
         <View style={styles.list}>
           {isLoading ? (

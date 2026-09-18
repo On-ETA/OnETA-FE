@@ -108,7 +108,7 @@ export function TermsAgreementScreen({
   return (
     <AppScreen>
       <View style={styles.agreementBox}>
-        <Header
+        <Header topSpacerStyle={{ height: 0 }}
           type="back"
           title="회원가입"
           BackIcon={BackIcon}
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.head01Sb,
     marginLeft: 0,
-    color: colors.black,
+    color: colors.gray08,
   },
   backButton: {
     width: 24,

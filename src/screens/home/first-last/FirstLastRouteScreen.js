@@ -3,6 +3,10 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import Svg, { Circle, Path } from "react-native-svg";
 
 import ArrowRightIcon from "../../../../assets/images/R_w.svg";
+import WalkAsset from "../../../../assets/images/man.svg";
+import SmallBusAsset from "../../../../assets/images/smallbus.svg";
+import BigBusAsset from "../../../../assets/images/bigbus.svg";
+import StopLineAsset from "../../../../assets/images/line.svg";
 import ChangeIcon from "../../../../public/images/change.svg";
 import CloseIcon from "../../../../public/images/close.svg";
 import LoadIcon from "../../../../public/images/load.svg";
@@ -124,7 +128,7 @@ export function FirstLastRouteScreen({
               <View style={styles.timeline}>
                 <View style={[styles.timelineSegment, styles.walkSegment]}>
                   <View style={styles.walkDot}>
-                    <WalkIcon />
+                    <WalkAsset width={6} height={10} />
                   </View>
                   <View style={styles.timelineLabelWrap}>
                     <Text style={styles.timelineLabel}>
@@ -134,7 +138,7 @@ export function FirstLastRouteScreen({
                 </View>
                 <View style={[styles.timelineSegment, styles.busSegment]}>
                   <View style={styles.busDot}>
-                    <BusIcon />
+                    <SmallBusAsset width={7} height={8} />
                   </View>
                   <View style={styles.timelineLabelWrap}>
                     <Text style={styles.timelineLabelOn}>
@@ -155,7 +159,7 @@ export function FirstLastRouteScreen({
 
               <View style={styles.busInfoRow}>
                 <View style={styles.busBadge}>
-                  <BusIcon size={13} />
+                  <BigBusAsset width={9} height={10} />
                 </View>
                 <Text style={styles.busNumber}>{routeSummary.routeNumber}</Text>
                 <Text style={styles.busDirection}>
@@ -164,6 +168,7 @@ export function FirstLastRouteScreen({
               </View>
 
               <View style={styles.stopRows}>
+                <StopLineAsset width={1} height={35} style={styles.stopLine} />
                 <StopRow
                   active
                   label="승차"
@@ -280,7 +285,9 @@ function StopRow({ active = false, label, name, time }) {
   return (
     <View style={styles.stopRow}>
       <View style={[styles.stopOuter, active && styles.stopOuterActive]}>
-        <View style={[styles.stopInner, active && styles.stopInnerActive]} />
+        <View style={[styles.stopInner, active && styles.stopInnerActive]}>
+          <View style={styles.stopCenter} />
+        </View>
       </View>
       <Text style={styles.stopLabel}>{label}</Text>
       <Text style={styles.stopName}>{name}</Text>
@@ -446,9 +453,12 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontFamily: "SUIT",
-    fontSize: 13,
+    fontSize: 12,
+    fontStyle: "normal",
     fontWeight: "500",
-    lineHeight: 18.2,
+    lineHeight: 19.2,
+    letterSpacing: -0.12,
+    textAlign: "right",
     color: colors.gray06,
   },
   remainingGroup: {
@@ -478,7 +488,7 @@ const styles = StyleSheet.create({
     color: colors.gray08,
   },
   timeline: {
-    height: 18,
+    height: 16,
     flexDirection: "row",
     alignItems: "center",
     overflow: "hidden",
@@ -540,16 +550,22 @@ const styles = StyleSheet.create({
   },
   timelineLabel: {
     fontFamily: "SUIT",
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 18,
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.2,
+    letterSpacing: -0.12,
+    textAlign: "center",
     color: colors.gray07,
   },
   timelineLabelOn: {
     fontFamily: "SUIT",
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 18,
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.2,
+    letterSpacing: -0.12,
+    textAlign: "center",
     color: colors.white,
   },
   busInfoRow: {
@@ -557,28 +573,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   busBadge: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     marginRight: 7,
     alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: colors.bus,
+    justifyContent:
+      "center",
+    borderRadius: 11,
+    backgroundColor:
+      colors.bus,
   },
   busNumber: {
     fontFamily: "SUIT",
     fontSize: 18,
-    fontWeight: "700",
-    lineHeight: 25.2,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 18,
+    letterSpacing: -0.18,
     color: colors.gray09,
   },
   busDirection: {
     fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 19.6,
+    fontSize: 13,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 18.2,
+    letterSpacing: -0.13,
     color: colors.gray06,
   },
+  stopCenter: { width: 6, height: 6, flexShrink: 0, borderRadius: 100, backgroundColor: colors.white },
+  stopLine: { position: "absolute", left: 11, top: 11.5 },
   stopRows: {
     gap: 12,
   },
@@ -592,36 +616,47 @@ const styles = StyleSheet.create({
     height: 23,
     marginRight: 9,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent:
+      "center",
     borderRadius: 12,
-    backgroundColor: colors.gray04,
+    backgroundColor:
+      colors.gray04,
   },
   stopOuterActive: {
-    backgroundColor: colors.sub,
+    backgroundColor:
+      colors.sub,
   },
   stopInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.gray06,
+    width: 16,
+    height: 16,
+    borderRadius: 100,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor:
+      colors.gray06,
   },
   stopInnerActive: {
-    backgroundColor: colors.bus,
+    backgroundColor:
+      colors.main,
   },
   stopLabel: {
     width: 42,
     fontFamily: "SUIT",
     fontSize: 14,
+    fontStyle: "normal",
     fontWeight: "600",
     lineHeight: 19.6,
+    letterSpacing: -0.14,
     color: colors.gray07,
   },
   stopName: {
     flex: 1,
     fontFamily: "SUIT",
     fontSize: 14,
-    fontWeight: "700",
+    fontStyle: "normal",
+    fontWeight: "600",
     lineHeight: 19.6,
+    letterSpacing: -0.14,
     color: colors.gray08,
   },
   stopTime: {

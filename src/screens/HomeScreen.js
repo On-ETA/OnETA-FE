@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAddresses } from "../api/addresses";
 import { HomeTopSection } from "../components";
@@ -269,7 +270,7 @@ export function HomeScreen({
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" backgroundColor={homeBackground} />
-      <View style={styles.phone}>
+      <SafeAreaView edges={["top", "bottom"]} style={styles.phone}>
         <View style={styles.content}>
           {activeTab === "myPage" ? (
             <MyPageScreen
@@ -438,7 +439,7 @@ export function HomeScreen({
             )
           ) : null}
         </View>
-      </View>
+      </SafeAreaView>
     </View>
   );
 }
