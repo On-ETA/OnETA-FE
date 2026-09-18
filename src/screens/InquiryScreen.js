@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     borderColor: colors.gray03,
     borderRadius: 8,
     backgroundColor: colors.gray02,
-    color: colors.gray06,
+    color: colors.black,
     ...typography.body01Sb,
   },
 
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     borderColor: colors.gray03,
     borderRadius: 8,
     backgroundColor: colors.gray02,
-    color: colors.gray06,
+    color: colors.black,
     ...typography.body01Sb,
   },
 

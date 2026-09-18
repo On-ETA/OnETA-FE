@@ -3,14 +3,13 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import Svg, { Circle, Path } from "react-native-svg";
 
 import ArrowRightIcon from "../../../../assets/images/R_w.svg";
-import WalkAsset from "../../../../assets/images/man.svg";
-import SmallBusAsset from "../../../../assets/images/smallbus.svg";
 import BigBusAsset from "../../../../assets/images/bigbus.svg";
 import StopLineAsset from "../../../../assets/images/line.svg";
 import ChangeIcon from "../../../../public/images/change.svg";
 import CloseIcon from "../../../../public/images/close.svg";
 import LoadIcon from "../../../../public/images/load.svg";
 import SettingIcon from "../../../../public/images/setting.svg";
+import { RouteTimeline } from "../../../components/RouteTimeline";
 import { colors } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 
@@ -110,7 +109,7 @@ export function FirstLastRouteScreen({
                     <Text style={styles.remainingNumber}>
                       {Number.isFinite(routeSummary.remainingMinutes)
                         ? routeSummary.remainingMinutes
-                        : ""}
+                        : "--"}
                     </Text>
                     {Number.isFinite(routeSummary.remainingMinutes) ? (
                       <Text style={styles.remainingUnit}>분</Text>
@@ -118,69 +117,39 @@ export function FirstLastRouteScreen({
                   </View>
                 </View>
                 <View style={[styles.summaryBlock, styles.summaryBlockRight]}>
-                  <Text style={styles.summaryLabel}>출발 적정 시간</Text>
+                  <Text style={styles.summaryLabel}>예상 출발 시간</Text>
                   <Text style={styles.departureTime}>
                     {routeSummary.departureTime ?? ""}
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.timeline}>
-                <View style={[styles.timelineSegment, styles.walkSegment]}>
-                  <View style={styles.walkDot}>
-                    <WalkAsset width={6} height={10} />
-                  </View>
-                  <View style={styles.timelineLabelWrap}>
-                    <Text style={styles.timelineLabel}>
-                      {routeSummary.walkMinutes}분
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.timelineSegment, styles.busSegment]}>
-                  <View style={styles.busDot}>
-                    <SmallBusAsset width={7} height={8} />
-                  </View>
-                  <View style={styles.timelineLabelWrap}>
-                    <Text style={styles.timelineLabelOn}>
-                      {routeSummary.busMinutes}분
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.timelineSegment, styles.afterWalkSegment]}>
-                  <View style={styles.timelineLabelWrap}>
-                    <Text style={styles.timelineLabel}>
-                      {routeSummary.afterWalkMinutes}분
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.routeSectionDivider} />
-
-              <View style={styles.busInfoRow}>
-                <View style={styles.busBadge}>
-                  <BigBusAsset width={9} height={10} />
-                </View>
-                <Text style={styles.busNumber}>{routeSummary.routeNumber}</Text>
-                <Text style={styles.busDirection}>
-                  · {routeSummary.routeDirection}
+              <View style={styles.routeDurationRow}>
+                <Text style={styles.summaryLabel}>
+                  {Number.isFinite(routeSummary.totalDurationMinutes) ? `총 ${routeSummary.totalDurationMinutes}분` : ""}
+                </Text>
+                <Text style={styles.summaryLabel}>
+                  {routeSummary.arrivalTime ? `예상 도착 ${routeSummary.arrivalTime}` : ""}
                 </Text>
               </View>
-
-              <View style={styles.stopRows}>
-                <StopLineAsset width={1} height={35} style={styles.stopLine} />
-                <StopRow
-                  active
-                  label="승차"
-                  name={routeSummary.boardingStopName}
-                  time={routeSummary.boardingTime}
-                />
-                <StopRow
-                  label="하차"
-                  name={routeSummary.arrivalStopName}
-                  time={routeSummary.arrivalTime}
-                />
-              </View>
+              <RouteTimeline segments={routeSummary.segments} />
+              {routeSummary.transitLegs.map((leg) => (
+                <React.Fragment key={leg.id}>
+                  <View style={styles.routeSectionDivider} />
+                  <View style={styles.busInfoRow}>
+                    <View style={styles.busBadge}>
+                      <BigBusAsset width={9} height={10} />
+                    </View>
+                    <Text style={styles.busNumber}>{leg.routeNumber}</Text>
+                    <Text style={styles.busDirection}> · {leg.routeDirection}</Text>
+                  </View>
+                  <View style={styles.stopRows}>
+                    <StopLineAsset width={1} height={35} style={styles.stopLine} />
+                    <StopRow active label="승차" name={leg.boardingStopName} time={leg.boardingTime} />
+                    <StopRow label="하차" name={leg.arrivalStopName} time={leg.arrivalTime} />
+                  </View>
+                </React.Fragment>
+              ))}
             </>
           ) : (
             <View style={styles.emptyRouteState}>
@@ -487,6 +456,11 @@ const styles = StyleSheet.create({
     lineHeight: 42,
     color: colors.gray08,
   },
+  routeDurationRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+  },
   timeline: {
     height: 16,
     flexDirection: "row",
@@ -593,6 +567,7 @@ const styles = StyleSheet.create({
     color: colors.gray09,
   },
   busDirection: {
+    flex: 1,
     fontFamily: "SUIT",
     fontSize: 13,
     fontStyle: "normal",
@@ -607,7 +582,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   stopRow: {
-    height: 23,
+    minHeight: 23,
     flexDirection: "row",
     alignItems: "center",
   },
