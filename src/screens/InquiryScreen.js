@@ -75,7 +75,7 @@ export function InquiryScreen({ onBackPress }) {
   return (
     <AppScreen>
       <View style={styles.container}>
-        <Header
+        <Header topSpacerStyle={{ height: 0 }}
           type="back"
           title="문의하기"
           onBackPress={onBackPress}

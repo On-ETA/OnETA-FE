@@ -29,7 +29,7 @@ export function TermsOfServiceScreen({ onBackPress }) {
   return (
     <AppScreen>
       <View style={styles.container}>
-        <Header type="back" title="이용약관" onBackPress={onBackPress} />
+        <Header topSpacerStyle={{ height: 0 }} type="back" title="이용약관" onBackPress={onBackPress} />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}

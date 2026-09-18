@@ -27,7 +27,6 @@ import SmallBusAsset from "../../../../assets/images/smallbus.svg";
 import WalkAsset from "../../../../assets/images/man.svg";
 import StopLineAsset from "../../../../assets/images/line.svg";
 
-import { getAddresses } from "../../../api/addresses";
 import { searchAddresses } from "../../../api/address/search";
 import { createArrivalNotification } from "../../../api/notifications/arrival";
 import { searchTransitRoutes } from "../../../api/transit/routes";
@@ -124,56 +123,6 @@ function createRoutePlaceFromSearchResult(
     raw:
       result?.raw ??
       result,
-  });
-}
-
-function createRoutePlaceFromSavedAddress(savedAddress) {
-  if (!savedAddress) {
-    return createRoutePlace("");
-  }
-
-  const name =
-    savedAddress.name ??
-    "";
-
-  const address =
-    savedAddress.address ||
-    savedAddress.detail ||
-    savedAddress.roadAddress ||
-    savedAddress.jibunAddress ||
-    "";
-
-  return createRoutePlace({
-    // 화면에 보여주는 기본값
-    label: name,
-
-    // 주소 별칭
-    name,
-
-    // 실제 경로 검색에 사용할 주소
-    address,
-
-    // 실제 경로 검색 좌표
-    x: savedAddress.x,
-    y: savedAddress.y,
-
-    addressId:
-      savedAddress.addressId ??
-      savedAddress.id,
-
-    current:
-      savedAddress.current ??
-      savedAddress.isCurrent ??
-      false,
-
-    isCurrent:
-      savedAddress.isCurrent ??
-      savedAddress.current ??
-      false,
-
-    raw:
-      savedAddress.raw ??
-      savedAddress,
   });
 }
 
@@ -297,124 +246,6 @@ export function ScheduleAlarmAddScreen({
     destination: createRoutePlace(""),
   });
 
-  const [
-    isLoadingCurrentAddress,
-    setIsLoadingCurrentAddress,
-  ] = useState(true);
-
-  const [
-    currentAddressError,
-    setCurrentAddressError,
-  ] = useState("");
-
-  useEffect(() => {
-    if (initialStep === "route") {
-      setIsLoadingCurrentAddress(false);
-      return;
-    }
-    let isActive = true;
-
-    const controller =
-      new AbortController();
-
-    async function loadCurrentAddress() {
-      setIsLoadingCurrentAddress(true);
-      setCurrentAddressError("");
-
-      try {
-        /*
-         * getAddresses 내부에서
-         *
-         * GET /api/addresses
-         *
-         * 요청
-         */
-        const addresses =
-          await getAddresses({
-            signal:
-              controller.signal,
-          });
-
-        if (!isActive) {
-          return;
-        }
-
-        /*
-         * normalizeAddress() 때문에
-         *
-         * current
-         * isCurrent
-         *
-         * 둘 다 대응
-         */
-        const currentAddress =
-          addresses.find(
-            (address) =>
-              address?.isCurrent ===
-                true ||
-              address?.current ===
-                true,
-          );
-
-        if (!currentAddress) {
-          setCurrentAddressError(
-            "현재 사용 중인 주소가 없습니다.",
-          );
-
-          return;
-        }
-
-        const currentPlace =
-          createRoutePlaceFromSavedAddress(
-            currentAddress,
-          );
-
-        /*
-         * 출발지 / 목적지 모두
-         * 현재 사용 중 주소로 초기 설정
-         */
-        setRoutePlaces({
-          origin: currentPlace,
-
-          destination: {
-            ...currentPlace,
-          },
-        });
-      } catch (error) {
-        if (
-          !isActive ||
-          error?.name ===
-            "AbortError"
-        ) {
-          return;
-        }
-
-        console.error(
-          "현재 주소 조회 실패:",
-          error,
-        );
-
-        setCurrentAddressError(
-          error?.message ??
-            "현재 주소를 불러오지 못했습니다.",
-        );
-      } finally {
-        if (isActive) {
-          setIsLoadingCurrentAddress(
-            false,
-          );
-        }
-      }
-    }
-
-    loadCurrentAddress();
-
-    return () => {
-      isActive = false;
-      controller.abort();
-    };
-  }, []);
-
   const formattedTime =
     `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
 
@@ -447,36 +278,15 @@ export function ScheduleAlarmAddScreen({
   };
 
   if (step === "route") {
-    if (initialStep === "route") {
-      return (
-        <RoutePlaceSetupScreen
-          initialPlaces={routePlaces}
-          onBackPress={handleBackPress}
-          onConfirm={(places) => {
-            setRoutePlaces(places);
-            setStep("routeResult");
-          }}
-        />
-      );
-    }
     return (
-      <ScheduleRouteMapStep
-        title={mapTitle}
-        initialDestination={
-          routePlaces.destination
-        }
-        initialOrigin={
-          routePlaces.origin
-        }
-        isLoadingCurrentAddress={
-          isLoadingCurrentAddress
-        }
-        currentAddressError={
-          currentAddressError
-        }
-        onBackPress={
-          handleBackPress
-        }
+      <RoutePlaceSetupScreen
+        title={initialStep === "route" ? "경로 재설정" : mapTitle}
+        showPreviousButton={initialStep !== "route"}
+        initialPlaces={routePlaces}
+        onBackPress={(places) => {
+          setRoutePlaces(places);
+          handleBackPress();
+        }}
         onConfirm={(places) => {
           setRoutePlaces(places);
           setStep("routeResult");

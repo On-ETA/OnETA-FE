@@ -9,7 +9,13 @@ import { Header } from "../../../components";
 import { colors } from "../../../theme";
 import { AddressManagementScreen } from "../../AddressManagementScreen";
 
-export function RoutePlaceSetupScreen({ initialPlaces, onBackPress, onConfirm }) {
+export function RoutePlaceSetupScreen({
+  initialPlaces = {},
+  onBackPress,
+  onConfirm,
+  title = "경로 재설정",
+  showPreviousButton = false,
+}) {
   const [places, setPlaces] = useState(initialPlaces);
   const [activeField, setActiveField] = useState(null);
   const [keyword, setKeyword] = useState("");
@@ -17,6 +23,10 @@ export function RoutePlaceSetupScreen({ initialPlaces, onBackPress, onConfirm })
   const [status, setStatus] = useState("");
   const [validation, setValidation] = useState("");
   const [showAddressManagement, setShowAddressManagement] = useState(false);
+  const canContinue = [places.origin, places.destination].every(
+    (place) => place?.label && Number.isFinite(place.x) && Number.isFinite(place.y),
+  );
+  const handleBackPress = () => onBackPress?.(places);
 
   useEffect(() => {
     setResults([]);
@@ -75,8 +85,8 @@ export function RoutePlaceSetupScreen({ initialPlaces, onBackPress, onConfirm })
     <View style={styles.screen}>
       <Header
         type="sub"
-        title={activeField ? `${activeField === "origin" ? "출발지" : "도착지"} 검색` : "경로 재설정"}
-        onBackPress={activeField ? closeSearch : onBackPress}
+        title={activeField ? `${activeField === "origin" ? "출발지" : "도착지"} 검색` : title}
+        onBackPress={activeField ? closeSearch : handleBackPress}
         topSpacerStyle={styles.topSpacer}
         headerStyle={styles.header}
         titleStyle={styles.headerTitle}
@@ -159,15 +169,24 @@ export function RoutePlaceSetupScreen({ initialPlaces, onBackPress, onConfirm })
             ))}
             {validation ? <Text accessibilityRole="alert" style={styles.status}>{validation}</Text> : null}
           </ScrollView>
-          <View style={styles.footer}>
-            <Pressable accessibilityRole="button" style={styles.nextButton} onPress={() => {
-              if (![places.origin, places.destination].every((place) => place?.label && Number.isFinite(place.x) && Number.isFinite(place.y))) {
+          <View style={[styles.footer, showPreviousButton && styles.footerWithPrevious]}>
+            {showPreviousButton ? (
+              <Pressable accessibilityRole="button" style={[styles.nextButton, styles.footerButton, styles.previousButton]} onPress={handleBackPress}>
+                <Text style={[styles.nextText, styles.previousText]}>이전</Text>
+              </Pressable>
+            ) : null}
+            <Pressable accessibilityRole="button"
+              disabled={showPreviousButton && !canContinue}
+              accessibilityState={{ disabled: showPreviousButton && !canContinue }}
+              style={[styles.nextButton, showPreviousButton && styles.footerButton, showPreviousButton && !canContinue && styles.disabledButton]}
+              onPress={() => {
+              if (!canContinue) {
                 setValidation("출발지와 도착지를 검색하여 선택해주세요.");
                 return;
               }
               onConfirm(places);
             }}>
-              <Text style={styles.nextText}>다음</Text>
+              <Text style={[styles.nextText, showPreviousButton && !canContinue && styles.disabledText]}>다음</Text>
             </Pressable>
           </View>
         </>
@@ -235,6 +254,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.16,
   },
   footer: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 18 },
+  footerWithPrevious: { flexDirection: "row", gap: 12 },
+  footerButton: { flex: 1 },
+  previousButton: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray04 },
+  previousText: { color: colors.gray08 },
+  disabledButton: { backgroundColor: colors.gray05 },
+  disabledText: { color: colors.gray07 },
   nextButton: { height: 56, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: colors.main },
   nextText: { fontFamily: "SUIT", fontSize: 16, fontWeight: "600", color: colors.white },
   searchContent: { width: 360, maxWidth: "100%", alignSelf: "center", alignItems: "flex-start", paddingHorizontal: 16 },
