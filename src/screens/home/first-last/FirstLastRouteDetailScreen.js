@@ -11,7 +11,7 @@ import Svg, { Circle, Path } from "react-native-svg";
 
 import BackIcon from "../../../../assets/images/L.svg";
 import { getArrivalNotifications } from "../../../api/notifications/arrival";
-import { colors } from "../../../theme";
+import { colors, layout } from "../../../theme";
 
 const DAY_LABELS = {
   MON: "월",
@@ -123,8 +123,6 @@ export function FirstLastRouteDetailScreen({
 
   return (
     <View style={styles.screen}>
-      <View style={styles.topSpacer} />
-
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="뒤로가기"
@@ -1090,14 +1088,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray01,
   },
 
-  topSpacer: {
-    height: 24,
-    backgroundColor: colors.gray01,
-  },
-
   header: {
-    height: 64,
-    paddingHorizontal: 24,
+    height: layout.headerHeight,
+    flexShrink: 0,
+    paddingHorizontal: layout.screenMargin,
+    gap: layout.headerTitleGap,
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
@@ -1106,9 +1101,9 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
-    width: 32,
-    height: 32,
-    marginRight: 8,
+    width: 24,
+    height: 24,
+    flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
   },

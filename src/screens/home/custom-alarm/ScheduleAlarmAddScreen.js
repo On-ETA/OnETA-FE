@@ -33,7 +33,7 @@ import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { NaverMapView } from "../../../components/NaverMapView";
 import { RoutePlaceSetupScreen } from "../first-last/RoutePlaceSetupScreen";
-import { colors, typography } from "../../../theme";
+import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 
 const DEFAULT_TIME = {
@@ -3562,11 +3562,13 @@ const styles =
 
     resultHeader: {
       display: "flex",
-      paddingVertical: 12,
-      paddingHorizontal: 16,
+      height: layout.headerHeight,
+      flexShrink: 0,
+      paddingVertical: 0,
+      paddingHorizontal: layout.screenMargin,
       flexDirection: "row",
       alignItems: "center",
-      gap: 10,
+      gap: layout.headerTitleGap,
       alignSelf: "stretch",
       backgroundColor:
         colors.gray01,
@@ -3575,6 +3577,7 @@ const styles =
     resultBackButton: {
       width: 24,
       height: 24,
+      flexShrink: 0,
       alignItems: "center",
       justifyContent:
         "center",
@@ -3583,10 +3586,12 @@ const styles =
     routeSummaryPill: {
       display: "flex",
       flexGrow: 1,
-      flexShrink: 0,
+      flexShrink: 1,
+      minWidth: 0,
       flexBasis: 0,
       height: 48,
-      padding: 16,
+      paddingHorizontal: 16,
+      paddingVertical: 0,
       flexDirection: "row",
       alignItems: "center",
       gap: 8,

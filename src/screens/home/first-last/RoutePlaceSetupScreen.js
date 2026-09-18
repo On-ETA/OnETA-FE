@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   topSpacer: { height: 0 },
   header: {
     display: "flex",
-    width: 360,
+    width: "100%",
     maxWidth: "100%",
     height: 54,
     paddingVertical: 0,
