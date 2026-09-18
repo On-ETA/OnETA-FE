@@ -5,6 +5,10 @@ import { isHeadlessLaunch, registerBackgroundFcmHandler } from "./src/service/fc
 
 import App from "./App";
 
+if (Platform.OS === "web") {
+  require("./src/theme/fonts.css");
+}
+
 registerBackgroundFcmHandler();
 
 function AppEntry({ isHeadless }) {

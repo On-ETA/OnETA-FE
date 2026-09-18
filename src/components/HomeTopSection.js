@@ -7,7 +7,7 @@ import BackIcon from "../../assets/images/L.svg";
 import MyPageIcon from "../../assets/images/icon_mypage.svg";
 import ArrowRightIcon from "../../assets/images/R.svg";
 import HomeIcon from "../../assets/images/icon_home.svg";
-import { colors, typography } from "../theme";
+import { colors, layout, typography } from "../theme";
 
 const homeBackground = colors.gray01;
 
@@ -30,11 +30,8 @@ export function HomeTopSection({
 
   return (
     <>
-      <View style={[
-        styles.homeTopSection,
-        showTabs ? styles.homeTopSectionWithTabs : styles.pageTopSection,
-      ]}>
-        <View style={styles.homeHeader}>
+      <View style={styles.homeTopSection}>
+        <View style={[styles.homeHeader, !showTabs && styles.pageHeader]}>
           {showAddress ? (
             <Pressable
               accessibilityRole="button"
@@ -42,7 +39,7 @@ export function HomeTopSection({
               style={styles.addressButton}
             >
               <HomeIcon height={20} style={styles.addressHomeIcon} width={20} />
-              <Text style={styles.addressText}>{addressLabel}</Text>
+              <Text numberOfLines={1} style={styles.addressText}>{addressLabel}</Text>
               <ArrowRightIcon
                 height={21}
                 style={styles.addressArrowIcon}
@@ -50,7 +47,7 @@ export function HomeTopSection({
               />
             </Pressable>
           ) : title ? (
-            <View style={[styles.titleGroup, !showTabs && styles.pageTitleGroup]}>
+            <View style={styles.titleGroup}>
               {showBackButton ? (
                 <Pressable
                   accessibilityLabel="뒤로가기"
@@ -62,7 +59,7 @@ export function HomeTopSection({
                   <BackIcon height={24} style={styles.headerIcon} width={24} />
                 </Pressable>
               ) : null}
-              <Text style={styles.titleText}>{title}</Text>
+              <Text numberOfLines={1} style={styles.titleText}>{title}</Text>
             </View>
           ) : (
             <View style={styles.emptyLeft} />
@@ -138,44 +135,27 @@ export function HomeTopSection({
 
 const styles = StyleSheet.create({
   homeTopSection: {
-    alignSelf: "center",
-    width: 360,
-    maxWidth: "100%",
-    paddingTop: 18,
-    paddingHorizontal: 16,
-    paddingBottom: 0,
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: 22,
-  },
-  homeTopSectionWithTabs: {
-    display: "flex",
     alignSelf: "stretch",
-    width: "auto",
-    paddingTop: 16,
-    gap: 16,
+    flexShrink: 0,
   },
-  pageTopSection: {
-    display: "flex",
-    height: 54,
-    paddingVertical: 0,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    alignSelf: "stretch",
-    width: "auto",
+  pageHeader: {
     borderBottomWidth: 1,
     borderBottomColor: colors.gray03,
   },
   homeHeader: {
     width: "100%",
+    height: layout.headerHeight,
+    flexShrink: 0,
+    paddingHorizontal: layout.screenMargin,
+    gap: layout.headerTitleGap,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: homeBackground,
   },
   addressButton: {
+    flexShrink: 1,
+    minWidth: 0,
     minHeight: 38,
     flexDirection: "row",
     alignItems: "center",
@@ -184,6 +164,7 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   addressText: {
+    flexShrink: 1,
     color: colors.gray08,
     fontFamily: "SUIT",
     fontSize: 20,
@@ -193,19 +174,20 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   titleText: {
+    flexShrink: 1,
     ...typography.head01Sb,
     color: colors.gray08,
   },
   titleGroup: {
+    flex: 1,
+    minWidth: 0,
     minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  pageTitleGroup: {
-    gap: 12,
+    gap: layout.headerTitleGap,
   },
   backButton: {
+    flexShrink: 0,
     width: 24,
     height: 24,
     alignItems: "center",
@@ -220,12 +202,13 @@ const styles = StyleSheet.create({
     height: 40,
   },
   headerActions: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
   iconButton: {
-    width: 34,
+    width: 25,
     height: 34,
     alignItems: "center",
     justifyContent: "center",
@@ -236,7 +219,9 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
   },
   routeTabs: {
-    width: "100%",
+    alignSelf: "stretch",
+    marginHorizontal: layout.screenMargin,
+    flexShrink: 0,
     height: 45,
     flexDirection: "row",
     borderBottomWidth: 1,

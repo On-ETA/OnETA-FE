@@ -5,7 +5,7 @@ import BackIconDefault from "../../assets/images/L.svg";
 import BellIcon from "../../assets/images/icon_bell.svg";
 import BellNoneIcon from "../../assets/images/icon_bell_none.svg";
 import OnetaLogo from "../../assets/images/on-eta_logo.png";
-import { colors, typography } from "../theme";
+import { colors, layout, typography } from "../theme";
 
 const MAIN_BACKGROUND = "#FCFDFE";
 const SUB_BACKGROUND = colors.white;
@@ -105,17 +105,18 @@ export function Header({
 
 const styles = StyleSheet.create({
   topSpacer: {
-    height: 24,
+    height: 0,
   },
   header: {
     width: "100%",
+    height: layout.headerHeight,
+    flexShrink: 0,
+    paddingHorizontal: layout.screenMargin,
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
   },
   mainHeader: {
-    height: 70,
-    paddingHorizontal: 22,
     justifyContent: "space-between",
     borderBottomColor: colors.gray04,
   },
@@ -123,10 +124,8 @@ const styles = StyleSheet.create({
     display: "flex",
     alignSelf: "stretch",
     paddingVertical: 0,
-    height: 54,
-    paddingHorizontal: 16,
     justifyContent: "flex-start",
-    gap: 12,
+    gap: layout.headerTitleGap,
     borderBottomColor: colors.gray03,
   },
   mainBg: {
@@ -140,7 +139,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   mainIconButton: {
-    width: 40,
+    width: 36,
     height: 40,
   },
   logo: {
