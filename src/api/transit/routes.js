@@ -97,7 +97,7 @@ function normalizeSegment(segment, index) {
     transitType: segment?.transitType ?? "",
     startStation: segment?.startStation ?? "",
     endStation: segment?.endStation ?? "",
-    durationMinutes: segment?.durationMinutes ?? 0,
+    durationMinutes: segment?.durationMinutes,
     transitName: segment?.transitName ?? "",
     stations: Array.isArray(segment?.stations)
       ? segment.stations.map(normalizeStation)

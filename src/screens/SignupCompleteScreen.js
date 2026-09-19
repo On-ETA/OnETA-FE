@@ -18,8 +18,6 @@ export function SignupCompleteScreen({ onLoginPress }) {
                 지금 바로 다양한 서비스를 이용해 보세요!
               </Text>
             </View>
-
-            <View style={styles.graphicPlaceholder} />
           </View>
 
           <View style={styles.footer}>
@@ -52,16 +50,8 @@ const styles = StyleSheet.create({
   content: {
     alignItems: "center",
   },
-  graphicPlaceholder: {
-    width: "78%",
-    maxWidth: 320,
-    aspectRatio: 1,
-    marginTop: 40,
-    borderRadius: 160,
-    backgroundColor: colors.gray03,
-  },
   messageBox: {
-    marginTop: 96,
+    marginTop: 177,
     alignItems: "center",
     gap: 20,
   },
