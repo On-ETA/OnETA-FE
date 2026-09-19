@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+android/.gradle/
+**/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+**/.cxx/
+**/.externalNativeBuild/
