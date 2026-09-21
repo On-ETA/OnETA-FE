@@ -10,13 +10,31 @@ import { Linking } from "react-native";
 import { buildApiUrl } from "./client";
 
 const GOOGLE_AUTH_ENDPOINT = buildApiUrl("/oauth2/authorization/google");
+const SOCIAL_SIGNUP_REDIRECT_PATH = "/signup/terms";
 
-export function getGoogleAuthUrl() {
-  return GOOGLE_AUTH_ENDPOINT;
+function getSocialSignupRedirectUri() {
+  if (typeof window === "undefined" || !window.location?.origin) {
+    return undefined;
+  }
+
+  return `${window.location.origin}${SOCIAL_SIGNUP_REDIRECT_PATH}`;
 }
 
-export async function startGoogleAuth() {
-  const authUrl = getGoogleAuthUrl();
+export function getGoogleAuthUrl({ redirectUri = getSocialSignupRedirectUri() } = {}) {
+  if (!redirectUri) {
+    return GOOGLE_AUTH_ENDPOINT;
+  }
+
+  const url = new URL(GOOGLE_AUTH_ENDPOINT);
+
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("redirectUri", redirectUri);
+
+  return url.toString();
+}
+
+export async function startGoogleAuth(options) {
+  const authUrl = getGoogleAuthUrl(options);
 
   await Linking.openURL(authUrl);
 

@@ -128,6 +128,15 @@ function SignupRoute({ navigation }) {
 }
 
 function TermsAgreementRoute({ navigation, route }) {
+  const signupTokens =
+    route.params?.signupTokens ??
+    (route.params?.accessToken
+      ? {
+          accessToken: route.params.accessToken,
+          refreshToken: route.params.refreshToken,
+        }
+      : undefined);
+
   return (
     <TermsAgreementScreen
       onBackPress={() => goBackOrReset(navigation, routes.signup)}
@@ -137,7 +146,7 @@ function TermsAgreementRoute({ navigation, route }) {
           password: route.params?.password,
         })
       }
-      signupTokens={route.params?.signupTokens}
+      signupTokens={signupTokens}
     />
   );
 }

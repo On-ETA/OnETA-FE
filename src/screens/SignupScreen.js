@@ -32,6 +32,19 @@ const EMAIL_AUTH_STATUS = {
 };
 
 const MAX_EMAIL_VERIFY_ATTEMPTS = 5;
+const DUPLICATE_EMAIL_ERROR_MESSAGE = "이미 가입된 이메일입니다.";
+
+function getEmailSendErrorMessage(error) {
+  if (error?.code === "C002" && error?.message === DUPLICATE_EMAIL_ERROR_MESSAGE) {
+    return DUPLICATE_EMAIL_ERROR_MESSAGE;
+  }
+
+  return (
+    error?.details?.message ??
+    error?.message ??
+    "인증번호 발송에 실패했습니다. 다시 시도해 주세요."
+  );
+}
 
 function getSignupErrorReason(error) {
   const detailMessage = error?.details?.data;
@@ -144,8 +157,7 @@ export function SignupScreen({ onBackPress, onNextPress }) {
       });
       Alert.alert("회원가입", "인증번호를 이메일로 보냈습니다.");
     } catch (error) {
-      const errorMessage =
-        error?.message ?? "인증번호 발송에 실패했습니다. 다시 시도해 주세요.";
+      const errorMessage = getEmailSendErrorMessage(error);
 
       setEmailStatus({
         type: "error",
