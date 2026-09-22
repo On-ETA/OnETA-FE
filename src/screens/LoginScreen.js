@@ -52,7 +52,6 @@ export function LoginScreen({
   const logoScale = isWideRoomy ? 1.32 : 1;
   const socialButtonSize = 44;
   const socialIconSize = 42;
-  const kakaoSocialIconSize = 42;
   const controlHeight = Math.round(Math.max(42, 54 * layoutScale));
   const verticalPadding = Math.round(
     Math.max(
@@ -251,7 +250,6 @@ export function LoginScreen({
           buttonStyle={responsiveLayout.socialButton}
           iconSize={socialIconSize}
           isGoogleLoading={isGoogleLoading}
-          kakaoIconSize={kakaoSocialIconSize}
           onGooglePress={handleGooglePress}
           style={responsiveLayout.social}
         />

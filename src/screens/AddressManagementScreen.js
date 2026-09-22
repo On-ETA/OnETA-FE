@@ -55,6 +55,7 @@ export function AddressManagementScreen({
   const [addressLoadError, setAddressLoadError] = useState("");
   const [selectedResult, setSelectedResult] = useState(null);
   const [editingAddress, setEditingAddress] = useState(null);
+  const [searchPurpose, setSearchPurpose] = useState("create");
   const [isRegisteringAddress, setIsRegisteringAddress] = useState(false);
   const [isDeletingAddress, setIsDeletingAddress] = useState(false);
   const [settingCurrentAddressId, setSettingCurrentAddressId] = useState(null);
@@ -108,7 +109,12 @@ export function AddressManagementScreen({
       return;
     }
 
-    if (screenMode === "search" || screenMode === "edit") {
+    if (screenMode === "search") {
+      setScreenMode(searchPurpose === "edit" ? "edit" : "list");
+      return;
+    }
+
+    if (screenMode === "edit") {
       setScreenMode("list");
       return;
     }
@@ -131,7 +137,7 @@ export function AddressManagementScreen({
     try {
       const response = await createAddress({
         payload: {
-          name: alias || selectedResult.name || "주소 이름",
+          name: alias || selectedResult.name,
           address: selectedResult.address ?? selectedResult.roadAddress,
           x: selectedResult.x,
           y: selectedResult.y,
@@ -172,11 +178,17 @@ export function AddressManagementScreen({
     }
 
     const addressId = editingAddress.addressId ?? editingAddress.id;
+    const nextAddressText = editingAddress.address ?? editingAddress.detail;
 
     try {
       const response = await updateAddressRequest({
         addressId,
-        name: alias || editingAddress.name,
+        payload: {
+          name: alias || editingAddress.name || editingAddress.placeName,
+          address: nextAddressText,
+          x: editingAddress.x,
+          y: editingAddress.y,
+        },
       });
       const updatedAddress = response?.data
         ? normalizeAddress(response.data)
@@ -185,7 +197,13 @@ export function AddressManagementScreen({
       setAddresses((current) => {
         const nextAddresses = current.map((address) =>
           (address.addressId ?? address.id) === addressId
-            ? updatedAddress ?? { ...address, name: alias || address.name }
+            ? updatedAddress ?? {
+                ...address,
+                ...editingAddress,
+                name: alias || address.name,
+                detail: nextAddressText,
+                address: nextAddressText,
+              }
             : address,
         );
 
@@ -211,15 +229,38 @@ export function AddressManagementScreen({
 
     try {
       await deleteAddressRequest({ addressId });
-      setAddresses((current) => {
-        const nextAddresses = current.filter(
-          (item) => (item.addressId ?? item.id) !== addressId,
-        );
+      const nextAddresses = addresses.filter(
+        (item) => (item.addressId ?? item.id) !== addressId,
+      );
+      const deletedCurrentAddress = editingAddress.isCurrent;
+      const nextCurrentAddress = deletedCurrentAddress ? nextAddresses[0] : null;
+      let resolvedAddresses = nextAddresses;
 
-        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+      if (nextCurrentAddress) {
+        const nextCurrentAddressId =
+          nextCurrentAddress.addressId ?? nextCurrentAddress.id;
+        const response = await setCurrentAddress({
+          addressId: nextCurrentAddressId,
+        });
+        const changedAddress = response?.data
+          ? normalizeAddress(response.data)
+          : null;
 
-        return nextAddresses;
-      });
+        resolvedAddresses = nextAddresses.map((item) => {
+          const itemAddressId = item.addressId ?? item.id;
+          const isSelectedAddress = itemAddressId === nextCurrentAddressId;
+
+          return {
+            ...item,
+            ...(isSelectedAddress ? changedAddress ?? {} : {}),
+            current: isSelectedAddress,
+            isCurrent: isSelectedAddress,
+          };
+        });
+      }
+
+      setAddresses(resolvedAddresses);
+      onCurrentAddressChange?.(getCurrentAddressLabel(resolvedAddresses));
       setEditingAddress(null);
       setScreenMode("list");
     } catch (error) {
@@ -284,6 +325,20 @@ export function AddressManagementScreen({
       <AddressSearchScreen
         onBackPress={handleBackPress}
         onResultPress={(result) => {
+          if (searchPurpose === "edit") {
+            setEditingAddress((current) => ({
+              ...current,
+              name: "",
+              placeName: result.name,
+              detail: result.address ?? result.roadAddress,
+              address: result.address ?? result.roadAddress,
+              x: result.x,
+              y: result.y,
+            }));
+            setScreenMode("edit");
+            return;
+          }
+
           setSelectedResult(result);
           setScreenMode("detail");
         }}
@@ -302,7 +357,10 @@ export function AddressManagementScreen({
         initialAlias=""
         isSubmitting={isRegisteringAddress}
         onBackPress={handleBackPress}
-        onChangeAddress={() => setScreenMode("search")}
+        onChangeAddress={() => {
+          setSearchPurpose("create");
+          setScreenMode("search");
+        }}
         onSubmit={registerAddress}
         title="주소 상세"
       />
@@ -320,7 +378,10 @@ export function AddressManagementScreen({
         initialAlias={editingAddress?.name ?? ""}
         isDeleting={isDeletingAddress}
         onBackPress={handleBackPress}
-        onChangeAddress={() => setScreenMode("search")}
+        onChangeAddress={() => {
+          setSearchPurpose("edit");
+          setScreenMode("search");
+        }}
         onDelete={deleteAddress}
         onSubmit={updateAddress}
         title="주소 편집"
@@ -354,6 +415,7 @@ export function AddressManagementScreen({
             onCurrentPress={() => onAddressSelect ? onAddressSelect(address) : handleCurrentAddressPress(address)}
             onEditPress={() => {
               setEditingAddress(address);
+              setSearchPurpose("edit");
               setScreenMode("edit");
             }}
           />
@@ -365,7 +427,10 @@ export function AddressManagementScreen({
           <Pressable
             accessibilityLabel="주소 추가"
             accessibilityRole="button"
-            onPress={() => setScreenMode("search")}
+            onPress={() => {
+              setSearchPurpose("create");
+              setScreenMode("search");
+            }}
             style={styles.addressAddCard}
           >
             <PlusIcon height={30} width={30} />
