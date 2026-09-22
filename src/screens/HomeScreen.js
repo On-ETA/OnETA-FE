@@ -1,9 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAddresses } from "../api/addresses";
+import {
+  createTransitNotification,
+  getTransitNotifications,
+} from "../api/notifications/transit";
 import { HomeTopSection } from "../components";
 import { AddressManagementScreen } from "./AddressManagementScreen";
 import { CustomAlarmScreen } from "./home/custom-alarm/CustomAlarmScreen";
@@ -26,6 +30,115 @@ import { createFirstLastRouteSummary } from "../utils/firstLastRouteSummary";
 
 const homeBackground = colors.gray01;
 
+
+function createFirstLastRouteSummaryFromNotification(notification) {
+  const details = notification?.route ?? {};
+  const route = details?.route ?? details;
+  const places = {
+    origin:
+      details?.origin ??
+      details?.originAddress ??
+      route?.originAddress,
+    destination:
+      details?.destination ??
+      details?.destinationAddress ??
+      route?.destinationAddress,
+  };
+  const summary = createFirstLastRouteSummary(route, places);
+  const reminderOffsetMinutes = Array.isArray(notification?.reminderOffsetMinutes)
+    ? notification.reminderOffsetMinutes
+    : [];
+
+  return {
+    ...summary,
+    notificationId: notification?.notificationId,
+    routeName: notification?.routeName,
+    arrivalTime: notification?.arrivalTime || summary.arrivalTime,
+    preDepartureAlarmMinutes:
+      reminderOffsetMinutes[0] ?? summary.preDepartureAlarmMinutes,
+    route,
+  };
+}
+
+function toLocalTimeObject(value) {
+  if (value && typeof value === "object") {
+    return {
+      hour: Number(value.hour ?? 0),
+      minute: Number(value.minute ?? 0),
+      second: Number(value.second ?? 0),
+      nano: Number(value.nano ?? 0),
+    };
+  }
+
+  if (typeof value === "string") {
+    const [hour, minute, second] = value.split(":");
+
+    return {
+      hour: Number(hour ?? 0),
+      minute: Number(minute ?? 0),
+      second: Number(second ?? 0),
+      nano: 0,
+    };
+  }
+
+  const date = value instanceof Date && !Number.isNaN(value.getTime())
+    ? value
+    : new Date();
+
+  return {
+    hour: date.getHours(),
+    minute: date.getMinutes(),
+    second: date.getSeconds(),
+    nano: 0,
+  };
+}
+
+function getRouteTargetArrivalTime(route, summary) {
+  const routeArrivalTime =
+    getRouteValue(route, "arrivalTime") ??
+    getRouteValue(getPrimaryTransitSegment(route), "arrivalTime") ??
+    summary?.arrivalTime;
+
+  if (routeArrivalTime) {
+    return toLocalTimeObject(routeArrivalTime);
+  }
+
+  const durationMinutes =
+    route?.realTimeDurationMinutes ??
+    route?.totalDurationMinutes ??
+    0;
+  const arrivalDate = new Date(Date.now() + durationMinutes * 60000);
+
+  return toLocalTimeObject(arrivalDate);
+}
+
+function createTransitNotificationPayload(route, places = {}, summary) {
+  const routeDetails = {
+    route: route?.raw ?? route,
+    origin: places.origin,
+    destination: places.destination,
+    originAddress:
+      places.originPlace?.address ??
+      route?.originAddress ??
+      places.origin,
+    destinationAddress:
+      places.destinationPlace?.address ??
+      route?.destinationAddress ??
+      places.destination,
+  };
+
+  return {
+    routeName:
+      summary?.routeName ||
+      [places.origin, places.destination].filter(Boolean).join(" - ") ||
+      "첫막차 경로",
+    targetArrivalTime: getRouteTargetArrivalTime(route, summary),
+    reminderOffsetMinutes: [summary?.preDepartureAlarmMinutes ?? 10],
+    repeatDays: [],
+    routeDetails: JSON.stringify(routeDetails),
+    scheduleType: "NORMAL",
+  };
+}
 
 function getCurrentAddressLabel(addresses) {
   const currentAddress = addresses.find((address) => address.isCurrent);
@@ -68,6 +181,19 @@ export function HomeScreen({
   const [currentAddressLabel, setCurrentAddressLabel] = useState("");
   const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(null);
 
+  const loadFirstLastTransitNotifications = useCallback(async ({
+    signal,
+  } = {}) => {
+    const notifications = await getTransitNotifications({ signal });
+    const firstNotification = notifications[0] ?? null;
+
+    setFirstLastRouteSummary(
+      firstNotification
+        ? createFirstLastRouteSummaryFromNotification(firstNotification)
+        : null,
+    );
+  }, []);
+
   useEffect(() => {
     let isActive = true;
     const controller = new AbortController();
@@ -95,6 +221,50 @@ export function HomeScreen({
       controller.abort();
     };
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    loadFirstLastTransitNotifications({
+      signal: controller.signal,
+    }).catch((error) => {
+      if (error?.name !== "AbortError") {
+        console.warn("첫막차 경로 조회 실패:", error?.code ?? error?.message);
+      }
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [loadFirstLastTransitNotifications]);
+
+  const handleFirstLastRouteConfigured = useCallback(async (route, places) => {
+    const summary = createFirstLastRouteSummary(route, places);
+
+    setFirstLastRouteSummary(summary);
+    blurActiveElement();
+    setIsScheduleAlarmAddVisible(false);
+    setScheduleAlarmInitialStep("form");
+
+    try {
+      const notificationId = await createTransitNotification({
+        payload: createTransitNotificationPayload(route, places, summary),
+      });
+      if (notificationId !== undefined && notificationId !== null) {
+        setFirstLastRouteSummary((current) =>
+          current
+            ? {
+                ...current,
+                notificationId,
+              }
+            : current,
+        );
+      }
+      await loadFirstLastTransitNotifications();
+    } catch (error) {
+      console.warn("첫막차 경로 등록 실패:", error?.code ?? error?.message);
+    }
+  }, [loadFirstLastTransitNotifications]);
 
   const handleTabPress = (tabKey) => {
     blurActiveElement();
@@ -166,14 +336,7 @@ export function HomeScreen({
                 }}
                 onRouteConfigured={
                   scheduleAlarmInitialStep === "route"
-                    ? (route, places) => {
-                        setFirstLastRouteSummary(
-                          createFirstLastRouteSummary(route, places),
-                        );
-                        blurActiveElement();
-                        setIsScheduleAlarmAddVisible(false);
-                        setScheduleAlarmInitialStep("form");
-                      }
+                    ? handleFirstLastRouteConfigured
                     : undefined
                 }
               />
@@ -236,6 +399,7 @@ export function HomeScreen({
               />
             ) : isRouteDetailVisible ? (
               <FirstLastRouteDetailScreen
+                notificationId={firstLastRouteSummary?.notificationId}
                 onBackPress={() => {
                   blurActiveElement();
                   setIsRouteDetailVisible(false);

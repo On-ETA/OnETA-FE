@@ -10,7 +10,7 @@ import {
 import Svg, { Circle, Path } from "react-native-svg";
 
 import BackIcon from "../../../../assets/images/L.svg";
-import { getArrivalNotifications } from "../../../api/notifications/arrival";
+import { getTransitNotifications } from "../../../api/notifications/transit";
 import { colors, layout } from "../../../theme";
 
 const DAY_LABELS = {
@@ -75,7 +75,7 @@ export function FirstLastRouteDetailScreen({
        *
        * 이 수행됨.
        */
-      const notifications = await getArrivalNotifications();
+      const notifications = await getTransitNotifications();
 
       const selectedNotification = notifications.find(
         (item) =>
