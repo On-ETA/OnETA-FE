@@ -1,7 +1,7 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -24,6 +24,7 @@ import {
 } from "./src/screens";
 import { linking } from "./linking";
 import { routes } from "./src/navigation/routes";
+import { getAccessToken, setAuthTokens } from "./src/api/auth/tokens";
 import { blurActiveElement } from "./src/utils/accessibility";
 import { PushNotifications } from "./src/notifications/PushNotifications";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
@@ -99,10 +100,56 @@ function navigateTo(navigation, name, params) {
   navigation.navigate(name, params);
 }
 
+function useAuthenticatedRoute(navigation, route) {
+  const accessToken = route?.params?.accessToken;
+  const refreshToken = route?.params?.refreshToken;
+  const [isReady, setIsReady] = React.useState(false);
+
+  React.useEffect(() => {
+    if (accessToken) {
+      setAuthTokens({ accessToken, refreshToken });
+      setIsReady(true);
+      return;
+    }
+
+    if (getAccessToken()) {
+      setIsReady(true);
+      return;
+    }
+
+    resetTo(navigation, routes.login);
+  }, [accessToken, refreshToken, navigation]);
+
+  return isReady;
+}
+
+const GOOGLE_CONFLICT_MESSAGE =
+  "이미 등록된 이메일입니다. 이메일/비밀번호로 로그인해주세요.";
+
+function getGoogleSignupConflictMessage(params = {}) {
+  const status = String(params.status ?? params.statusCode ?? "");
+  const code = params.code ?? params.errorCode;
+  const message = params.message ?? params.errorMessage;
+  const error = params.error ?? params.errorName;
+  const hasConflictStatus =
+    status === "409" || error === "SC_CONFLICT" || (!status && !error);
+
+  if (
+    code === "C002" &&
+    message === GOOGLE_CONFLICT_MESSAGE &&
+    hasConflictStatus
+  ) {
+    return message;
+  }
+
+  return "";
+}
+
 function LoginRoute({ navigation, route }) {
   return (
     <LoginScreen
       initialEmail={route.params?.email}
+      initialError={route.params?.loginError}
       initialPassword={route.params?.password}
       initialRemember={route.params?.remember}
       onFindPasswordPress={() => navigateTo(navigation, routes.findPassword)}
@@ -128,6 +175,7 @@ function SignupRoute({ navigation }) {
 }
 
 function TermsAgreementRoute({ navigation, route }) {
+  const googleConflictMessage = getGoogleSignupConflictMessage(route.params);
   const signupTokens =
     route.params?.signupTokens ??
     (route.params?.accessToken
@@ -136,6 +184,26 @@ function TermsAgreementRoute({ navigation, route }) {
           refreshToken: route.params.refreshToken,
         }
       : undefined);
+
+  React.useEffect(() => {
+    if (!googleConflictMessage) {
+      return;
+    }
+
+    Alert.alert("구글 회원가입", googleConflictMessage, [
+      {
+        text: "확인",
+        onPress: () =>
+          resetTo(navigation, routes.login, {
+            loginError: googleConflictMessage,
+          }),
+      },
+    ]);
+  }, [googleConflictMessage, navigation]);
+
+  if (googleConflictMessage) {
+    return null;
+  }
 
   return (
     <TermsAgreementScreen
@@ -166,6 +234,12 @@ function SignupCompleteRoute({ navigation, route }) {
 }
 
 function HomeRoute({ navigation, route }) {
+  const isReady = useAuthenticatedRoute(navigation, route);
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <HomeScreen
       initialTab={route.params?.initialTab ?? "home"}
@@ -196,13 +270,25 @@ function HomeRoute({ navigation, route }) {
   );
 }
 
-function CustomAlarmRoute({ navigation }) {
+function CustomAlarmRoute({ navigation, route }) {
+  const isReady = useAuthenticatedRoute(navigation, route);
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <CustomAlarmScreen />
   );
 }
 
-function MyPageRoute({ navigation }) {
+function MyPageRoute({ navigation, route }) {
+  const isReady = useAuthenticatedRoute(navigation, route);
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <HomeScreen
       initialTab="myPage"
@@ -233,7 +319,13 @@ function MyPageRoute({ navigation }) {
   );
 }
 
-function InquiryRoute({ navigation }) {
+function InquiryRoute({ navigation, route }) {
+  const isReady = useAuthenticatedRoute(navigation, route);
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <InquiryScreen
       onBackPress={() => goBackOrReset(navigation, routes.myPage)}
@@ -241,7 +333,13 @@ function InquiryRoute({ navigation }) {
   );
 }
 
-function NoticesRoute({ navigation }) {
+function NoticesRoute({ navigation, route }) {
+  const isReady = useAuthenticatedRoute(navigation, route);
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <NoticesScreen
       onBackPress={() => goBackOrReset(navigation, routes.myPage)}
@@ -261,6 +359,12 @@ function FaqsRoute({ navigation }) {
 }
 
 function NoticeDetailRoute({ navigation, route }) {
+  const isReady = useAuthenticatedRoute(navigation, route);
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <NoticeDetailScreen
       notice={route.params?.notice}
@@ -285,7 +389,13 @@ function TermsOfServiceRoute({ navigation }) {
   );
 }
 
-function NotificationsRoute({ navigation }) {
+function NotificationsRoute({ navigation, route }) {
+  const isReady = useAuthenticatedRoute(navigation, route);
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <NotificationsScreen
       onBackPress={() => goBackOrReset(navigation, routes.myPage)}
@@ -293,7 +403,13 @@ function NotificationsRoute({ navigation }) {
   );
 }
 
-function AccountInfoRoute({ navigation }) {
+function AccountInfoRoute({ navigation, route }) {
+  const isReady = useAuthenticatedRoute(navigation, route);
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <AccountInfoScreen
       onBackPress={() => goBackOrReset(navigation, routes.myPage)}
@@ -302,7 +418,13 @@ function AccountInfoRoute({ navigation }) {
   );
 }
 
-function ChangePasswordRoute({ navigation }) {
+function ChangePasswordRoute({ navigation, route }) {
+  const isReady = useAuthenticatedRoute(navigation, route);
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <ChangePasswordScreen
       onBackPress={() => goBackOrReset(navigation, routes.myPage)}

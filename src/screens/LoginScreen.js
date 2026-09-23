@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -26,6 +26,7 @@ import { colors, layout, typography } from "../theme";
 
 export function LoginScreen({
   initialEmail = "",
+  initialError = "",
   initialPassword = "",
   initialRemember = false,
   onLoginPress,
@@ -42,7 +43,7 @@ export function LoginScreen({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [loginError, setLoginError] = useState("");
+  const [loginError, setLoginError] = useState(initialError);
   // 가로로 긴 화면처럼 높이가 낮을 때도 전체 로그인 요소가 같은 비율로 화면 안에 들어오도록 조절합니다.
   const isShortHeight = availableHeight < 600;
   const isWideRoomy =
@@ -104,6 +105,10 @@ export function LoginScreen({
       borderRadius: socialButtonSize / 2,
     },
   };
+
+  useEffect(() => {
+    setLoginError(initialError);
+  }, [initialError]);
 
   const handleLoginPress = async () => {
     const trimmedEmail = email.trim();

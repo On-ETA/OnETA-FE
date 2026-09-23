@@ -10,7 +10,7 @@ import { Linking } from "react-native";
 import { buildApiUrl } from "./client";
 
 const GOOGLE_AUTH_ENDPOINT = buildApiUrl("/oauth2/authorization/google");
-const SOCIAL_SIGNUP_REDIRECT_PATH = "/signup/terms";
+const SOCIAL_SIGNUP_REDIRECT_PATH = "/signup/consent";
 
 function getSocialSignupRedirectUri() {
   if (typeof window === "undefined" || !window.location?.origin) {

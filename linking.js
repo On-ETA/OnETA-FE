@@ -6,7 +6,7 @@ export const linking = {
     screens: {
       [routes.login]: "",
       [routes.signup]: "signup",
-      [routes.termsAgreement]: "signup/terms",
+      [routes.termsAgreement]: "signup/consent",
       [routes.signupComplete]: "signup/complete",
       [routes.findPassword]: "find-password",
       [routes.home]: "home",
