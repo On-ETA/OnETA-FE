@@ -5,6 +5,14 @@ import { homeCacheKeys, readHomeCache } from "./homeCache";
 
 let preloadPromise = null;
 
+async function attemptPreload(load) {
+  try {
+    await load();
+  } catch {
+    // Keep the remaining preload sequence moving.
+  }
+}
+
 export function getCachedFirstLastRoute() {
   return readHomeCache(homeCacheKeys.firstLastRoute, null);
 }
@@ -16,9 +24,13 @@ export async function preloadHomeCache({ signal } = {}) {
 
   preloadPromise = (async () => {
     getCachedFirstLastRoute();
-    await getArrivalNotifications({ forceRefresh: true, signal });
-    await getMyDepotNotifications({ forceRefresh: true, signal });
-    await getMyPage({ forceRefresh: true, signal });
+    await attemptPreload(() =>
+      getArrivalNotifications({ signal }),
+    );
+    await attemptPreload(() =>
+      getMyDepotNotifications({ signal }),
+    );
+    await attemptPreload(() => getMyPage({ signal }));
   })().finally(() => {
     preloadPromise = null;
   });

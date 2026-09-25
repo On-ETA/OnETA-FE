@@ -28,7 +28,7 @@ const TERMS = [
 export function TermsAgreementScreen({
   onBackPress,
   onConfirmPress,
-  signupTokens,
+  signupSession,
 }) {
   const [checkedMap, setCheckedMap] = useState({
     service: false,
@@ -79,7 +79,7 @@ export function TermsAgreementScreen({
       return;
     }
 
-    if (!signupTokens?.accessToken) {
+    if (!signupSession?.tempId) {
       Alert.alert("회원가입", "회원가입 정보를 다시 입력해 주세요.");
       onBackPress?.();
       return;
@@ -89,9 +89,9 @@ export function TermsAgreementScreen({
 
     try {
       await agreeToSignupTerms({
+        tempId: signupSession.tempId,
         serviceTermsAgreement: checkedMap.service,
         personalInfoAgreement: checkedMap.privacy,
-        accessToken: signupTokens.accessToken,
       });
 
       onConfirmPress?.();

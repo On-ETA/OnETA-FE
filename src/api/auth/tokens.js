@@ -1,3 +1,5 @@
+import { clearHomeCache } from "../homeCache";
+
 const ACCESS_TOKEN_KEY = "oneta.accessToken";
 const REFRESH_TOKEN_KEY = "oneta.refreshToken";
 const listeners = new Set();
@@ -40,7 +42,10 @@ export function setAuthTokens(
   { accessToken, refreshToken } = {},
   { isRefresh = false } = {},
 ) {
-  if (!isRefresh) sessionId += 1;
+  if (!isRefresh) {
+    clearHomeCache();
+    sessionId += 1;
+  }
   memoryTokens = {
     accessToken: accessToken ?? null,
     refreshToken: refreshToken ?? null,

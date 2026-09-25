@@ -15,7 +15,6 @@ import {
 import { sendEmailVerificationCode } from "../api/auth/email/send";
 import { verifyEmailCode } from "../api/auth/email/verify";
 import { signup } from "../api/auth/signup";
-import { extractAuthTokens } from "../api/auth/tokens";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import BackIcon from "../../assets/images/L.svg";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";
@@ -65,6 +64,15 @@ function getSignupErrorReason(error) {
     "회원가입 요청에 실패했습니다. 다시 시도해 주세요.";
 
   return message.replace(/^\[?[A-Z]\d{3,}\]?\s*:?\s*/, "");
+}
+
+function extractSignupSession(response) {
+  const data = response?.data ?? response;
+
+  return {
+    tempId: data?.tempId,
+    expiresInSeconds: data?.expiresInSeconds,
+  };
 }
 
 export function SignupScreen({ onBackPress, onNextPress }) {
@@ -267,16 +275,16 @@ export function SignupScreen({ onBackPress, onNextPress }) {
         password,
         passwordConfirm,
       });
-      const signupTokens = extractAuthTokens(signupResponse);
+      const signupSession = extractSignupSession(signupResponse);
 
-      if (!signupTokens.accessToken) {
+      if (!signupSession.tempId) {
         throw new Error("회원가입 인증 토큰을 받을 수 없습니다.");
       }
 
       onNextPress?.({
         email: trimmedEmail,
         password,
-        signupTokens,
+        signupSession,
       });
     } catch (error) {
       setSignupErrorMessage(getSignupErrorReason(error));

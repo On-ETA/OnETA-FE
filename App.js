@@ -25,6 +25,7 @@ import {
 import { linking } from "./linking";
 import { routes } from "./src/navigation/routes";
 import { getAccessToken, setAuthTokens } from "./src/api/auth/tokens";
+import { preloadHomeCache } from "./src/api/homePreload";
 import { blurActiveElement } from "./src/utils/accessibility";
 import { PushNotifications } from "./src/notifications/PushNotifications";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
@@ -106,18 +107,32 @@ function useAuthenticatedRoute(navigation, route) {
   const [isReady, setIsReady] = React.useState(false);
 
   React.useEffect(() => {
-    if (accessToken) {
-      setAuthTokens({ accessToken, refreshToken });
-      setIsReady(true);
-      return;
+    let isActive = true;
+
+    async function prepareAuthenticatedRoute() {
+      if (accessToken) {
+        setAuthTokens({ accessToken, refreshToken });
+      } else if (!getAccessToken()) {
+        resetTo(navigation, routes.login);
+        return;
+      }
+
+      try {
+        await preloadHomeCache();
+      } catch {
+        // Preload is a cache warm-up; authenticated navigation can continue.
+      }
+
+      if (isActive) {
+        setIsReady(true);
+      }
     }
 
-    if (getAccessToken()) {
-      setIsReady(true);
-      return;
-    }
+    prepareAuthenticatedRoute();
 
-    resetTo(navigation, routes.login);
+    return () => {
+      isActive = false;
+    };
   }, [accessToken, refreshToken, navigation]);
 
   return isReady;
@@ -159,11 +174,11 @@ function SignupRoute({ navigation }) {
   return (
     <SignupScreen
       onBackPress={() => goBackOrReset(navigation, routes.login)}
-      onNextPress={({ email, password, signupTokens }) =>
+      onNextPress={({ email, password, signupSession }) =>
         navigateTo(navigation, routes.termsAgreement, {
           email,
           password,
-          signupTokens,
+          signupSession,
         })
       }
     />
@@ -172,14 +187,7 @@ function SignupRoute({ navigation }) {
 
 function TermsAgreementRoute({ navigation, route }) {
   const googleConflictMessage = getGoogleSignupConflictMessage(route.params);
-  const signupTokens =
-    route.params?.signupTokens ??
-    (route.params?.accessToken
-      ? {
-          accessToken: route.params.accessToken,
-          refreshToken: route.params.refreshToken,
-        }
-      : undefined);
+  const signupSession = route.params?.signupSession;
 
   React.useEffect(() => {
     if (!googleConflictMessage) {
@@ -204,7 +212,7 @@ function TermsAgreementRoute({ navigation, route }) {
           password: route.params?.password,
         })
       }
-      signupTokens={signupTokens}
+      signupSession={signupSession}
     />
   );
 }

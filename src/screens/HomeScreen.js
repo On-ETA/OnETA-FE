@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAddresses } from "../api/addresses";
+import { homeCacheKeys, readHomeCache, writeHomeCache } from "../api/homeCache";
 import { HomeTopSection } from "../components";
 import { AddressManagementScreen } from "./AddressManagementScreen";
 import { CustomAlarmScreen } from "./home/custom-alarm/CustomAlarmScreen";
@@ -66,7 +67,14 @@ export function HomeScreen({
     useState(false);
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
   const [currentAddressLabel, setCurrentAddressLabel] = useState("");
-  const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(null);
+  const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(() =>
+    readHomeCache(homeCacheKeys.firstLastRoute, null),
+  );
+
+  const setCachedFirstLastRouteSummary = (summary) => {
+    setFirstLastRouteSummary(summary);
+    writeHomeCache(homeCacheKeys.firstLastRoute, summary);
+  };
 
   useEffect(() => {
     let isActive = true;
@@ -167,7 +175,7 @@ export function HomeScreen({
                 onRouteConfigured={
                   scheduleAlarmInitialStep === "route"
                     ? (route, places) => {
-                        setFirstLastRouteSummary(
+                        setCachedFirstLastRouteSummary(
                           createFirstLastRouteSummary(route, places),
                         );
                         blurActiveElement();
@@ -200,7 +208,9 @@ export function HomeScreen({
                   setFirstLastRouteSetupStep("map");
                 }}
                 onRouteSelect={(route, places) => {
-                  setFirstLastRouteSummary(createFirstLastRouteSummary(route, places));
+                  setCachedFirstLastRouteSummary(
+                    createFirstLastRouteSummary(route, places),
+                  );
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
                 }}

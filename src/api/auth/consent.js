@@ -44,19 +44,19 @@ import { requestJson } from "../client";
 const SIGNUP_CONSENT_ENDPOINT = "/api/auth/signup/consent";
 
 export async function agreeToSignupTerms({
+  tempId,
   serviceTermsAgreement,
   personalInfoAgreement,
-  accessToken,
   signal,
 }) {
   return requestJson({
     path: SIGNUP_CONSENT_ENDPOINT,
     method: "POST",
     body: {
+      tempId,
       serviceTermsAgreement: Boolean(serviceTermsAgreement),
       personalInfoAgreement: Boolean(personalInfoAgreement),
     },
-    accessToken,
     signal,
     errorMessage: "약관 동의에 실패했습니다.",
   });
