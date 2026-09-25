@@ -10,7 +10,7 @@ import {
 } from "react-native";
 
 import { changeNickname } from "../api/mypage/nickname";
-import { getUser } from "../api/user";
+import { getMyPage } from "../api/mypage";
 import { AppScreen, Header, PrimaryButton } from "../components";
 import BackIcon from "../../assets/images/L.svg";
 import { colors, layout, typography } from "../theme";
@@ -30,7 +30,7 @@ export function AccountInfoScreen({ onBackPress, onConfirmPress }) {
       setIsLoadingUser(true);
 
       try {
-        const user = await getUser({ signal: controller.signal });
+        const user = await getMyPage({ signal: controller.signal });
 
         if (isActive) {
           setEmail(user.email ?? "");

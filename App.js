@@ -1,7 +1,7 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Alert, Platform } from "react-native";
+import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -134,12 +134,8 @@ function getGoogleSignupConflictMessage(params = {}) {
   const hasConflictStatus =
     status === "409" || error === "SC_CONFLICT" || (!status && !error);
 
-  if (
-    code === "C002" &&
-    message === GOOGLE_CONFLICT_MESSAGE &&
-    hasConflictStatus
-  ) {
-    return message;
+  if (code === "C002" && hasConflictStatus) {
+    return message || GOOGLE_CONFLICT_MESSAGE;
   }
 
   return "";
@@ -190,15 +186,9 @@ function TermsAgreementRoute({ navigation, route }) {
       return;
     }
 
-    Alert.alert("구글 회원가입", googleConflictMessage, [
-      {
-        text: "확인",
-        onPress: () =>
-          resetTo(navigation, routes.login, {
-            loginError: googleConflictMessage,
-          }),
-      },
-    ]);
+    resetTo(navigation, routes.login, {
+      loginError: googleConflictMessage,
+    });
   }, [googleConflictMessage, navigation]);
 
   if (googleConflictMessage) {

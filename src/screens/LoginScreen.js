@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,6 +24,8 @@ import OnetaLogo from "../../assets/images/logo_t.svg";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";
 import VisibleIcon from "../../assets/images/icon_visible.svg";
 import { colors, layout, typography } from "../theme";
+
+const OAUTH_AUTH_ERROR_COOKIE = "oauth2_auth_error";
 
 export function LoginScreen({
   initialEmail = "",
@@ -109,6 +112,14 @@ export function LoginScreen({
   useEffect(() => {
     setLoginError(initialError);
   }, [initialError]);
+
+  useEffect(() => {
+    const oauthErrorMessage = consumeCookie(OAUTH_AUTH_ERROR_COOKIE);
+
+    if (oauthErrorMessage) {
+      Alert.alert("소셜 로그인", oauthErrorMessage);
+    }
+  }, []);
 
   const handleLoginPress = async () => {
     const trimmedEmail = email.trim();
@@ -262,6 +273,46 @@ export function LoginScreen({
       </ScrollView>
     </AppScreen>
   );
+}
+
+function consumeCookie(name) {
+  if (
+    Platform.OS !== "web" ||
+    typeof document === "undefined" ||
+    !document.cookie
+  ) {
+    return "";
+  }
+
+  const cookiePrefix = `${name}=`;
+  const cookie = document.cookie
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(cookiePrefix));
+
+  if (!cookie) {
+    return "";
+  }
+
+  const value = cookie.slice(cookiePrefix.length);
+  deleteCookie(name);
+
+  try {
+    return decodeURIComponent(value.replace(/\+/g, " "));
+  } catch {
+    return value;
+  }
+}
+
+function deleteCookie(name) {
+  if (Platform.OS !== "web" || typeof document === "undefined") {
+    return;
+  }
+
+  const expires = "expires=Thu, 01 Jan 1970 00:00:00 GMT";
+
+  document.cookie = `${name}=; ${expires}; path=/`;
+  document.cookie = `${name}=; ${expires}; path=${window.location?.pathname ?? "/"}`;
 }
 
 function getLoginErrorMessage(error) {

@@ -31,7 +31,6 @@ import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { NaverMapView } from "../../../components/NaverMapView";
 import { RouteTimeline } from "../../../components/RouteTimeline";
-import { RoutePlaceSetupScreen } from "../first-last/RoutePlaceSetupScreen";
 import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 
@@ -137,6 +136,30 @@ function getRoutePlaceAddress(place) {
     routePlace.address ||
     routePlace.label
   );
+}
+
+function getMapCenterFromPlaces(origin, destination, activePlaceType) {
+  const activePlace = activePlaceType === "destination" ? destination : origin;
+  const fallbackPlace = activePlaceType === "destination" ? origin : destination;
+
+  return getMapCenterFromPlace(activePlace) ?? getMapCenterFromPlace(fallbackPlace);
+}
+
+function getMapCenterFromPlace(place) {
+  const routePlace = createRoutePlace(place);
+  const latitude = Number(routePlace.y ?? routePlace.latitude ?? routePlace.lat);
+  const longitude = Number(
+    routePlace.x ?? routePlace.longitude ?? routePlace.lng ?? routePlace.lon,
+  );
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  return {
+    latitude,
+    longitude,
+  };
 }
 
 function getSegmentStopName(
@@ -278,14 +301,11 @@ export function ScheduleAlarmAddScreen({
 
   if (step === "route") {
     return (
-      <RoutePlaceSetupScreen
-        title={initialStep === "route" ? "경로 재설정" : mapTitle}
-        showPreviousButton={initialStep !== "route"}
-        initialPlaces={routePlaces}
-        onBackPress={(places) => {
-          setRoutePlaces(places);
-          handleBackPress();
-        }}
+      <ScheduleRouteMapStep
+        headerTitle={initialStep === "route" ? "경로 재설정" : mapTitle}
+        initialDestination={routePlaces.destination}
+        initialOrigin={routePlaces.origin}
+        onBackPress={handleBackPress}
         onConfirm={(places) => {
           setRoutePlaces(places);
           setStep("routeResult");
@@ -489,7 +509,8 @@ export function ScheduleAlarmAddScreen({
   );
 }
 
-function ScheduleRouteMapStep({
+export function ScheduleRouteMapStep({
+  headerTitle = "경로 설정",
   initialDestination,
   initialOrigin,
   isLoadingCurrentAddress,
@@ -902,13 +923,19 @@ function ScheduleRouteMapStep({
     setPlaceSearchError("");
   };
 
+  const mapCenter = getMapCenterFromPlaces(
+    origin,
+    destination,
+    activePlaceType,
+  );
+
   return (
     <View
       style={
         styles.mapScreen
       }
     >
-      <NaverMapView />
+      <NaverMapView center={mapCenter ?? undefined} />
 
       <View
         style={
@@ -922,7 +949,7 @@ function ScheduleRouteMapStep({
           onBackPress={
             onBackPress
           }
-          title="알림 추가"
+          title={headerTitle}
           titleStyle={
             styles.headerTitle
           }
@@ -943,8 +970,8 @@ function ScheduleRouteMapStep({
             placeholder={
               activePlaceType ===
               "origin"
-                ? "출발지 장소 검색"
-                : "도착지 장소 검색"
+                ? "출발지 장소명 또는 건물명으로 검색"
+                : "도착지 장소명 또는 건물명으로 검색"
             }
             placeholderTextColor={
               colors.gray06
