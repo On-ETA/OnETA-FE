@@ -18,6 +18,7 @@
 import { getAccessToken } from "./auth/tokens";
 import { reissueAuthTokens } from "./auth/reissue";
 import { requestJson } from "./client";
+import { homeCacheKeys, readHomeCache, writeHomeCache } from "./homeCache";
 
 const MYPAGE_ENDPOINT = "/api/mypage";
 
@@ -82,7 +83,19 @@ async function requestMyPageJson(options) {
   }
 }
 
-export async function getMyPage({ accessToken = getAccessToken(), signal } = {}) {
+export async function getMyPage({
+  accessToken = getAccessToken(),
+  forceRefresh = false,
+  signal,
+} = {}) {
+  if (!forceRefresh) {
+    const cachedMyPage = readHomeCache(homeCacheKeys.myPage);
+
+    if (cachedMyPage) {
+      return cachedMyPage;
+    }
+  }
+
   const data = await requestMyPageJson({
     path: MYPAGE_ENDPOINT,
     method: "GET",
@@ -93,9 +106,9 @@ export async function getMyPage({ accessToken = getAccessToken(), signal } = {})
 
   const myPageData = data?.data ?? data;
 
-  return {
+  return writeHomeCache(homeCacheKeys.myPage, {
     appVersion: myPageData?.appVersion,
     email: myPageData?.email,
     nickname: myPageData?.nickname,
-  };
+  });
 }

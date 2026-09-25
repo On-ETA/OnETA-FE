@@ -1,6 +1,12 @@
 import { getAccessToken } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
+import {
+  homeCacheKeys,
+  readHomeCache,
+  removeHomeCache,
+  writeHomeCache,
+} from "../homeCache";
 
 const ARRIVAL_NOTIFICATIONS_ENDPOINT = "/api/notifications/arrival";
 
@@ -190,8 +196,17 @@ export function normalizeArrivalNotification(notification) {
 
 export async function getArrivalNotifications({
   accessToken = getAccessToken(),
+  forceRefresh = false,
   signal,
 } = {}) {
+  if (!forceRefresh) {
+    const cachedNotifications = readHomeCache(homeCacheKeys.arrivalNotifications);
+
+    if (cachedNotifications) {
+      return cachedNotifications;
+    }
+  }
+
   const response = await requestArrivalNotificationJson({
     path: ARRIVAL_NOTIFICATIONS_ENDPOINT,
     method: "GET",
@@ -200,7 +215,10 @@ export async function getArrivalNotifications({
     errorMessage: "도착 알림 목록을 불러오지 못했습니다.",
   });
 
-  return pickArrivalNotificationList(response).map(normalizeArrivalNotification);
+  return writeHomeCache(
+    homeCacheKeys.arrivalNotifications,
+    pickArrivalNotificationList(response).map(normalizeArrivalNotification),
+  );
 }
 
 export async function createArrivalNotification({

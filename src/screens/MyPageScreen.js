@@ -73,11 +73,11 @@ export function MyPageScreen({
   onWithdrawComplete,
 }) {
   const [withdrawStep, setWithdrawStep] = useState(null);
+  const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawErrorMessage, setWithdrawErrorMessage] = useState("");
   const [myPageInfo, setMyPageInfo] = useState(defaultMyPageInfo);
-
   useEffect(() => {
     let isActive = true;
 
@@ -153,7 +153,20 @@ export function MyPageScreen({
     closeWithdrawModal();
     onWithdrawComplete?.();
   };
+  const openLogoutConfirm = () => {
+    blurActiveElement();
+    setLogoutConfirmVisible(true);
+  };
 
+  const closeLogoutConfirm = () => {
+    blurActiveElement();
+
+    if (isLoggingOut) {
+      return;
+    }
+
+    setLogoutConfirmVisible(false);
+  };
   const handleLogoutPress = async () => {
     if (isLoggingOut) {
       return;
@@ -163,9 +176,11 @@ export function MyPageScreen({
 
     try {
       await logout();
+      setLogoutConfirmVisible(false);
       onLogoutComplete?.();
     } catch (error) {
       if (isAuthError(error)) {
+        setLogoutConfirmVisible(false);
         onLogoutComplete?.();
         return;
       }
@@ -284,7 +299,7 @@ export function MyPageScreen({
             <Pressable
               accessibilityRole="button"
               disabled={isLoggingOut}
-              onPress={handleLogoutPress}
+              onPress={openLogoutConfirm}
               style={[
                 styles.logoutButton,
                 isLoggingOut && styles.logoutButtonDisabled,
@@ -318,6 +333,50 @@ export function MyPageScreen({
   return (
     <>
       {screen}
+      <Modal
+        animationType="fade"
+        onRequestClose={closeLogoutConfirm}
+        transparent
+        visible={logoutConfirmVisible}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>로그아웃하시겠습니까?</Text>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isLoggingOut}
+                onPress={closeLogoutConfirm}
+                style={styles.cancelButton}
+              >
+                <Text style={[styles.modalButtonText, styles.cancelText]}>
+                  취소
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                disabled={isLoggingOut}
+                onPress={handleLogoutPress}
+                style={[
+                  styles.withdrawButton,
+                  isLoggingOut && styles.withdrawButtonDisabled,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.modalButtonText,
+                    styles.withdrawButtonText,
+                  ]}
+                >
+                  {isLoggingOut ? "처리 중" : "로그아웃"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal
         animationType="fade"
         onRequestClose={() => {
