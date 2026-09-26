@@ -8,6 +8,9 @@ import {
   View,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import BigBusAsset from "../../../../assets/images/bigbus.svg";
+import DirectionCircleAsset from "../../../../assets/images/circle.svg";
+import StopLineAsset from "../../../../assets/images/line.svg";
 
 import {
   getArrivalNotificationById,
@@ -16,7 +19,9 @@ import {
 import { getBusRouteDirections } from "../../../api/busRoutes";
 import { updateDepotNotification } from "../../../api/notifications/depot";
 import { Header } from "../../../components";
+import { RouteTimeline } from "../../../components/RouteTimeline";
 import { colors, typography } from "../../../theme";
+import { normalizeTimelineSegments } from "../../../utils/routeSegments";
 
 const days = ["월", "화", "수", "목", "금", "토", "일"];
 const apiDayToKoreanDay = {
@@ -87,6 +92,93 @@ function getPrimaryTransitSegment(route) {
   return route?.segments?.find((segment) => segment.transitType !== "WALK");
 }
 
+function parseRouteDetails(routeDetails) {
+  if (!routeDetails) {
+    return null;
+  }
+
+  if (typeof routeDetails !== "string") {
+    return routeDetails;
+  }
+
+  try {
+    return JSON.parse(routeDetails);
+  } catch {
+    return null;
+  }
+}
+
+function getAlarmRoute(alarm) {
+  return (
+    alarm?.route ??
+    alarm?.raw?.route ??
+    parseRouteDetails(alarm?.routeDetails) ??
+    parseRouteDetails(alarm?.raw?.routeDetails)
+  );
+}
+
+function getSegmentStopName(segment, edge) {
+  if (!segment) {
+    return "";
+  }
+
+  if (edge === "start") {
+    return segment.startStation || segment.stations?.[0]?.name || "";
+  }
+
+  return (
+    segment.endStation ||
+    segment.stations?.[segment.stations.length - 1]?.name ||
+    ""
+  );
+}
+
+function formatKoreanTime(time) {
+  const formatted = formatArrivalTime(time);
+  const [rawHour = "0", rawMinute = "00"] = formatted.split(":");
+  let hour = Number(rawHour);
+
+  if (!Number.isFinite(hour)) {
+    return formatted;
+  }
+
+  const period = hour >= 12 ? "오후" : "오전";
+  hour %= 12;
+
+  if (hour === 0) {
+    hour = 12;
+  }
+
+  return `${period} ${String(hour).padStart(2, "0")} : ${rawMinute}`;
+}
+
+function getFormattedStartTime(arrivalTime, durationMinutes) {
+  const formatted = formatArrivalTime(arrivalTime);
+  const [rawHour = "0", rawMinute = "0"] = formatted.split(":");
+  const hour = Number(rawHour);
+  const minute = Number(rawMinute);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return "시간 정보 없음";
+  }
+
+  let totalMinutes = hour * 60 + minute - Number(durationMinutes || 0);
+  totalMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+
+  const startHour24 = Math.floor(totalMinutes / 60);
+  const startMinute = totalMinutes % 60;
+  const period = startHour24 >= 12 ? "오후" : "오전";
+  let startHour12 = startHour24 % 12;
+
+  if (startHour12 === 0) {
+    startHour12 = 12;
+  }
+
+  return `${period} ${String(startHour12).padStart(2, "0")} : ${String(
+    startMinute,
+  ).padStart(2, "0")}`;
+}
+
 function getRepeatDays(repeatDays) {
   return Array.isArray(repeatDays)
     ? repeatDays.map((day) => apiDayToKoreanDay[day]).filter(Boolean)
@@ -103,7 +195,12 @@ function getRouteDetails(alarm) {
   return route ? JSON.stringify(route) : undefined;
 }
 
-export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
+export function ScheduleAlarmEditScreen({
+  alarm,
+  onBackPress,
+  onResetRoutePress,
+  onSavePress,
+}) {
   const [routeName, setRouteName] = useState(alarm?.routeName ?? "출근길");
   const [selectedDays, setSelectedDays] = useState(
     getRepeatDays(alarm?.repeatDays),
@@ -113,9 +210,16 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
   const [isSavingAlarm, setIsSavingAlarm] = useState(false);
   const [alarmError, setAlarmError] = useState("");
   const notificationId = getNotificationId(alarm);
-  const route = arrivalAlarm?.route ?? arrivalAlarm?.raw?.route;
+  const route = getAlarmRoute(arrivalAlarm);
   const primarySegment = useMemo(() => getPrimaryTransitSegment(route), [route]);
+  const timelineSegments = useMemo(
+    () => normalizeTimelineSegments(route?.segments ?? []),
+    [route],
+  );
   const arrivalTime = formatArrivalTime(
+    arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
+  );
+  const formattedArrivalTime = formatKoreanTime(
     arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
   );
   const reminderText = Array.isArray(arrivalAlarm?.reminderOffsetMinutes)
@@ -123,6 +227,10 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
     : "10분 전 알림";
   const totalDuration =
     route?.realTimeDurationMinutes ?? route?.totalDurationMinutes ?? 0;
+  const formattedStartTime = getFormattedStartTime(
+    arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
+    totalDuration,
+  );
 
   useEffect(() => {
     if (!notificationId) {
@@ -251,15 +359,46 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
         </View>
       ) : null}
       <View style={styles.routeHeader}>
-        <View style={styles.routeClockGroup}>
-          <Text style={styles.routeClockText}>23:42</Text>
-          <ChevronRightIcon />
-          <Text style={styles.routeClockText}>00:04</Text>
+        <View style={styles.routeTopRow}>
+          <View style={styles.busInfo}>
+            <View style={styles.busIconCircle}>
+              <BigBusAsset width={9} height={10} />
+            </View>
+            <Text style={styles.busNumber}>
+              {primarySegment?.transitName || "대중교통"}
+            </Text>
+            {primarySegment?.endStation ? (
+              <View style={styles.busDirectionRow}>
+                <DirectionCircleAsset width={3} height={3} />
+                <Text numberOfLines={1} style={styles.busDirection}>
+                  {`${primarySegment.endStation} 방면`}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={styles.totalTime}>
+            <Text style={styles.totalTimeNumber}>{totalDuration}</Text>
+            <Text style={styles.totalTimeUnit}>분</Text>
+          </View>
         </View>
-        <View style={styles.totalTime}>
-          <Text style={styles.totalTimeNumber}>{totalDuration}</Text>
-          <Text style={styles.totalTimeUnit}>분</Text>
+
+        <View style={styles.stopRows}>
+          <StopLineAsset height={34} style={styles.stopLine} width={1} />
+          <StopRow
+            active
+            label="승차"
+            name={getSegmentStopName(primarySegment, "start") || "승차 정류장"}
+          />
+          <StopRow
+            label="하차"
+            name={getSegmentStopName(primarySegment, "end") || "하차 정류장"}
+            style={styles.dropoffRow}
+          />
         </View>
+
+        {timelineSegments.length > 0 ? (
+          <RouteTimeline segments={timelineSegments} style={styles.routeTimeline} />
+        ) : null}
       </View>
 
       <View style={styles.timeSection}>
@@ -267,18 +406,22 @@ export function ScheduleAlarmEditScreen({ alarm, onBackPress, onSavePress }) {
           <View style={styles.timeSummaryBlock}>
             <Text style={styles.fieldLabel}>출발 적정 시간</Text>
             <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>경로 기준 계산</Text>
+              <Text style={styles.timeCardText}>{formattedStartTime}</Text>
             </View>
           </View>
           <ChevronRightIcon />
           <View style={styles.timeSummaryBlock}>
             <Text style={styles.fieldLabel}>도착 예정 시간</Text>
             <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>{arrivalTime}</Text>
+              <Text style={styles.timeCardText}>{formattedArrivalTime}</Text>
             </View>
           </View>
         </View>
-        <Pressable accessibilityRole="button" style={styles.resetButton}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onResetRoutePress}
+          style={styles.resetButton}
+        >
           <Text style={styles.resetButtonText}>경로 및 시간 재설정</Text>
         </Pressable>
       </View>
@@ -559,6 +702,25 @@ function BusIcon() {
   );
 }
 
+function StopRow({
+  active = false,
+  label,
+  name,
+  style,
+}) {
+  return (
+    <View style={[styles.stopRow, style]}>
+      <View style={[styles.stopOuter, active && styles.stopOuterActive]}>
+        <View style={[styles.stopInner, active && styles.stopInnerActive]}>
+          <View style={styles.stopCenter} />
+        </View>
+      </View>
+      <Text style={styles.stopLabel}>{label}</Text>
+      <Text numberOfLines={1} style={styles.stopName}>{name}</Text>
+    </View>
+  );
+}
+
 function ChevronRightIcon() {
   return (
     <Svg height={24} viewBox="0 0 24 24" width={24}>
@@ -602,12 +764,15 @@ const styles = StyleSheet.create({
     color: colors.black,
   },
   routeHeader: {
-    height: 64,
     paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 8,
+    backgroundColor: colors.gray02,
+  },
+  routeTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: colors.gray02,
   },
   statusBox: {
     paddingVertical: 10,
@@ -619,6 +784,8 @@ const styles = StyleSheet.create({
     color: colors.gray07,
   },
   busInfo: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -651,11 +818,22 @@ const styles = StyleSheet.create({
     color: colors.gray09,
   },
   busDirection: {
+    flex: 1,
     fontFamily: "SUIT",
     fontSize: 13,
-    fontWeight: "700",
+    fontStyle: "normal",
+    fontWeight: "500",
     lineHeight: 18.2,
+    letterSpacing: -0.13,
     color: colors.gray06,
+  },
+  busDirectionRow: {
+    marginLeft: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    minWidth: 0,
+    flexShrink: 1,
   },
   totalTime: {
     flexDirection: "row",
@@ -678,12 +856,16 @@ const styles = StyleSheet.create({
     color: colors.gray09,
   },
   timeSection: {
-    paddingTop: 18,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    display: "flex",
+    padding: 16,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+    gap: 12,
     backgroundColor: colors.gray02,
   },
   timeSummaryRow: {
+    alignSelf: "stretch",
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 12,
@@ -694,9 +876,11 @@ const styles = StyleSheet.create({
   fieldLabel: {
     marginBottom: 8,
     fontFamily: "SUIT",
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 18.2,
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.6,
+    letterSpacing: -0.14,
     color: colors.gray07,
   },
   timeCard: {
@@ -711,19 +895,100 @@ const styles = StyleSheet.create({
   timeCardText: {
     fontFamily: "SUIT",
     fontSize: 18,
-    fontWeight: "700",
-    lineHeight: 25.2,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 18,
+    letterSpacing: -0.18,
+    textAlign: "right",
     color: colors.gray07,
   },
   resetButton: {
-    height: 42,
-    marginTop: 12,
+    height: 46,
+    alignSelf: "stretch",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.white,
+  },
+  stopRows: {
+    marginTop: 16,
+    position: "relative",
+  },
+  stopLine: {
+    position: "absolute",
+    left: 11,
+    top: 7,
+    zIndex: 0,
+  },
+  stopRow: {
+    height: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    position: "relative",
+    zIndex: 1,
+  },
+  dropoffRow: {
+    marginTop: 8,
+  },
+  stopOuter: {
+    width: 23,
+    height: 23,
+    marginRight: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: colors.gray04,
+  },
+  stopOuterActive: {
+    backgroundColor: colors.sub,
+  },
+  stopInner: {
+    width: 16,
+    height: 16,
+    borderRadius: 100,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.gray06,
+  },
+  stopInnerActive: {
+    backgroundColor: colors.main,
+  },
+  stopCenter: {
+    display: "flex",
+    width: 6,
+    height: 6,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    flexShrink: 0,
+    borderRadius: 100,
+    backgroundColor: colors.white,
+  },
+  stopLabel: {
+    width: 32,
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 19.6,
+    letterSpacing: -0.14,
+    color: colors.gray07,
+  },
+  stopName: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 19.6,
+    letterSpacing: -0.14,
+    color: colors.gray08,
+  },
+  routeTimeline: {
+    height: 16,
+    marginTop: 12,
   },
   resetButtonText: {
     fontFamily: "SUIT",

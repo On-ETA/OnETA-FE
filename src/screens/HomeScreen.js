@@ -180,6 +180,7 @@ export function HomeScreen({
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
   const [currentAddressLabel, setCurrentAddressLabel] = useState("");
   const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(null);
+  const [customAlarmRefreshKey, setCustomAlarmRefreshKey] = useState(0);
 
   const loadFirstLastTransitNotifications = useCallback(async ({
     signal,
@@ -266,6 +267,15 @@ export function HomeScreen({
     }
   }, [loadFirstLastTransitNotifications]);
 
+  const handleScheduleAlarmSaved = useCallback(() => {
+    blurActiveElement();
+    setIsScheduleAlarmAddVisible(false);
+    setScheduleAlarmInitialStep("form");
+    setActiveTab("home");
+    setActiveHomeTab("customAlarm");
+    setCustomAlarmRefreshKey((current) => current + 1);
+  }, []);
+
   const handleTabPress = (tabKey) => {
     blurActiveElement();
     setIsAddressManagerVisible(false);
@@ -334,6 +344,7 @@ export function HomeScreen({
                   setIsScheduleAlarmAddVisible(false);
                   setScheduleAlarmInitialStep("form");
                 }}
+                onSaveComplete={handleScheduleAlarmSaved}
                 onRouteConfigured={
                   scheduleAlarmInitialStep === "route"
                     ? handleFirstLastRouteConfigured
@@ -375,6 +386,12 @@ export function HomeScreen({
                   blurActiveElement();
                   setEditingCustomAlarm(null);
                 }}
+                onResetRoutePress={() => {
+                  blurActiveElement();
+                  setEditingCustomAlarm(null);
+                  setIsScheduleAlarmAddVisible(true);
+                  setScheduleAlarmInitialStep("route");
+                }}
                 onSavePress={() => {
                   blurActiveElement();
                   setEditingCustomAlarm(null);
@@ -413,6 +430,7 @@ export function HomeScreen({
                   (activeHomeTab === "firstLast" ? "주소 등록하기" : "주소 등록하기")
                 }
                 notificationCount={notificationCount}
+                customAlarmRefreshKey={customAlarmRefreshKey}
                 onAddressPress={() => {
                   blurActiveElement();
                   setIsAddressManagerVisible(true);
@@ -458,6 +476,7 @@ export function HomeScreen({
 function HomeDashboard({
   activeHomeTab,
   addressLabel,
+  customAlarmRefreshKey,
   notificationCount,
   onAddressPress,
   onBellPress,
@@ -486,6 +505,7 @@ function HomeDashboard({
       />
       {activeHomeTab === "customAlarm" ? (
         <CustomAlarmScreen
+          refreshKey={customAlarmRefreshKey}
           onGarageDepartureAddPress={onGarageDepartureAddPress}
           onGarageAlarmEditPress={onGarageAlarmEditPress}
           onScheduleAlarmAddPress={onScheduleAlarmAddPress}

@@ -51,6 +51,7 @@ function breakRouteNumberAtParenthesis(routeNumber) {
 export function CustomAlarmScreen({
   onGarageDepartureAddPress,
   onGarageAlarmEditPress,
+  refreshKey = 0,
   onScheduleAlarmAddPress,
   onScheduleAlarmEditPress,
 }) {
@@ -109,6 +110,7 @@ export function CustomAlarmScreen({
 
       try {
         const alarms = await getArrivalNotifications({
+          forceRefresh: refreshKey > 0,
           signal: controller.signal,
         });
 
@@ -136,7 +138,7 @@ export function CustomAlarmScreen({
       isActive = false;
       controller.abort();
     };
-  }, []);
+  }, [refreshKey]);
 
   const toggleEditSection = (sectionKey) => {
     setEditingSections((current) => {
