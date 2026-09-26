@@ -46,8 +46,47 @@ function loadNaverMapsScript(clientId) {
   return naverMapsScriptPromise;
 }
 
-function WebNaverMapView({ center, clientId, level, style }) {
+function normalizeMarkers(markers, center, showCenterMarker) {
+  const normalizedMarkers = Array.isArray(markers)
+    ? markers
+        .map((marker) => ({
+          latitude: Number(marker?.latitude),
+          longitude: Number(marker?.longitude),
+        }))
+        .filter(
+          (marker) =>
+            Number.isFinite(marker.latitude) &&
+            Number.isFinite(marker.longitude),
+        )
+    : [];
+
+  if (normalizedMarkers.length > 0) {
+    return normalizedMarkers;
+  }
+
+  return showCenterMarker ? [center] : [];
+}
+
+function WebNaverMapView({
+  center,
+  clientId,
+  level,
+  markers,
+  showCenterMarker,
+  style,
+}) {
   const [errorMessage, setErrorMessage] = useState("");
+  const markerPositions = useMemo(
+    () => normalizeMarkers(markers, center, showCenterMarker),
+    [center, markers, showCenterMarker],
+  );
+  const markerKey = useMemo(
+    () =>
+      markerPositions
+        .map((marker) => `${marker.latitude},${marker.longitude}`)
+        .join("|"),
+    [markerPositions],
+  );
   const mapId = useMemo(() => {
     naverMapIdSeed += 1;
     return `naver-map-${naverMapIdSeed}`;
@@ -76,10 +115,16 @@ function WebNaverMapView({ center, clientId, level, style }) {
           mapDataControl: false,
         });
 
-        new maps.Marker({
-          map,
-          position: new maps.LatLng(center.latitude, center.longitude),
+        markerPositions.forEach((marker) => {
+          const position = new maps.LatLng(marker.latitude, marker.longitude);
+
+          new maps.Marker({
+            map,
+            position,
+          });
         });
+
+        map.setCenter(new maps.LatLng(center.latitude, center.longitude));
       })
       .catch((error) => {
         if (isActive) {
@@ -90,7 +135,7 @@ function WebNaverMapView({ center, clientId, level, style }) {
     return () => {
       isActive = false;
     };
-  }, [center.latitude, center.longitude, clientId, level, mapId]);
+  }, [center.latitude, center.longitude, clientId, level, mapId, markerKey, markerPositions]);
 
   return (
     <View style={[styles.container, style]}>
@@ -105,14 +150,22 @@ function WebNaverMapView({ center, clientId, level, style }) {
   );
 }
 
-function NativeNaverMap({ center, level, style }) {
+function NativeNaverMap({
+  center,
+  level,
+  markers,
+  showCenterMarker,
+  style,
+}) {
   const {
     NaverMapMarkerOverlay,
     NaverMapView: NativeNaverMapView,
   } = require("@mj-studio/react-native-naver-map");
+  const markerPositions = normalizeMarkers(markers, center, showCenterMarker);
 
   return (
     <NativeNaverMapView
+      key={`${center.latitude}-${center.longitude}-${markerPositions.length}`}
       initialCamera={{
         latitude: center.latitude,
         longitude: center.longitude,
@@ -125,26 +178,35 @@ function NativeNaverMap({ center, level, style }) {
       locale="ko"
       style={[styles.container, style]}
     >
-      <NaverMapMarkerOverlay
-        latitude={center.latitude}
-        longitude={center.longitude}
-      />
+      {markerPositions.map((marker, index) => (
+        <NaverMapMarkerOverlay
+          key={`${marker.latitude}-${marker.longitude}-${index}`}
+          latitude={marker.latitude}
+          longitude={marker.longitude}
+        />
+      ))}
     </NativeNaverMapView>
   );
 }
 
 export function NaverMapView({
-  center = NAVER_MAP_DEFAULT_CENTER,
+  center,
   clientId = NAVER_MAP_CLIENT_ID,
   level = 15,
+  markers,
+  showCenterMarker = true,
   style,
 }) {
+  const resolvedCenter = center ?? NAVER_MAP_DEFAULT_CENTER;
+
   if (Platform.OS === "web") {
     return (
       <WebNaverMapView
-        center={center}
+        center={resolvedCenter}
         clientId={clientId}
         level={level}
+        markers={markers}
+        showCenterMarker={showCenterMarker}
         style={style}
       />
     );
@@ -152,8 +214,10 @@ export function NaverMapView({
 
   return (
     <NativeNaverMap
-      center={center}
+      center={resolvedCenter}
       level={level}
+      markers={markers}
+      showCenterMarker={showCenterMarker}
       style={style}
     />
   );

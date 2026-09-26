@@ -49,9 +49,9 @@ export function RouteTimeline({ segments: routeSegments = [], style }) {
 
             <View style={styles.textWrap}>
               <Text
-                numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.7}
+                numberOfLines={1}
                 style={isTransit ? styles.textOn : styles.text}
               >
                 {duration}분
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     fontStyle: "normal",
     fontWeight: "500",
     lineHeight: 19.2,
-    letterSpacing: -0.12,
+    letterSpacing: 0,
     textAlign: "center",
     color: colors.gray07,
   },
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     fontStyle: "normal",
     fontWeight: "500",
     lineHeight: 19.2,
-    letterSpacing: -0.12,
+    letterSpacing: 0,
     textAlign: "center",
     color: colors.white,
   },

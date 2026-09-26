@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
   useEffect,
   useMemo,
   useRef,
@@ -24,6 +24,7 @@ import RouteArrowIcon from "../../../../assets/images/R_g.svg";
 import RouteClearIcon from "../../../../assets/images/x.svg";
 import BigBusAsset from "../../../../assets/images/bigbus.svg";
 import StopLineAsset from "../../../../assets/images/line.svg";
+import DirectionCircleAsset from "../../../../assets/images/circle.svg";
 
 import { searchAddresses } from "../../../api/address/search";
 import { createArrivalNotification } from "../../../api/notifications/arrival";
@@ -31,8 +32,10 @@ import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { NaverMapView } from "../../../components/NaverMapView";
 import { RouteTimeline } from "../../../components/RouteTimeline";
+import { AddressManagementScreen } from "../../AddressManagementScreen";
 import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
+import { normalizeTimelineSegments } from "../../../utils/routeSegments";
 
 const DEFAULT_TIME = {
   period: "오전",
@@ -162,6 +165,54 @@ function getMapCenterFromPlace(place) {
   };
 }
 
+function getDistanceMeters(from, to) {
+  if (!from || !to) {
+    return Infinity;
+  }
+
+  const fromLatitude = Number(from.latitude);
+  const fromLongitude = Number(from.longitude);
+  const toLatitude = Number(to.latitude);
+  const toLongitude = Number(to.longitude);
+
+  if (
+    !Number.isFinite(fromLatitude) ||
+    !Number.isFinite(fromLongitude) ||
+    !Number.isFinite(toLatitude) ||
+    !Number.isFinite(toLongitude)
+  ) {
+    return Infinity;
+  }
+
+  const earthRadiusMeters = 6371000;
+  const toRadians = (degree) => (degree * Math.PI) / 180;
+  const latitudeDelta = toRadians(toLatitude - fromLatitude);
+  const longitudeDelta = toRadians(toLongitude - fromLongitude);
+  const a =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(toRadians(fromLatitude)) *
+      Math.cos(toRadians(toLatitude)) *
+      Math.sin(longitudeDelta / 2) ** 2;
+
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getMapMarkersFromPlaces(places) {
+  return places.map(getMapCenterFromPlace).filter(Boolean);
+}
+
+function sortPlacesByDistance(places, referenceCenter) {
+  if (!referenceCenter) {
+    return places;
+  }
+
+  return [...places].sort(
+    (left, right) =>
+      getDistanceMeters(referenceCenter, getMapCenterFromPlace(left)) -
+      getDistanceMeters(referenceCenter, getMapCenterFromPlace(right)),
+  );
+}
+
 function getSegmentStopName(
   segment,
   edge,
@@ -238,6 +289,7 @@ export function ScheduleAlarmAddScreen({
   mapTitle = "알림 추가",
   onBackPress,
   onRouteConfigured,
+  onSaveComplete,
 }) {
   const [routeName, setRouteName] =
     useState("");
@@ -268,11 +320,16 @@ export function ScheduleAlarmAddScreen({
     destination: createRoutePlace(""),
   });
 
+  const [
+    activePlaceType,
+    setActivePlaceType,
+  ] = useState("origin");
+
   const formattedTime =
     `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
 
   const handleNextPress = () => {
-    setStep("route");
+    setStep("routeSetup");
   };
 
   const handleBackPress = () => {
@@ -282,7 +339,7 @@ export function ScheduleAlarmAddScreen({
     }
 
     if (step === "routeResult") {
-      setStep("route");
+      setStep("routeSetup");
       return;
     }
 
@@ -292,6 +349,16 @@ export function ScheduleAlarmAddScreen({
         return;
       }
 
+      setStep("routeSetup");
+      return;
+    }
+
+    if (step === "addressList") {
+      setStep("route");
+      return;
+    }
+
+    if (step === "routeSetup") {
       setStep("form");
       return;
     }
@@ -302,14 +369,69 @@ export function ScheduleAlarmAddScreen({
   if (step === "route") {
     return (
       <ScheduleRouteMapStep
+        activePlaceType={activePlaceType}
         headerTitle={initialStep === "route" ? "경로 재설정" : mapTitle}
         initialDestination={routePlaces.destination}
         initialOrigin={routePlaces.origin}
         onBackPress={handleBackPress}
-        onConfirm={(places) => {
-          setRoutePlaces(places);
-          setStep("routeResult");
+        onPlaceSelect={(type, place) => {
+          setRoutePlaces((current) => ({
+            ...current,
+            [type]: place,
+          }));
+          setStep("routeSetup");
         }}
+        onAddressListPress={() =>
+          setStep("addressList")
+        }
+        selectionMode
+      />
+    );
+  }
+
+  if (step === "addressList") {
+    return (
+      <AddressManagementScreen
+        onBackPress={handleBackPress}
+        onAddressSelect={(address) => {
+          setRoutePlaces((current) => ({
+            ...current,
+            [activePlaceType]:
+              createRoutePlace({
+                label:
+                  address.name ||
+                  address.placeName ||
+                  address.address ||
+                  address.detail,
+                name:
+                  address.name ||
+                  address.placeName,
+                address:
+                  address.address ||
+                  address.detail,
+                x: address.x,
+                y: address.y,
+                raw: address,
+              }),
+          }));
+          setStep("routeSetup");
+        }}
+      />
+    );
+  }
+
+  if (step === "routeSetup") {
+    return (
+      <ScheduleRouteSetupStep
+        onBackPress={handleBackPress}
+        onNextPress={() =>
+          setStep("routeResult")
+        }
+        onPlacePress={(type) => {
+          setActivePlaceType(type);
+          setStep("route");
+        }}
+        places={routePlaces}
       />
     );
   }
@@ -359,7 +481,11 @@ export function ScheduleAlarmAddScreen({
           setStep("routeResult")
         }
         onSavePress={
+          onSaveComplete ??
           onBackPress
+        }
+        onResetRoutePress={() =>
+          setStep("form")
         }
         route={
           selectedRoute
@@ -509,14 +635,197 @@ export function ScheduleAlarmAddScreen({
   );
 }
 
+function ScheduleRouteSetupStep({
+  onBackPress,
+  onNextPress,
+  onPlacePress,
+  places,
+}) {
+  const originText =
+    getRoutePlaceText(places.origin);
+
+  const destinationText =
+    getRoutePlaceText(places.destination);
+
+  const canGoNext =
+    Boolean(originText) &&
+    Boolean(destinationText);
+
+  return (
+    <View style={styles.screen}>
+      <Header
+        headerStyle={
+          styles.header
+        }
+        onBackPress={
+          onBackPress
+        }
+        title="알림 추가"
+        titleStyle={
+          styles.headerTitle
+        }
+        type="back"
+      />
+
+      <View
+        style={
+          styles.routeSetupContent
+        }
+      >
+        <Text
+          style={
+            styles.routeSetupHeading
+          }
+        >
+          출발지와 도착지를 지정해주세요.
+        </Text>
+
+        <PlaceSelectField
+          label="출발지"
+          onPress={() =>
+            onPlacePress("origin")
+          }
+          place={places.origin}
+          placeholder="출발지를 지정해주세요."
+        />
+
+        <PlaceSelectField
+          label="도착지"
+          onPress={() =>
+            onPlacePress("destination")
+          }
+          place={places.destination}
+          placeholder="도착지를 지정해주세요."
+        />
+      </View>
+
+      <View style={styles.footer}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBackPress}
+          style={
+            styles.cancelButton
+          }
+        >
+          <Text
+            style={
+              styles.cancelButtonText
+            }
+          >
+            이전
+          </Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={!canGoNext}
+          onPress={onNextPress}
+          style={[
+            styles.nextButton,
+            !canGoNext &&
+              styles.nextButtonDisabled,
+          ]}
+        >
+          <Text
+            style={[
+              styles.nextButtonText,
+              !canGoNext &&
+                styles.nextButtonTextDisabled,
+            ]}
+          >
+            다음
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function PlaceSelectField({
+  label,
+  onPress,
+  placeholder,
+  place,
+}) {
+  const value =
+    getRoutePlaceText(place);
+
+  const address =
+    value
+      ? getRoutePlaceAddress(place)
+      : "";
+
+  const hasDetail =
+    Boolean(address) &&
+    address !== value;
+
+  return (
+    <View
+      style={
+        styles.placeSelectGroup
+      }
+    >
+      <Text
+        style={
+          styles.placeSelectLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={
+          styles.placeSelectButton
+        }
+      >
+        <View
+          style={
+            styles.placeSelectTextGroup
+          }
+        >
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.placeSelectText,
+              value &&
+                styles.placeSelectTextFilled,
+            ]}
+          >
+            {value || placeholder}
+          </Text>
+
+          {hasDetail ? (
+            <Text
+              numberOfLines={1}
+              style={
+                styles.placeSelectDetail
+              }
+            >
+              {address}
+            </Text>
+          ) : null}
+        </View>
+
+        <ChevronRightIcon />
+      </Pressable>
+    </View>
+  );
+}
+
 export function ScheduleRouteMapStep({
   headerTitle = "경로 설정",
+  activePlaceType: initialActivePlaceType = "origin",
   initialDestination,
   initialOrigin,
   isLoadingCurrentAddress,
   currentAddressError,
   onBackPress,
   onConfirm,
+  onAddressListPress,
+  onPlaceSelect,
+  selectionMode = false,
 }) {
   const { height } =
     useWindowDimensions();
@@ -547,8 +856,8 @@ export function ScheduleRouteMapStep({
     useRef(null);
 
   /*
-   * 부모에서 가져온 현재 주소를
-   * 초기값으로 사용
+   * 遺紐⑥뿉??媛?몄삩 ?꾩옱 二쇱냼瑜?
+   * 珥덇린媛믪쑝濡??ъ슜
    */
   const [
     origin,
@@ -569,9 +878,9 @@ export function ScheduleRouteMapStep({
   );
 
   /*
-   * 주소 API가 비동기로 완료되기 때문에
+   * 二쇱냼 API媛 鍮꾨룞湲곕줈 ?꾨즺?섍린 ?뚮Ц??
    * initialOrigin / initialDestination
-   * 변경 시 state 동기화
+   * 蹂寃???state ?숆린??
    */
   const hasEditedOrigin =
     useRef(false);
@@ -610,7 +919,7 @@ export function ScheduleRouteMapStep({
   const [
     activePlaceType,
     setActivePlaceType,
-  ] = useState("origin");
+  ] = useState(initialActivePlaceType);
 
   const [
     placeResults,
@@ -627,12 +936,73 @@ export function ScheduleRouteMapStep({
     setPlaceSearchError,
   ] = useState("");
 
+  const [
+    userLocation,
+    setUserLocation,
+  ] = useState(null);
+
   const trimmedPlaceKeyword =
     placeKeyword.trim();
 
   const hasPlaceKeyword =
     trimmedPlaceKeyword.length >
     0;
+
+  const selectedPlaceCenter =
+    getMapCenterFromPlaces(
+      origin,
+      destination,
+      activePlaceType,
+    );
+
+  const searchReferenceCenter =
+    userLocation ?? selectedPlaceCenter;
+
+  useEffect(() => {
+    const geolocation =
+      globalThis.navigator?.geolocation;
+
+    if (!geolocation) {
+      return undefined;
+    }
+
+    let isActive = true;
+
+    geolocation.getCurrentPosition(
+      (position) => {
+        if (!isActive) {
+          return;
+        }
+
+        const latitude = Number(
+          position?.coords?.latitude,
+        );
+        const longitude = Number(
+          position?.coords?.longitude,
+        );
+
+        if (
+          Number.isFinite(latitude) &&
+          Number.isFinite(longitude)
+        ) {
+          setUserLocation({
+            latitude,
+            longitude,
+          });
+        }
+      },
+      () => {},
+      {
+        enableHighAccuracy: true,
+        maximumAge: 60000,
+        timeout: 8000,
+      },
+    );
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const focusPlaceSearch = (
     type,
@@ -779,7 +1149,7 @@ export function ScheduleRouteMapStep({
     ).current;
 
   /*
-   * 장소 검색
+   * ?μ냼 寃??
    */
   useEffect(() => {
     if (
@@ -819,12 +1189,18 @@ export function ScheduleRouteMapStep({
               });
 
             if (isActive) {
-              setPlaceResults(
+              const normalizedResults =
                 Array.isArray(
                   nextResults,
                 )
                   ? nextResults
-                  : [],
+                  : [];
+
+              setPlaceResults(
+                sortPlacesByDistance(
+                  normalizedResults,
+                  searchReferenceCenter,
+                ),
               );
             }
           } catch (error) {
@@ -864,6 +1240,8 @@ export function ScheduleRouteMapStep({
     };
   }, [
     hasPlaceKeyword,
+    searchReferenceCenter?.latitude,
+    searchReferenceCenter?.longitude,
     trimmedPlaceKeyword,
   ]);
 
@@ -897,6 +1275,14 @@ export function ScheduleRouteMapStep({
         result,
       );
 
+    if (selectionMode) {
+      onPlaceSelect?.(
+        activePlaceType,
+        nextPlace,
+      );
+      return;
+    }
+
     if (
       activePlaceType ===
       "origin"
@@ -923,11 +1309,26 @@ export function ScheduleRouteMapStep({
     setPlaceSearchError("");
   };
 
-  const mapCenter = getMapCenterFromPlaces(
-    origin,
-    destination,
-    activePlaceType,
-  );
+  const searchResultMarkers =
+    getMapMarkersFromPlaces(
+      placeResults,
+    );
+
+  const nearestSearchResultCenter =
+    searchResultMarkers[0] ?? null;
+
+  const mapCenter =
+    hasPlaceKeyword &&
+    nearestSearchResultCenter
+      ? nearestSearchResultCenter
+      : selectedPlaceCenter ??
+        userLocation;
+
+  const mapMarkers =
+    hasPlaceKeyword &&
+    searchResultMarkers.length > 0
+      ? searchResultMarkers
+      : undefined;
 
   return (
     <View
@@ -935,7 +1336,12 @@ export function ScheduleRouteMapStep({
         styles.mapScreen
       }
     >
-      <NaverMapView center={mapCenter ?? undefined} />
+      <NaverMapView
+        center={mapCenter ?? undefined}
+        level={hasPlaceKeyword ? 13 : 15}
+        markers={mapMarkers}
+        showCenterMarker={Boolean(mapCenter)}
+      />
 
       <View
         style={
@@ -949,7 +1355,11 @@ export function ScheduleRouteMapStep({
           onBackPress={
             onBackPress
           }
-          title={headerTitle}
+          title={
+            selectionMode
+              ? ""
+              : headerTitle
+          }
           titleStyle={
             styles.headerTitle
           }
@@ -997,8 +1407,8 @@ export function ScheduleRouteMapStep({
                   styles.placeResultStatus
                 }
               >
-                장소를 검색하는
-                중입니다.
+                장소를 검색하고
+                있습니다.
               </Text>
             ) : placeSearchError ? (
               <Text
@@ -1080,6 +1490,7 @@ export function ScheduleRouteMapStep({
         ) : null}
       </View>
 
+      {!selectionMode ? (
       <Animated.View
         style={[
           styles.routeSheet,
@@ -1268,6 +1679,29 @@ export function ScheduleRouteMapStep({
           </Text>
         </Pressable>
       </Animated.View>
+      ) : (
+        <View
+          style={
+            styles.mapAddressListFooter
+          }
+        >
+          <Pressable
+            accessibilityRole="button"
+            onPress={onAddressListPress}
+            style={
+              styles.mapAddressListButton
+            }
+          >
+            <Text
+              style={
+                styles.mapAddressListButtonText
+              }
+            >
+              주소 목록에서 불러오기
+            </Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -1444,45 +1878,31 @@ export function ScheduleRouteResultStep({
             styles.routeSummaryPill
           }
         >
-          <TextInput
+          <Text
+            ellipsizeMode="tail"
             numberOfLines={1}
-            onChangeText={
-              updateOriginText
-            }
-            placeholder="출발지"
-            placeholderTextColor={
-              colors.gray06
-            }
             style={
               styles.routeSummaryInput
             }
-            value={
-              getRoutePlaceText(
-                origin,
-              )
-            }
-          />
+          >
+            {getRoutePlaceText(
+              origin,
+            ) || "출발지"}
+          </Text>
 
           <RouteArrowIcon width={20} height={20} />
 
-          <TextInput
+          <Text
+            ellipsizeMode="tail"
             numberOfLines={1}
-            onChangeText={
-              updateDestinationText
-            }
-            placeholder="도착지"
-            placeholderTextColor={
-              colors.gray06
-            }
             style={
               styles.routeSummaryInput
             }
-            value={
-              getRoutePlaceText(
-                destination,
-              )
-            }
-          />
+          >
+            {getRoutePlaceText(
+              destination,
+            ) || "도착지"}
+          </Text>
 
           <RouteClearIcon width={20} height={20} />
         </View>
@@ -1498,9 +1918,9 @@ export function ScheduleRouteResultStep({
             styles.resultNoticeText
           }
         >
-          도로 상황에 따라 실제
+          교통 상황에 따라 실제
           도착 시간은 달라질 수
-          있어요.
+          있어요
         </Text>
       </View>
 
@@ -1516,8 +1936,8 @@ export function ScheduleRouteResultStep({
                 styles.routeStatusText
               }
             >
-              경로를 검색하는
-              중입니다.
+              경로를 검색하고
+              있습니다.
             </Text>
           </View>
         ) : routeError ||
@@ -1628,15 +2048,18 @@ export function ScheduleRouteResultStep({
                   "대중교통"}
               </Text>
 
-              <Text
-                style={
-                  styles.routeBusDirection
-                }
-              >
-                {primarySegment?.endStation
-                  ? ` · ${primarySegment.endStation} 방면`
-                  : ""}
-              </Text>
+              {primarySegment?.endStation ? (
+                <View style={styles.routeBusDirectionRow}>
+                  <DirectionCircleAsset width={3} height={3} />
+                  <Text
+                    style={
+                      styles.routeBusDirection
+                    }
+                  >
+                    {`${primarySegment.endStation} 방면`}
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             <View
@@ -1644,7 +2067,7 @@ export function ScheduleRouteResultStep({
                 styles.routeStops
               }
             >
-              <StopLineAsset width={1} height={34} style={styles.resultStopLine} />
+              <StopLineAsset width={1} height={35} style={styles.resultStopLine} />
               <StopRow
                 active
                 label="승차"
@@ -1724,6 +2147,7 @@ function ScheduleAlarmFinalStep({
   arrivalTime,
   onBackPress,
   onPrevPress,
+  onResetRoutePress,
   onSavePress,
   route,
   routeName,
@@ -1749,10 +2173,10 @@ function ScheduleAlarmFinalStep({
   ] = useState({
     1: false,
     3: false,
-    5: true,
-    10: true,
+    5: false,
+    10: false,
     15: false,
-    30: true,
+    30: false,
     60: false,
   });
 
@@ -1770,11 +2194,18 @@ function ScheduleAlarmFinalStep({
     getPrimaryTransitSegment(
       route,
     );
+  const timelineSegments =
+    normalizeTimelineSegments(
+      route?.segments ?? [],
+    );
 
   const selectedReminderOffsets =
     pickReminderOffsets(
       reminders,
     );
+  const canSaveAlarm =
+    selectedReminderOffsets.length > 0 &&
+    selectedDays.length > 0;
 
   const selectedRouteName =
     routeName.trim() ||
@@ -1805,7 +2236,7 @@ function ScheduleAlarmFinalStep({
     let hour = Number(arrivalTime.hour);
     const minute = Number(arrivalTime.minute);
 
-    // 12시간제 → 24시간제
+    // 12시간제를 24시간제로 변환합니다.
     if (arrivalTime.period === "오후" && hour !== 12) {
       hour += 12;
     }
@@ -1819,7 +2250,7 @@ function ScheduleAlarmFinalStep({
       minute -
       Number(durationMinutes || 0);
 
-    // 자정을 넘어 전날로 가는 경우
+    // 자정을 넘어 전날로 가는 경우도 보정합니다.
     totalMinutes =
       ((totalMinutes % 1440) + 1440) % 1440;
 
@@ -1852,6 +2283,24 @@ function ScheduleAlarmFinalStep({
       arrivalTime,
       displayDuration,
     );
+
+  const reminderSummaryText =
+    selectedReminderOffsets.length >
+    0
+      ? `${selectedReminderOffsets.join(
+          ", ",
+        )}분 전 알림`
+      : "알림 시간 선택";
+
+  const finalInfoText =
+    `${formattedArrivalTime}까지 도착하실 수 있도록`;
+
+  const finalInfoSubText =
+    selectedReminderOffsets.length > 0
+      ? `출발 예정 시간 ${selectedReminderOffsets.join(
+          ", ",
+        )}분 전에 알림을 알려드릴게요.`
+      : "알림 시간을 선택하면 출발 전 알림을 알려드릴게요.";
   const toggleDay = (day) => {
     setSelectedDays(
       (current) =>
@@ -1910,6 +2359,15 @@ function ScheduleAlarmFinalStep({
         return;
       }
 
+      if (selectedDays.length === 0) {
+        Alert.alert(
+          "알림 등록 실패",
+          "반복 요일을 선택해주세요.",
+        );
+
+        return;
+      }
+
       setIsSubmitting(true);
 
       try {
@@ -1943,7 +2401,7 @@ function ScheduleAlarmFinalStep({
           },
         );
 
-        onSavePress?.();
+        await onSavePress?.();
       } catch (error) {
         Alert.alert(
           "알림 등록 실패",
@@ -1981,65 +2439,112 @@ function ScheduleAlarmFinalStep({
           styles.finalRouteHeader
         }
       >
-        <View
-          style={
-            styles.finalBusInfo
-          }
-        >
+        <View style={styles.finalRouteTopRow}>
           <View
             style={
-              styles.routeBusBadge
+              styles.finalBusInfo
             }
           >
-            <BusIconPlain />
+            <View
+              style={
+                styles.routeBusBadge
+              }
+            >
+              <BusIconPlain />
+            </View>
+
+            <Text
+              style={
+                styles.routeBusNumber
+              }
+            >
+              {primarySegment?.transitName ||
+                "대중교통"}
+            </Text>
+
+            {primarySegment?.endStation ? (
+              <View style={styles.routeBusDirectionRow}>
+                <DirectionCircleAsset width={3} height={3} />
+                <Text
+                  numberOfLines={1}
+                  style={
+                    styles.routeBusDirection
+                  }
+                >
+                  {`${primarySegment.endStation} 방면`}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
-          <Text
+          <View
             style={
-              styles.routeBusNumber
+              styles.finalTotalTime
             }
           >
-            {primarySegment?.transitName ||
-              "대중교통"}
-          </Text>
+            <Text
+              style={
+                styles.finalTotalTimeNumber
+              }
+            >
+              {displayDuration}
+            </Text>
 
-          <Text
-            style={
-              styles.routeBusDirection
-            }
-          >
-            {primarySegment?.endStation
-              ? `· ${primarySegment.endStation} 방면`
-              : ""}
-          </Text>
+            <Text
+              style={
+                styles.finalTotalTimeUnit
+              }
+            >
+              분
+            </Text>
+          </View>
         </View>
 
-        <View
-          style={
-            styles.finalTotalTime
-          }
-        >
-          <Text
-            style={
-              styles.finalTotalTimeNumber
-            }
-          >
-            {displayDuration}
-          </Text>
+        <View style={styles.finalStops}>
+          <StopLineAsset
+            height={34}
+            style={styles.finalStopLine}
+            width={1}
+          />
 
-          <Text
-            style={
-              styles.finalTotalTimeUnit
+          <StopRow
+            active
+            label="승차"
+            name={
+              getSegmentStopName(
+                primarySegment,
+                "start",
+              ) || "승차 정류장"
             }
-          >
-            분
-          </Text>
+            style={styles.finalStopRow}
+          />
+
+          <StopRow
+            label="하차"
+            name={
+              getSegmentStopName(
+                primarySegment,
+                "end",
+              ) || "하차 정류장"
+            }
+            style={[
+              styles.finalStopRow,
+              styles.finalDropoffRow,
+            ]}
+          />
         </View>
+
+        {timelineSegments.length > 0 ? (
+          <RouteTimeline
+            segments={timelineSegments}
+            style={styles.finalRouteTimeline}
+          />
+        ) : null}
       </View>
 
       <View
         style={
-          styles.finalContent
+          styles.finalRouteTimeBox
         }
       >
         <View
@@ -2112,6 +2617,9 @@ function ScheduleAlarmFinalStep({
 
         <Pressable
           accessibilityRole="button"
+          onPress={
+            onResetRoutePress
+          }
           style={
             styles.resetRouteButton
           }
@@ -2142,8 +2650,7 @@ function ScheduleAlarmFinalStep({
             styles.questionText
           }
         >
-          출발 시간 몇 분 전에
-          알려드릴까요?
+          출발 시간 몇 분 전에 알려드릴까요?
         </Text>
 
         <Pressable
@@ -2164,12 +2671,7 @@ function ScheduleAlarmFinalStep({
               styles.reminderSelectText
             }
           >
-            {selectedReminderOffsets.length >
-            0
-              ? `${selectedReminderOffsets.join(
-                  ", ",
-                )}분 전 알림`
-              : "알림 시간 선택"}
+            {reminderSummaryText}
           </Text>
 
           <ChevronDownIcon />
@@ -2238,9 +2740,7 @@ function ScheduleAlarmFinalStep({
               styles.finalInfoText
             }
           >
-            {formattedArrivalTime}
-            까지 도착하실 수
-            있도록,
+            {finalInfoText}
           </Text>
 
           <Text
@@ -2248,9 +2748,7 @@ function ScheduleAlarmFinalStep({
               styles.finalInfoText
             }
           >
-            선택한 출발 전 알림
-            시간에 맞춰
-            알려드릴게요.
+            {finalInfoSubText}
           </Text>
         </View>
 
@@ -2280,7 +2778,8 @@ function ScheduleAlarmFinalStep({
           <Pressable
             accessibilityRole="button"
             disabled={
-              isSubmitting
+              isSubmitting ||
+              !canSaveAlarm
             }
             onPress={
               saveAlarm
@@ -2289,6 +2788,9 @@ function ScheduleAlarmFinalStep({
               styles.saveButton,
 
               isSubmitting &&
+                styles.saveButtonDisabled,
+
+              !canSaveAlarm &&
                 styles.saveButtonDisabled,
             ]}
           >
@@ -2456,10 +2958,11 @@ function StopRow({
   active = false,
   label,
   name,
+  style,
 }) {
   return (
     <View
-      style={styles.stopRow}
+      style={[styles.stopRow, style]}
     >
       <View
         style={[
@@ -2748,13 +3251,6 @@ function WheelPickerColumn({
         styles.pickerColumn
       }
     >
-      <View
-        pointerEvents="none"
-        style={
-          styles.pickerSelection
-        }
-      />
-
       <ScrollView
         accessibilityLabel={
           accessibilityLabel
@@ -2815,16 +3311,25 @@ function WheelPickerColumn({
                   styles.pickerOption
                 }
               >
-                <Text
+                <View
                   style={[
-                    styles.pickerOptionText,
+                    styles.pickerOptionInner,
 
                     selected &&
-                      styles.pickerOptionTextSelected,
+                      styles.pickerOptionInnerSelected,
                   ]}
                 >
-                  {option}
-                </Text>
+                  <Text
+                    style={[
+                      styles.pickerOptionText,
+
+                      selected &&
+                        styles.pickerOptionTextSelected,
+                    ]}
+                  >
+                    {option}
+                  </Text>
+                </View>
               </Pressable>
             );
           },
@@ -3022,12 +3527,93 @@ const styles =
       paddingHorizontal: 20,
     },
 
+    routeSetupContent: {
+      flex: 1,
+      paddingTop: 28,
+      paddingHorizontal: 20,
+      backgroundColor:
+        colors.white,
+    },
+
     heading: {
       fontFamily: "SUIT",
       fontSize: 20,
       fontWeight: "700",
       lineHeight: 28,
       color: colors.gray09,
+    },
+
+    routeSetupHeading: {
+      fontFamily: "SUIT",
+      fontSize: 18,
+      fontStyle: "normal",
+      fontWeight: "700",
+      lineHeight: 25.2,
+      letterSpacing: -0.18,
+      color: colors.gray09,
+    },
+
+    placeSelectGroup: {
+      marginTop: 24,
+    },
+
+    placeSelectLabel: {
+      marginBottom: 8,
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontStyle: "normal",
+      fontWeight: "600",
+      lineHeight: 19.6,
+      letterSpacing: -0.14,
+      color: colors.gray08,
+    },
+
+    placeSelectButton: {
+      display: "flex",
+      minHeight: 72,
+      padding: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+      gap: 10,
+      alignSelf: "stretch",
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    placeSelectTextGroup: {
+      flex: 1,
+      minWidth: 0,
+      gap: 4,
+    },
+
+    placeSelectText: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontStyle: "normal",
+      fontWeight: "600",
+      lineHeight: 19.6,
+      letterSpacing: -0.14,
+      color: colors.gray06,
+    },
+
+    placeSelectTextFilled: {
+      color: colors.gray09,
+    },
+
+    placeSelectDetail: {
+      fontFamily: "SUIT",
+      fontSize: 11,
+      fontStyle: "normal",
+      fontWeight: "500",
+      lineHeight: 15.4,
+      letterSpacing: -0.11,
+      color: colors.gray06,
     },
 
     label: {
@@ -3044,9 +3630,13 @@ const styles =
     },
 
     textInput: {
-      height: 64,
+      display: "flex",
+      width: 328,
+      height: 54,
       marginTop: 12,
-      paddingHorizontal: 16,
+      padding: 16,
+      alignItems: "center",
+      gap: 10,
       borderWidth: 1,
       borderColor:
         colors.gray04,
@@ -3060,13 +3650,16 @@ const styles =
     },
 
     timeInput: {
-      height: 64,
+      display: "flex",
+      width: 328,
+      height: 54,
       marginTop: 12,
-      paddingHorizontal: 16,
+      padding: 16,
       flexDirection: "row",
       alignItems: "center",
       justifyContent:
         "space-between",
+      gap: 10,
       borderWidth: 1,
       borderColor:
         colors.gray04,
@@ -3094,10 +3687,16 @@ const styles =
 
     cancelButton: {
       flex: 1,
-      height: 64,
+      flexBasis: 0,
+      flexGrow: 1,
+      flexShrink: 0,
+      display: "flex",
+      height: 54,
+      padding: 10,
       alignItems: "center",
       justifyContent:
         "center",
+      gap: 10,
       borderWidth: 1,
       borderColor:
         colors.gray05,
@@ -3109,17 +3708,26 @@ const styles =
     cancelButtonText: {
       fontFamily: "SUIT",
       fontSize: 16,
-      fontWeight: "700",
+      fontStyle: "normal",
+      fontWeight: "600",
       lineHeight: 22.4,
+      letterSpacing: -0.16,
+      textAlign: "center",
       color: colors.gray08,
     },
 
     nextButton: {
       flex: 1,
-      height: 64,
+      flexBasis: 0,
+      flexGrow: 1,
+      flexShrink: 0,
+      display: "flex",
+      height: 54,
+      padding: 10,
       alignItems: "center",
       justifyContent:
         "center",
+      gap: 10,
       borderRadius: 8,
       backgroundColor:
         colors.main,
@@ -3128,9 +3736,21 @@ const styles =
     nextButtonText: {
       fontFamily: "SUIT",
       fontSize: 16,
-      fontWeight: "800",
+      fontStyle: "normal",
+      fontWeight: "600",
       lineHeight: 22.4,
+      letterSpacing: -0.16,
+      textAlign: "center",
       color: colors.white,
+    },
+
+    nextButtonDisabled: {
+      backgroundColor:
+        colors.gray04,
+    },
+
+    nextButtonTextDisabled: {
+      color: colors.gray06,
     },
 
     sheetOverlay: {
@@ -3187,21 +3807,6 @@ const styles =
         TIME_PICKER_VISIBLE_ITEMS,
     },
 
-    pickerSelection: {
-      position: "absolute",
-      top:
-        TIME_PICKER_ITEM_HEIGHT,
-      left: 0,
-      right: 0,
-      height:
-        TIME_PICKER_ITEM_HEIGHT,
-
-      borderRadius: 4,
-
-      backgroundColor:
-        colors.gray03,
-    },
-
     pickerScroll: {
       height:
         TIME_PICKER_ITEM_HEIGHT *
@@ -3221,6 +3826,22 @@ const styles =
 
       justifyContent:
         "center",
+    },
+
+    pickerOptionInner: {
+      width: "100%",
+      display: "flex",
+      height: 48,
+      paddingVertical: 8,
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
+
+    pickerOptionInnerSelected: {
+      borderRadius: 4,
+      backgroundColor:
+        colors.gray03,
     },
 
     pickerOptionText: {
@@ -3246,11 +3867,15 @@ const styles =
     },
 
     confirmButton: {
-      height: 64,
+      display: "flex",
+      height: 54,
       marginTop: 30,
+      padding: 10,
       alignItems: "center",
       justifyContent:
         "center",
+      gap: 10,
+      alignSelf: "stretch",
       borderRadius: 8,
       backgroundColor:
         colors.main,
@@ -3364,6 +3989,40 @@ const styles =
       color: colors.gray07,
     },
 
+    mapAddressListFooter: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: 20,
+      paddingBottom: 16,
+    },
+
+    mapAddressListButton: {
+      height: 54,
+      padding: 10,
+      alignItems: "center",
+      justifyContent:
+        "center",
+      borderWidth: 1,
+      borderColor:
+        colors.gray04,
+      borderRadius: 8,
+      backgroundColor:
+        colors.white,
+    },
+
+    mapAddressListButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontStyle: "normal",
+      fontWeight: "700",
+      lineHeight: 19.6,
+      letterSpacing: -0.14,
+      color: colors.gray08,
+      textAlign: "center",
+    },
+
     routeSheet: {
       position: "absolute",
       left: 0,
@@ -3437,7 +4096,7 @@ const styles =
     },
 
     /*
-     * 현재 주소 API 오류 표시
+     * ?꾩옱 二쇱냼 API ?ㅻ쪟 ?쒖떆
      */
     currentAddressError: {
       marginTop: 0,
@@ -3519,9 +4178,11 @@ const styles =
 
     routeSummaryInput: {
       flex: 1,
+      flexShrink: 1,
       height: 24,
       minWidth: 0,
       paddingVertical: 0,
+      overflow: "hidden",
       textAlign: "center",
       fontFamily: "SUIT",
       fontSize: 16,
@@ -3563,7 +4224,12 @@ const styles =
     },
     routeResultList: { paddingBottom: 24, gap: 16 },
     routeResultCard: { paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: colors.gray04 },
-    resultStopLine: { position: "absolute", left: 11, top: 11.5 },
+    resultStopLine: {
+      position: "absolute",
+      left: 11,
+      top: 12,
+      zIndex: 0,
+    },
 
     routeStatusBox: {
       minHeight: 180,
@@ -3767,15 +4433,27 @@ const styles =
       color: colors.gray06,
     },
 
+    routeBusDirectionRow: {
+      marginLeft: 6,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      minWidth: 0,
+      flexShrink: 1,
+    },
+
     routeStops: {
       marginTop: 12,
       gap: 11,
+      position: "relative",
     },
 
     stopRow: {
       height: 23,
       flexDirection: "row",
       alignItems: "center",
+      position: "relative",
+      zIndex: 1,
     },
 
     stopOuter: {
@@ -3833,6 +4511,9 @@ const styles =
 
     stopName: {
       flex: 1,
+      flexShrink: 1,
+      minWidth: 0,
+      overflow: "hidden",
       fontFamily: "SUIT",
       fontSize: 14,
       fontStyle: "normal",
@@ -3876,17 +4557,23 @@ const styles =
     },
 
     finalRouteHeader: {
-      height: 64,
       paddingHorizontal: 20,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "space-between",
+      paddingTop: 10,
+      paddingBottom: 8,
       backgroundColor:
         colors.gray02,
     },
 
+    finalRouteTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+    },
+
     finalBusInfo: {
+      flex: 1,
+      minWidth: 0,
       flexDirection: "row",
       alignItems: "center",
     },
@@ -3895,6 +4582,7 @@ const styles =
       flexDirection: "row",
       alignItems:
         "flex-end",
+      marginLeft: 8,
     },
 
     finalTotalTimeNumber: {
@@ -3903,6 +4591,31 @@ const styles =
       fontWeight: "800",
       lineHeight: 30,
       color: colors.gray09,
+    },
+
+    finalStops: {
+      marginTop: 16,
+      position: "relative",
+    },
+
+    finalStopLine: {
+      position: "absolute",
+      left: 11,
+      top: 7,
+      zIndex: 0,
+    },
+
+    finalStopRow: {
+      height: 18,
+    },
+
+    finalDropoffRow: {
+      marginTop: 8,
+    },
+
+    finalRouteTimeline: {
+      height: 16,
+      marginTop: 12,
     },
 
     finalTotalTimeUnit: {
@@ -3918,11 +4631,24 @@ const styles =
     finalContent: {
       paddingHorizontal: 20,
       paddingTop: 22,
+      paddingBottom: 22,
       backgroundColor:
         colors.white,
     },
 
+    finalRouteTimeBox: {
+      display: "flex",
+      padding: 16,
+      flexDirection: "column",
+      alignItems: "flex-start",
+      alignSelf: "stretch",
+      gap: 12,
+      backgroundColor:
+        colors.gray02,
+    },
+
     timeSummaryRow: {
+      alignSelf: "stretch",
       flexDirection: "row",
       alignItems:
         "flex-end",
@@ -3936,14 +4662,16 @@ const styles =
     finalLabel: {
       marginBottom: 8,
       fontFamily: "SUIT",
-      fontSize: 13,
-      fontWeight: "700",
-      lineHeight: 18.2,
+      fontSize: 14,
+      fontStyle: "normal",
+      fontWeight: "500",
+      lineHeight: 19.6,
+      letterSpacing: -0.14,
       color: colors.gray07,
     },
 
     timeCard: {
-      height: 64,
+      height: 54,
       alignItems: "center",
       justifyContent:
         "center",
@@ -3958,14 +4686,17 @@ const styles =
     timeCardText: {
       fontFamily: "SUIT",
       fontSize: 18,
-      fontWeight: "700",
-      lineHeight: 25.2,
+      fontStyle: "normal",
+      fontWeight: "600",
+      lineHeight: 18,
+      letterSpacing: -0.18,
+      textAlign: "right",
       color: colors.gray07,
     },
 
     resetRouteButton: {
       height: 46,
-      marginTop: 16,
+      alignSelf: "stretch",
       alignItems: "center",
       justifyContent:
         "center",
@@ -4000,7 +4731,7 @@ const styles =
     },
 
     reminderSelect: {
-      height: 64,
+      height: 54,
       marginTop: 16,
       paddingHorizontal: 16,
       flexDirection: "row",
@@ -4068,6 +4799,7 @@ const styles =
       marginTop: "auto",
       paddingHorizontal: 20,
       paddingBottom: 28,
+      gap: 16,
       backgroundColor:
         colors.white,
     },
@@ -4096,7 +4828,7 @@ const styles =
 
     prevButton: {
       flex: 1,
-      height: 64,
+      height: 54,
       alignItems: "center",
       justifyContent:
         "center",
@@ -4118,7 +4850,7 @@ const styles =
 
     saveButton: {
       flex: 1,
-      height: 64,
+      height: 54,
       alignItems: "center",
       justifyContent:
         "center",

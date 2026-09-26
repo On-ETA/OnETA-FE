@@ -226,7 +226,7 @@ export async function createArrivalNotification({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
-  return requestArrivalNotificationJson({
+  const response = await requestArrivalNotificationJson({
     path: ARRIVAL_NOTIFICATIONS_ENDPOINT,
     method: "POST",
     body: payload,
@@ -234,6 +234,10 @@ export async function createArrivalNotification({
     signal,
     errorMessage: "도착 알림 등록에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.arrivalNotifications);
+
+  return response;
 }
 
 export async function deleteArrivalNotifications({

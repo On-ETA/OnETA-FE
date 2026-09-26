@@ -4,6 +4,7 @@ import Svg, { Circle, Path } from "react-native-svg";
 
 import ArrowRightIcon from "../../../../assets/images/R_w.svg";
 import BigBusAsset from "../../../../assets/images/bigbus.svg";
+import DirectionCircleAsset from "../../../../assets/images/circle.svg";
 import StopLineAsset from "../../../../assets/images/line.svg";
 import ChangeIcon from "../../../../public/images/change.svg";
 import CloseIcon from "../../../../public/images/close.svg";
@@ -141,7 +142,10 @@ export function FirstLastRouteScreen({
                       <BigBusAsset width={9} height={10} />
                     </View>
                     <Text style={styles.busNumber}>{leg.routeNumber}</Text>
-                    <Text style={styles.busDirection}> · {leg.routeDirection}</Text>
+                    <View style={styles.busDirectionRow}>
+                      <DirectionCircleAsset width={3} height={3} />
+                      <Text style={styles.busDirection}>{leg.routeDirection}</Text>
+                    </View>
                   </View>
                   <View style={styles.stopRows}>
                     <StopLineAsset width={1} height={35} style={styles.stopLine} />
@@ -566,6 +570,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.18,
     color: colors.gray09,
   },
+  busDirectionRow: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   busDirection: {
     flex: 1,
     fontFamily: "SUIT",
@@ -577,14 +588,17 @@ const styles = StyleSheet.create({
     color: colors.gray06,
   },
   stopCenter: { width: 6, height: 6, flexShrink: 0, borderRadius: 100, backgroundColor: colors.white },
-  stopLine: { position: "absolute", left: 11, top: 11.5 },
+  stopLine: { position: "absolute", left: 11, top: 12, zIndex: 0 },
   stopRows: {
     gap: 12,
+    position: "relative",
   },
   stopRow: {
     minHeight: 23,
     flexDirection: "row",
     alignItems: "center",
+    position: "relative",
+    zIndex: 1,
   },
   stopOuter: {
     width: 23,
