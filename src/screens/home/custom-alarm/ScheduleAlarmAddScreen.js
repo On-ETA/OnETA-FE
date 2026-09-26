@@ -284,6 +284,40 @@ function pickReminderOffsets(
     .sort((a, b) => a - b);
 }
 
+function getArrivalRegistrationErrorContent(error) {
+  const serverMessage = String(error?.data?.message ?? "").trim();
+  const message = serverMessage || error?.message || "";
+
+  if (error?.status === 409) {
+    if (/(최대|한도|초과|limit)/i.test(message)) {
+      return {
+        title: "일정 알림 개수 제한에 도달했습니다.",
+        description:
+          serverMessage ||
+          "등록 가능한 일정 알림 수를 초과했습니다. 기존 알림을 정리한 뒤 다시 시도해주세요.",
+      };
+    }
+
+    if (/(중복|이미.*등록|duplicate)/i.test(message)) {
+      return {
+        title: "이미 등록된 경로입니다.",
+        description: "",
+      };
+    }
+
+    return {
+      title: "알림을 추가할 수 없습니다.",
+      description:
+        "같은 경로가 이미 등록되었거나 등록 가능한 일정 알림 개수에 도달했습니다. 등록된 알림을 확인해주세요.",
+    };
+  }
+
+  return {
+    title: "알림 등록에 실패했습니다.",
+    description: message || "내 일정 알림 등록에 실패했습니다.",
+  };
+}
+
 export function ScheduleAlarmAddScreen({
   initialStep = "form",
   mapTitle = "알림 추가",
@@ -2170,6 +2204,11 @@ function ScheduleAlarmFinalStep({
   ] = useState(false);
 
   const [
+    registrationError,
+    setRegistrationError,
+  ] = useState(null);
+
+  const [
     isReminderModalVisible,
     setIsReminderModalVisible,
   ] = useState(false);
@@ -2410,12 +2449,7 @@ function ScheduleAlarmFinalStep({
 
         await onSavePress?.();
       } catch (error) {
-        Alert.alert(
-          "알림 등록 실패",
-
-          error?.message ??
-            "내 일정 알림 등록에 실패했습니다.",
-        );
+        setRegistrationError(getArrivalRegistrationErrorContent(error));
       } finally {
         setIsSubmitting(false);
       }
@@ -2832,7 +2866,40 @@ function ScheduleAlarmFinalStep({
           isReminderModalVisible
         }
       />
+      <RegistrationErrorModal
+        error={registrationError}
+        onClose={() => setRegistrationError(null)}
+      />
     </View>
+  );
+}
+
+function RegistrationErrorModal({ error, onClose }) {
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={onClose}
+      transparent
+      visible={Boolean(error)}
+    >
+      <View style={styles.registrationErrorOverlay}>
+        <View style={styles.registrationErrorCard}>
+          <Text style={styles.registrationErrorTitle}>{error?.title}</Text>
+          {error?.description ? (
+            <Text style={styles.registrationErrorDescription}>
+              {error.description}
+            </Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            onPress={onClose}
+            style={styles.registrationErrorButton}
+          >
+            <Text style={styles.registrationErrorButtonText}>확인</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -4886,6 +4953,75 @@ const styles =
         "center",
       backgroundColor:
         "rgba(52, 56, 59, 0.32)",
+    },
+
+    registrationErrorOverlay: {
+      flex: 1,
+      paddingHorizontal: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(52, 56, 59, 0.32)",
+    },
+
+    registrationErrorCard: {
+      width: 328,
+      maxWidth: "100%",
+      paddingTop: 24,
+      paddingHorizontal: 24,
+      paddingBottom: 16,
+      alignItems: "center",
+      gap: 12,
+      borderWidth: 1,
+      borderColor: colors.gray03,
+      borderRadius: 16,
+      backgroundColor: colors.white,
+      shadowColor: "#B9C8D0",
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.15,
+      shadowRadius: 20,
+      boxShadow: "0 0 20px rgba(185, 200, 208, 0.15)",
+      elevation: 3,
+    },
+
+    registrationErrorTitle: {
+      width: "100%",
+      fontFamily: "SUIT",
+      fontSize: 16,
+      fontWeight: "600",
+      lineHeight: 22.4,
+      letterSpacing: -0.16,
+      color: colors.gray09,
+      textAlign: "center",
+    },
+
+    registrationErrorDescription: {
+      width: "100%",
+      fontFamily: "SUIT",
+      fontSize: 12,
+      fontWeight: "500",
+      lineHeight: 19.2,
+      letterSpacing: -0.12,
+      color: colors.gray07,
+      textAlign: "center",
+    },
+
+    registrationErrorButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 28,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      borderRadius: 50,
+      backgroundColor: colors.main,
+    },
+
+    registrationErrorButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 13,
+      fontWeight: "500",
+      lineHeight: 18.2,
+      letterSpacing: -0.13,
+      color: colors.white,
     },
 
     reminderCard: {
