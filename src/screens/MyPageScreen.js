@@ -246,7 +246,7 @@ export function MyPageScreen({
         <View style={styles.contentGroup}>
           <View style={styles.card}>
             <View style={styles.profileTextWrap}>
-              <Text style={styles.profileName}>{`${myPageInfo.nickname}님`}</Text>
+              <Text style={styles.profileName}>{`${myPageInfo.nickname}`}</Text>
               <Text style={styles.profileEmail}>{myPageInfo.email}</Text>
             </View>
 
