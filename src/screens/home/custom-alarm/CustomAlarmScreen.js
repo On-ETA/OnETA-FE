@@ -837,10 +837,12 @@ const styles = StyleSheet.create({
   },
   arrivalTimeColumn: {
     width: 96,
-    marginRight: 35.5,
+    marginRight: 18,
+    transform: [{ translateX: 3 }],
   },
   alarmColumn: {
     width: 48,
+    paddingRight: 7,
     textAlign: "right",
   },
   scheduleList: {
@@ -848,13 +850,16 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   scheduleRow: {
-    height: 92,
+    display: "flex",
+    width: 328,
+    maxWidth: "100%",
+    height: 64,
     paddingHorizontal: 16,
     overflow: "hidden",
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     borderWidth: 1,
-    borderColor: colors.gray04,
+    borderColor: colors.gray03,
     borderRadius: 8,
     backgroundColor: colors.white,
   },
@@ -874,7 +879,7 @@ const styles = StyleSheet.create({
   },
   scheduleTime: {
     width: 96,
-    marginRight: 35.5,
+    marginRight: 18,
     textAlign: "center",
     fontFamily: "SUIT",
     fontSize: 16,
