@@ -163,6 +163,54 @@ function getMapCenterFromPlace(place) {
   };
 }
 
+function getDistanceMeters(from, to) {
+  if (!from || !to) {
+    return Infinity;
+  }
+
+  const fromLatitude = Number(from.latitude);
+  const fromLongitude = Number(from.longitude);
+  const toLatitude = Number(to.latitude);
+  const toLongitude = Number(to.longitude);
+
+  if (
+    !Number.isFinite(fromLatitude) ||
+    !Number.isFinite(fromLongitude) ||
+    !Number.isFinite(toLatitude) ||
+    !Number.isFinite(toLongitude)
+  ) {
+    return Infinity;
+  }
+
+  const earthRadiusMeters = 6371000;
+  const toRadians = (degree) => (degree * Math.PI) / 180;
+  const latitudeDelta = toRadians(toLatitude - fromLatitude);
+  const longitudeDelta = toRadians(toLongitude - fromLongitude);
+  const a =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(toRadians(fromLatitude)) *
+      Math.cos(toRadians(toLatitude)) *
+      Math.sin(longitudeDelta / 2) ** 2;
+
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getMapMarkersFromPlaces(places) {
+  return places.map(getMapCenterFromPlace).filter(Boolean);
+}
+
+function sortPlacesByDistance(places, referenceCenter) {
+  if (!referenceCenter) {
+    return places;
+  }
+
+  return [...places].sort(
+    (left, right) =>
+      getDistanceMeters(referenceCenter, getMapCenterFromPlace(left)) -
+      getDistanceMeters(referenceCenter, getMapCenterFromPlace(right)),
+  );
+}
+
 function getSegmentStopName(
   segment,
   edge,
@@ -881,12 +929,73 @@ export function ScheduleRouteMapStep({
     setPlaceSearchError,
   ] = useState("");
 
+  const [
+    userLocation,
+    setUserLocation,
+  ] = useState(null);
+
   const trimmedPlaceKeyword =
     placeKeyword.trim();
 
   const hasPlaceKeyword =
     trimmedPlaceKeyword.length >
     0;
+
+  const selectedPlaceCenter =
+    getMapCenterFromPlaces(
+      origin,
+      destination,
+      activePlaceType,
+    );
+
+  const searchReferenceCenter =
+    userLocation ?? selectedPlaceCenter;
+
+  useEffect(() => {
+    const geolocation =
+      globalThis.navigator?.geolocation;
+
+    if (!geolocation) {
+      return undefined;
+    }
+
+    let isActive = true;
+
+    geolocation.getCurrentPosition(
+      (position) => {
+        if (!isActive) {
+          return;
+        }
+
+        const latitude = Number(
+          position?.coords?.latitude,
+        );
+        const longitude = Number(
+          position?.coords?.longitude,
+        );
+
+        if (
+          Number.isFinite(latitude) &&
+          Number.isFinite(longitude)
+        ) {
+          setUserLocation({
+            latitude,
+            longitude,
+          });
+        }
+      },
+      () => {},
+      {
+        enableHighAccuracy: true,
+        maximumAge: 60000,
+        timeout: 8000,
+      },
+    );
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const focusPlaceSearch = (
     type,
@@ -1073,12 +1182,18 @@ export function ScheduleRouteMapStep({
               });
 
             if (isActive) {
-              setPlaceResults(
+              const normalizedResults =
                 Array.isArray(
                   nextResults,
                 )
                   ? nextResults
-                  : [],
+                  : [];
+
+              setPlaceResults(
+                sortPlacesByDistance(
+                  normalizedResults,
+                  searchReferenceCenter,
+                ),
               );
             }
           } catch (error) {
@@ -1118,6 +1233,8 @@ export function ScheduleRouteMapStep({
     };
   }, [
     hasPlaceKeyword,
+    searchReferenceCenter?.latitude,
+    searchReferenceCenter?.longitude,
     trimmedPlaceKeyword,
   ]);
 
@@ -1185,11 +1302,26 @@ export function ScheduleRouteMapStep({
     setPlaceSearchError("");
   };
 
-  const mapCenter = getMapCenterFromPlaces(
-    origin,
-    destination,
-    activePlaceType,
-  );
+  const searchResultMarkers =
+    getMapMarkersFromPlaces(
+      placeResults,
+    );
+
+  const nearestSearchResultCenter =
+    searchResultMarkers[0] ?? null;
+
+  const mapCenter =
+    hasPlaceKeyword &&
+    nearestSearchResultCenter
+      ? nearestSearchResultCenter
+      : selectedPlaceCenter ??
+        userLocation;
+
+  const mapMarkers =
+    hasPlaceKeyword &&
+    searchResultMarkers.length > 0
+      ? searchResultMarkers
+      : undefined;
 
   return (
     <View
@@ -1197,7 +1329,12 @@ export function ScheduleRouteMapStep({
         styles.mapScreen
       }
     >
-      <NaverMapView center={mapCenter ?? undefined} />
+      <NaverMapView
+        center={mapCenter ?? undefined}
+        level={hasPlaceKeyword ? 13 : 15}
+        markers={mapMarkers}
+        showCenterMarker={Boolean(mapCenter)}
+      />
 
       <View
         style={
