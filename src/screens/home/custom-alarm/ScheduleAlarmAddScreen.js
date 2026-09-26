@@ -236,7 +236,7 @@ function pickReminderOffsets(
 
 export function ScheduleAlarmAddScreen({
   initialStep = "form",
-  mapTitle = "?뚮┝ 異붽?",
+  mapTitle = "알림 추가",
   onBackPress,
   onRouteConfigured,
 }) {
@@ -451,7 +451,7 @@ export function ScheduleAlarmAddScreen({
         onBackPress={
           handleBackPress
         }
-        title="?뚮┝ 異붽?"
+        title="알림 추가"
         titleStyle={
           styles.headerTitle
         }
@@ -460,20 +460,20 @@ export function ScheduleAlarmAddScreen({
 
       <View style={styles.content}>
         <Text style={styles.heading}>
-          留ㅼ씪 ?댁슜?섎뒗 寃쎈줈瑜?
-          ?깅줉?댁＜?몄슂
+          매일 이용하는 경로를
+          등록해주세요
         </Text>
 
         <Text style={styles.label}>
-          寃쎈줈 ?대쫫???낅젰?댁＜?몄슂
-          (?좏깮)
+          경로 이름을 입력해주세요
+          (선택)
         </Text>
 
         <TextInput
           onChangeText={
             setRouteName
           }
-          placeholder="寃쎈줈 01"
+          placeholder="경로 01"
           placeholderTextColor={
             colors.gray06
           }
@@ -489,8 +489,8 @@ export function ScheduleAlarmAddScreen({
             styles.timeLabel,
           ]}
         >
-          紐??쒓퉴吏 ?꾩갑?섍퀬
-          ?띠쑝?좉???
+          몇 시까지 도착하고
+          싶으신가요?
         </Text>
 
         <Pressable
@@ -531,7 +531,7 @@ export function ScheduleAlarmAddScreen({
               styles.cancelButtonText
             }
           >
-            痍⑥냼
+            취소
           </Text>
         </Pressable>
 
@@ -549,7 +549,7 @@ export function ScheduleAlarmAddScreen({
               styles.nextButtonText
             }
           >
-            ?ㅼ쓬
+            다음
           </Text>
         </Pressable>
       </View>
@@ -605,7 +605,7 @@ function ScheduleRouteSetupStep({
         onBackPress={
           onBackPress
         }
-        title="?뚮┝ 異붽?"
+        title="알림 추가"
         titleStyle={
           styles.headerTitle
         }
@@ -657,7 +657,7 @@ function ScheduleRouteSetupStep({
               styles.cancelButtonText
             }
           >
-            ?댁쟾
+            이전
           </Text>
         </Pressable>
 
@@ -678,7 +678,7 @@ function ScheduleRouteSetupStep({
                 styles.nextButtonTextDisabled,
             ]}
           >
-            ?ㅼ쓬
+            다음
           </Text>
         </Pressable>
       </View>
@@ -760,7 +760,7 @@ function PlaceSelectField({
 }
 
 export function ScheduleRouteMapStep({
-  headerTitle = "寃쎈줈 ?ㅼ젙",
+  headerTitle = "경로 설정",
   activePlaceType: initialActivePlaceType = "origin",
   initialDestination,
   initialOrigin,
@@ -1093,7 +1093,7 @@ export function ScheduleRouteMapStep({
 
               setPlaceSearchError(
                 error?.message ??
-                  "?μ냼 寃?됱뿉 ?ㅽ뙣?덉뒿?덈떎.",
+                  "장소 검색에 실패했습니다.",
               );
             }
           } finally {
@@ -1263,8 +1263,8 @@ export function ScheduleRouteMapStep({
                   styles.placeResultStatus
                 }
               >
-                ?μ냼瑜?寃?됲븯??
-                以묒엯?덈떎.
+                장소를 검색하고
+                있습니다.
               </Text>
             ) : placeSearchError ? (
               <Text
@@ -1283,8 +1283,8 @@ export function ScheduleRouteMapStep({
                   styles.placeResultStatus
                 }
               >
-                寃??寃곌낵媛
-                ?놁뒿?덈떎.
+                검색 결과가
+                없습니다.
               </Text>
             ) : (
               <ScrollView
@@ -1389,7 +1389,7 @@ export function ScheduleRouteMapStep({
               styles.routeFieldLabel
             }
           >
-            異쒕컻吏
+            출발지
           </Text>
 
           <Pressable
@@ -1423,10 +1423,10 @@ export function ScheduleRouteMapStep({
               }
               placeholder={
                 isLoadingCurrentAddress
-                  ? "?꾩옱 二쇱냼 遺덈윭?ㅻ뒗 以?.."
+                  ? "현재 주소 불러오는 중..."
                   : currentAddressError
-                    ? "異쒕컻吏 ?낅젰"
-                    : "異쒕컻吏 ?낅젰"
+                    ? "출발지 입력"
+                    : "출발지 입력"
               }
               placeholderTextColor={
                 colors.gray06
@@ -1447,7 +1447,7 @@ export function ScheduleRouteMapStep({
               styles.routeFieldLabel
             }
           >
-            ?꾩갑吏
+            도착지
           </Text>
 
           <Pressable
@@ -1481,8 +1481,8 @@ export function ScheduleRouteMapStep({
               }
               placeholder={
                 isLoadingCurrentAddress
-                  ? "?꾩옱 二쇱냼 遺덈윭?ㅻ뒗 以?.."
-                  : "?꾩갑吏 ?낅젰"
+                  ? "현재 주소 불러오는 중..."
+                  : "도착지 입력"
               }
               placeholderTextColor={
                 colors.gray06
@@ -1531,7 +1531,7 @@ export function ScheduleRouteMapStep({
               styles.mapConfirmButtonText
             }
           >
-            ?뺤씤
+            확인
           </Text>
         </Pressable>
       </Animated.View>
@@ -1553,7 +1553,7 @@ export function ScheduleRouteMapStep({
                 styles.mapAddressListButtonText
               }
             >
-              二쇱냼 紐⑸줉?먯꽌 遺덈윭?ㅺ린
+              주소 목록에서 불러오기
             </Text>
           </Pressable>
         </View>
@@ -1563,7 +1563,7 @@ export function ScheduleRouteMapStep({
 }
 
 export function ScheduleRouteResultStep({
-  actionLabel = "??寃쎈줈濡??뚮┝ ?ㅼ젙",
+  actionLabel = "이 경로로 알림 설정",
   initialDestination,
   initialOrigin,
   onBackPress,
@@ -1661,7 +1661,7 @@ export function ScheduleRouteResultStep({
 
           setRouteError(
             error?.message ??
-              "?以묎탳??寃쎈줈 寃?됱뿉 ?ㅽ뙣?덉뒿?덈떎.",
+              "대중교통 경로 검색에 실패했습니다.",
           );
         }
       } finally {
@@ -1743,7 +1743,7 @@ export function ScheduleRouteResultStep({
           >
             {getRoutePlaceText(
               origin,
-            ) || "異쒕컻吏"}
+            ) || "출발지"}
           </Text>
 
           <RouteArrowIcon width={20} height={20} />
@@ -1757,7 +1757,7 @@ export function ScheduleRouteResultStep({
           >
             {getRoutePlaceText(
               destination,
-            ) || "?꾩갑吏"}
+            ) || "도착지"}
           </Text>
 
           <RouteClearIcon width={20} height={20} />
@@ -1774,9 +1774,9 @@ export function ScheduleRouteResultStep({
             styles.resultNoticeText
           }
         >
-          ?꾨줈 ?곹솴???곕씪 ?ㅼ젣
-          ?꾩갑 ?쒓컙? ?щ씪吏???
-          ?덉뼱??
+          교통 상황에 따라 실제
+          도착 시간은 달라질 수
+          있어요
         </Text>
       </View>
 
@@ -1792,8 +1792,8 @@ export function ScheduleRouteResultStep({
                 styles.routeStatusText
               }
             >
-              寃쎈줈瑜?寃?됲븯??
-              以묒엯?덈떎.
+              경로를 검색하고
+              있습니다.
             </Text>
           </View>
         ) : routeError ||
@@ -1809,7 +1809,7 @@ export function ScheduleRouteResultStep({
               }
             >
               {routeError ||
-                "寃?됰맂 寃쎈줈媛 ?놁뒿?덈떎."}
+                "검색된 경로가 없습니다."}
             </Text>
           </View>
         ) : (
@@ -1822,12 +1822,12 @@ export function ScheduleRouteResultStep({
               <View style={styles.optionBadges}>
                 {routeIndex === 0 ? (
                   <View style={styles.optionBadge}>
-                    <Text style={styles.optionBadgeText}>理쒖쟻</Text>
+                    <Text style={styles.optionBadgeText}>최적</Text>
                   </View>
                 ) : null}
                 {displayDuration === minimumDuration ? (
                   <View style={styles.optionBadge}>
-                    <Text style={styles.optionBadgeText}>理쒖냼 ?쒓컙</Text>
+                    <Text style={styles.optionBadgeText}>최소 시간</Text>
                   </View>
                 ) : null}
               </View>
@@ -1839,11 +1839,11 @@ export function ScheduleRouteResultStep({
               }
             >
               <View style={styles.routeClockRow}>
-                <Text accessibilityLabel={`?꾩옱 ?쒓컖 ${formatClockTime(currentTime)}`} style={styles.routeDepartureTime}>
+                <Text accessibilityLabel={`현재 시각 ${formatClockTime(currentTime)}`} style={styles.routeDepartureTime}>
                   {formatClockTime(currentTime)}
                 </Text>
                 <RouteArrowIcon width={20} height={20} />
-                <Text accessibilityLabel={`?덉긽 ?꾩갑 ?쒓컖 ${formatClockTime(currentTime + displayDuration * 60000)}`} style={styles.routeArrivalTime}>
+                <Text accessibilityLabel={`예상 도착 시각 ${formatClockTime(currentTime + displayDuration * 60000)}`} style={styles.routeArrivalTime}>
                   {formatClockTime(currentTime + displayDuration * 60000)}
                 </Text>
               </View>
@@ -1863,7 +1863,7 @@ export function ScheduleRouteResultStep({
                   styles.totalTimeUnit
                 }
               >
-                遺?
+                분
               </Text>
               </View>
             </View>
@@ -1910,7 +1910,7 @@ export function ScheduleRouteResultStep({
                 }
               >
                 {primarySegment?.endStation
-                  ? ` 쨌 ${primarySegment.endStation} 諛⑸㈃`
+                  ? ` · ${primarySegment.endStation} 방면`
                   : ""}
               </Text>
             </View>
@@ -1923,7 +1923,7 @@ export function ScheduleRouteResultStep({
               <StopLineAsset width={1} height={34} style={styles.resultStopLine} />
               <StopRow
                 active
-                label="?뱀감"
+                label="승차"
                 name={
                   getSegmentStopName(
                     primarySegment,
@@ -1936,7 +1936,7 @@ export function ScheduleRouteResultStep({
               />
 
               <StopRow
-                label="?섏감"
+                label="하차"
                 name={
                   getSegmentStopName(
                     primarySegment,
@@ -2081,12 +2081,12 @@ function ScheduleAlarmFinalStep({
     let hour = Number(arrivalTime.hour);
     const minute = Number(arrivalTime.minute);
 
-    // 12?쒓컙????24?쒓컙??
-    if (arrivalTime.period === "?ㅽ썑" && hour !== 12) {
+    // 12시간제를 24시간제로 변환합니다.
+    if (arrivalTime.period === "오후" && hour !== 12) {
       hour += 12;
     }
 
-    if (arrivalTime.period === "?ㅼ쟾" && hour === 12) {
+    if (arrivalTime.period === "오전" && hour === 12) {
       hour = 0;
     }
 
@@ -2095,7 +2095,7 @@ function ScheduleAlarmFinalStep({
       minute -
       Number(durationMinutes || 0);
 
-    // ?먯젙???섏뼱 ?꾨궇濡?媛??寃쎌슦
+    // 자정을 넘어 전날로 가는 경우도 보정합니다.
     totalMinutes =
       ((totalMinutes % 1440) + 1440) % 1440;
 
@@ -2107,8 +2107,8 @@ function ScheduleAlarmFinalStep({
 
     const period =
       startHour24 >= 12
-        ? "?ㅽ썑"
-        : "?ㅼ쟾";
+        ? "오후"
+        : "오전";
 
     let startHour12 =
       startHour24 % 12;
@@ -2134,16 +2134,16 @@ function ScheduleAlarmFinalStep({
     0
       ? `${selectedReminderOffsets.join(
           ", ",
-        )}遺????뚮┝`
-      : "?뚮┝ ?쒓컙 ?좏깮";
+        )}분 전 알림`
+      : "알림 시간 선택";
 
   const finalInfoText =
-    `${formattedArrivalTime}源뚯? ?꾩갑?섏떎 ???덈룄濡?`;
+    `${formattedArrivalTime}까지 도착하실 수 있도록`;
 
   const finalInfoSubText =
-    `異쒕컻 ?곸젙 ?쒓컙 ${selectedReminderOffsets.join(
+    `출발 예정 시간 ${selectedReminderOffsets.join(
       ", ",
-    )}遺??꾩뿉 ?뚮┝???뚮젮?쒕┫寃뚯슂.`;
+    )}분 전에 알림을 알려드릴게요.`;
   const toggleDay = (day) => {
     setSelectedDays(
       (current) =>
@@ -2183,8 +2183,8 @@ function ScheduleAlarmFinalStep({
 
       if (!route) {
         Alert.alert(
-          "?뚮┝ ?깅줉 ?ㅽ뙣",
-          "?깅줉??寃쎈줈 ?뺣낫瑜?李얠? 紐삵뻽?듬땲??",
+          "알림 등록 실패",
+          "등록할 경로 정보를 찾지 못했습니다.",
         );
 
         return;
@@ -2195,8 +2195,8 @@ function ScheduleAlarmFinalStep({
         0
       ) {
         Alert.alert(
-          "?뚮┝ ?깅줉 ?ㅽ뙣",
-          "異쒕컻 ???뚮┝ ?쒓컙???좏깮?댁＜?몄슂.",
+          "알림 등록 실패",
+          "출발 전 알림 시간을 선택해주세요.",
         );
 
         return;
@@ -2238,10 +2238,10 @@ function ScheduleAlarmFinalStep({
         onSavePress?.();
       } catch (error) {
         Alert.alert(
-          "?뚮┝ ?깅줉 ?ㅽ뙣",
+          "알림 등록 실패",
 
           error?.message ??
-            "???쇱젙 ?뚮┝ ?깅줉???ㅽ뙣?덉뒿?덈떎.",
+            "내 일정 알림 등록에 실패했습니다.",
         );
       } finally {
         setIsSubmitting(false);
@@ -2261,7 +2261,7 @@ function ScheduleAlarmFinalStep({
         onBackPress={
           onBackPress
         }
-        title="?뚮┝ 異붽?"
+        title="알림 추가"
         titleStyle={
           styles.headerTitle
         }
@@ -2301,7 +2301,7 @@ function ScheduleAlarmFinalStep({
             }
           >
             {primarySegment?.endStation
-              ? `쨌 ${primarySegment.endStation} 諛⑸㈃`
+              ? `· ${primarySegment.endStation} 방면`
               : ""}
           </Text>
         </View>
@@ -2654,11 +2654,11 @@ function ReminderModal({
                 styles.reminderTitle
               }
             >
-              誘몃━ ?뚮┝ ?ㅼ젙
+              미리 알림 설정
             </Text>
 
             <Pressable
-              accessibilityLabel="誘몃━ ?뚮┝ ?ㅼ젙 ?リ린"
+              accessibilityLabel="미리 알림 설정 닫기"
               accessibilityRole="button"
               hitSlop={10}
               onPress={
@@ -2848,7 +2848,7 @@ function TimePickerSheet({
             }
           >
             <WheelPickerColumn
-              accessibilityLabel="?ㅼ쟾 ?ㅽ썑 ?좏깮"
+              accessibilityLabel="오전 오후 선택"
               onChange={(
                 period,
               ) =>
@@ -2866,7 +2866,7 @@ function TimePickerSheet({
             />
 
             <WheelPickerColumn
-              accessibilityLabel="???좏깮"
+              accessibilityLabel="시 선택"
               onChange={(
                 hour,
               ) =>
@@ -2892,7 +2892,7 @@ function TimePickerSheet({
             </Text>
 
             <WheelPickerColumn
-              accessibilityLabel="遺??좏깮"
+              accessibilityLabel="분 선택"
               onChange={(
                 minute,
               ) =>
@@ -2926,7 +2926,7 @@ function TimePickerSheet({
                 styles.confirmButtonText
               }
             >
-              ?뺤씤
+              확인
             </Text>
           </Pressable>
         </View>
