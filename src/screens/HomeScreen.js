@@ -335,7 +335,7 @@ export function HomeScreen({
               <ScheduleAlarmAddScreen
                 initialStep={scheduleAlarmInitialStep}
                 mapTitle={
-                  scheduleAlarmInitialStep === "route"
+                  scheduleAlarmInitialStep === "routeSetup"
                     ? "경로 재설정"
                     : "알림 추가"
                 }
@@ -346,7 +346,7 @@ export function HomeScreen({
                 }}
                 onSaveComplete={handleScheduleAlarmSaved}
                 onRouteConfigured={
-                  scheduleAlarmInitialStep === "route"
+                  scheduleAlarmInitialStep === "routeSetup"
                     ? handleFirstLastRouteConfigured
                     : undefined
                 }
@@ -449,7 +449,7 @@ export function HomeScreen({
                 onRouteSetupPress={() => {
                   blurActiveElement();
                   setIsScheduleAlarmAddVisible(true);
-                  setScheduleAlarmInitialStep("route");
+                  setScheduleAlarmInitialStep("routeSetup");
                 }}
                 firstLastRouteSummary={firstLastRouteSummary}
                 onScheduleAlarmAddPress={() => {

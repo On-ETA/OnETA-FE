@@ -359,6 +359,11 @@ export function ScheduleAlarmAddScreen({
     }
 
     if (step === "routeSetup") {
+      if (initialStep === "routeSetup") {
+        onBackPress?.();
+        return;
+      }
+
       setStep("form");
       return;
     }
@@ -423,6 +428,7 @@ export function ScheduleAlarmAddScreen({
   if (step === "routeSetup") {
     return (
       <ScheduleRouteSetupStep
+        headerTitle={initialStep === "routeSetup" ? mapTitle : "알림 추가"}
         onBackPress={handleBackPress}
         onNextPress={() =>
           setStep("routeResult")
@@ -636,6 +642,7 @@ export function ScheduleAlarmAddScreen({
 }
 
 function ScheduleRouteSetupStep({
+  headerTitle = "알림 추가",
   onBackPress,
   onNextPress,
   onPlacePress,
@@ -660,7 +667,7 @@ function ScheduleRouteSetupStep({
         onBackPress={
           onBackPress
         }
-        title="알림 추가"
+        title={headerTitle}
         titleStyle={
           styles.headerTitle
         }

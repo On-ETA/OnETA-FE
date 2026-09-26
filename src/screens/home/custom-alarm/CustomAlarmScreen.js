@@ -13,6 +13,8 @@ import Svg, { Circle, Path } from "react-native-svg";
 
 import MemoIcon from "../../../../public/images/memo.svg";
 import PlusIcon from "../../../../public/images/plus.svg";
+import BellGreenIcon from "../../../../assets/images/bell_green.svg";
+import BellWhiteIcon from "../../../../assets/images/bell_white.svg";
 import {
   deleteDepotNotification,
   getMyDepotNotifications,
@@ -509,7 +511,11 @@ function GarageAlarmCard({
           ]}
         >
           <View style={styles.garageAlarmIcon}>
-            <BellGlyph color={alarm.enabled ? colors.main : colors.white} />
+            {alarm.enabled ? (
+              <BellGreenIcon height={24} width={24} />
+            ) : (
+              <BellWhiteIcon height={24} width={24} />
+            )}
           </View>
           <Text
             ellipsizeMode="tail"
@@ -630,17 +636,6 @@ function TrashIcon({ color = colors.gray07, size = 20 }) {
   );
 }
 
-function BellGlyph({ color = colors.white }) {
-  return (
-    <Svg height={16} viewBox="0 0 16 16" width={16}>
-      <Path
-        d="M8 14.2c1 0 1.8-.6 2.1-1.5H5.9c.3.9 1.1 1.5 2.1 1.5Zm5-3.8-.9-1.1V6.7c0-2-1.2-3.6-3-4.2V2c0-.6-.5-1.1-1.1-1.1S6.9 1.4 6.9 2v.5c-1.8.5-3 2.2-3 4.2v2.6L3 10.4c-.5.6-.1 1.5.7 1.5h8.6c.8 0 1.2-.9.7-1.5Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
 function Switch({ enabled }) {
   return (
     <View style={[styles.switchTrack, enabled && styles.switchTrackOn]}>
@@ -713,8 +708,11 @@ const styles = StyleSheet.create({
     color: colors.gray06,
   },
   garageCard: {
-    width: 174,
-    height: 150,
+    display: "flex",
+    width: 140,
+    flexShrink: 0,
+    flexDirection: "column",
+    alignItems: "flex-start",
     overflow: "hidden",
     borderWidth: 1,
     borderColor: colors.gray04,
@@ -726,11 +724,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sub,
   },
   garageCardTop: {
-    flex: 1,
-    overflow: "hidden",
-    paddingTop: 12,
-    paddingLeft: 8,
-    paddingRight: 12,
+    display: "flex",
+    height: 68,
+    alignSelf: "stretch",
+    padding: 12,
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    gap: 4,
   },
   garageDirection: {
     width: "100%",
@@ -738,7 +739,6 @@ const styles = StyleSheet.create({
     color: colors.gray07,
   },
   garageRouteRow: {
-    marginTop: 8,
     flexDirection: "row",
     alignItems: "center",
     minWidth: 0,
@@ -754,6 +754,7 @@ const styles = StyleSheet.create({
     color: colors.gray09,
   },
   garageDeleteArea: {
+    alignSelf: "stretch",
     height: 50,
     flexDirection: "row",
     alignItems: "center",
@@ -762,18 +763,19 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(238, 243, 246, 0.8)",
   },
   garageAlarmButton: {
-    height: 50,
-    paddingHorizontal: 12,
+    display: "flex",
+    alignSelf: "stretch",
+    height: 52,
+    paddingRight: 6,
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
   },
   garageAlarmIcon: {
     flexShrink: 0,
-    width: 16,
-    height: 16,
+    width: 24,
+    height: 24,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -789,9 +791,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
     textAlign: "center",
     fontFamily: "SUIT",
-    fontSize: 11,
-    fontWeight: "700",
-    lineHeight: 15.4,
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 19.6,
+    letterSpacing: -0.14,
   },
   garageAlarmButtonTextOn: {
     color: colors.main,
@@ -807,17 +811,24 @@ const styles = StyleSheet.create({
     color: colors.gray07,
   },
   tableHeader: {
+    display: "flex",
     height: 28,
     marginTop: 10,
-    paddingHorizontal: 20,
+    paddingLeft: 16,
+    paddingRight: 26,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.gray02,
     borderRadius: 4,
   },
   tableHeaderText: {
-    ...typography.caption02M,
-    color: colors.gray06,
+    fontFamily: "SUIT",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.2,
+    letterSpacing: -0.12,
+    color: colors.gray07,
     textAlign: "center",
   },
   routeNameColumn: {
@@ -825,23 +836,30 @@ const styles = StyleSheet.create({
     textAlign: "left",
   },
   arrivalTimeColumn: {
-    flex: 1.35,
+    width: 96,
+    marginRight: 18,
+    transform: [{ translateX: 3 }],
   },
   alarmColumn: {
-    flex: 0.54,
+    width: 48,
+    paddingRight: 7,
     textAlign: "right",
   },
   scheduleList: {
-    marginTop: 8,
-    gap: 8,
+    marginTop: 12,
+    gap: 12,
   },
   scheduleRow: {
-    minHeight: 64,
+    display: "flex",
+    width: 328,
+    maxWidth: "100%",
+    height: 64,
+    paddingHorizontal: 16,
     overflow: "hidden",
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     borderWidth: 1,
-    borderColor: colors.gray04,
+    borderColor: colors.gray03,
     borderRadius: 8,
     backgroundColor: colors.white,
   },
@@ -853,7 +871,6 @@ const styles = StyleSheet.create({
   },
   scheduleName: {
     flex: 1,
-    paddingLeft: 20,
     fontFamily: "SUIT",
     fontSize: 16,
     fontWeight: "700",
@@ -861,7 +878,8 @@ const styles = StyleSheet.create({
     color: colors.gray08,
   },
   scheduleTime: {
-    flex: 1.35,
+    width: 96,
+    marginRight: 18,
     textAlign: "center",
     fontFamily: "SUIT",
     fontSize: 16,
@@ -877,7 +895,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(238, 243, 246, 0.8)",
   },
   switchButton: {
-    width: 80,
+    width: 48,
     alignSelf: "stretch",
     alignItems: "center",
     justifyContent: "center",

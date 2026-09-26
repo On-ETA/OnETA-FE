@@ -12,6 +12,26 @@ function buildBusRouteLocationsEndpoint(routeId) {
   return `/api/bus-routes/${encodeURIComponent(routeId)}/locations`;
 }
 
+function normalizeDirectionName(name, fallback) {
+  return String(name ?? fallback)
+    .replace(/\s*방면\s*$/, "")
+    .trim();
+}
+
+function formatDirectionTitle(name, fallback) {
+  const directionName = normalizeDirectionName(name, fallback);
+
+  return `${directionName || fallback} 방면`;
+}
+
+function formatDepartureDescription(name, fallback) {
+  const stationName = normalizeDirectionName(name, fallback)
+    .replace(/\s*정류장\s*$/, "")
+    .trim();
+
+  return `${stationName || fallback} 정류장에서 출고 시 1회 알림`;
+}
+
 function toQueryString(params = {}) {
   const query = new URLSearchParams();
 
@@ -134,14 +154,14 @@ export function normalizeBusRouteDirections(direction) {
       {
         id: data.depotEnum ?? "DEPOT",
         type: data.depotEnum ?? "DEPOT",
-        title: `${data.depotName ?? "차고지"} 방면`,
-        description: "차고지에서 출발하는 방향입니다.",
+        title: formatDirectionTitle(data.depotName, "차고지"),
+        description: formatDepartureDescription(data.depotName, "차고지"),
       },
       {
         id: data.turnaroundEnum ?? "TURNAROUND",
         type: data.turnaroundEnum ?? "TURNAROUND",
-        title: `${data.turnaroundName ?? "회차지"} 방면`,
-        description: "회차지에서 돌아오는 방향입니다.",
+        title: formatDirectionTitle(data.turnaroundName, "회차지"),
+        description: formatDepartureDescription(data.turnaroundName, "회차지"),
       },
     ],
     raw: data,
