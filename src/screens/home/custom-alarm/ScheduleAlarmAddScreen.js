@@ -36,7 +36,7 @@ import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 
 const DEFAULT_TIME = {
-  period: "?ㅼ쟾",
+  period: "오전",
   hour: "11",
   minute: "30",
 };
@@ -44,7 +44,7 @@ const DEFAULT_TIME = {
 const TIME_PICKER_ITEM_HEIGHT = 58;
 const TIME_PICKER_VISIBLE_ITEMS = 3;
 
-const PERIOD_OPTIONS = ["?ㅼ쟾", "?ㅽ썑"];
+const PERIOD_OPTIONS = ["오전", "오후"];
 
 const HOUR_OPTIONS = Array.from(
   { length: 12 },
@@ -196,10 +196,10 @@ function toTargetArrivalTime(time) {
     Number(time.minute);
 
   const normalizedHour =
-    time.period === "?ㅽ썑" &&
+    time.period === "오후" &&
     hourNumber < 12
       ? hourNumber + 12
-      : time.period === "?ㅼ쟾" &&
+      : time.period === "오전" &&
           hourNumber === 12
         ? 0
         : hourNumber;
@@ -213,13 +213,13 @@ function toTargetArrivalTime(time) {
 
 function mapDayToApiValue(day) {
   const dayMap = {
-    ?? "MON",
-    ?? "TUE",
-    ?? "WED",
-    紐? "THU",
-    湲? "FRI",
-    ?? "SAT",
-    ?? "SUN",
+    월: "MON",
+    화: "TUE",
+    수: "WED",
+    목: "THU",
+    금: "FRI",
+    토: "SAT",
+    일: "SUN",
   };
 
   return dayMap[day];
@@ -319,7 +319,7 @@ export function ScheduleAlarmAddScreen({
     return (
       <ScheduleRouteMapStep
         activePlaceType={activePlaceType}
-        headerTitle={initialStep === "route" ? "寃쎈줈 ?ъ꽕?? : mapTitle}
+        headerTitle={initialStep === "route" ? "경로 재설정" : mapTitle}
         initialDestination={routePlaces.destination}
         initialOrigin={routePlaces.origin}
         onBackPress={handleBackPress}
@@ -622,24 +622,25 @@ function ScheduleRouteSetupStep({
             styles.routeSetupHeading
           }
         >
-          異쒕컻吏? ?꾩갑吏瑜?吏?뺥빐二쇱꽭??        </Text>
+          출발지와 도착지를 지정해주세요.
+        </Text>
 
         <PlaceSelectField
-          label="異쒕컻吏"
+          label="출발지"
           onPress={() =>
             onPlacePress("origin")
           }
           place={places.origin}
-          placeholder="異쒕컻吏瑜?吏?뺥빐二쇱꽭??
+          placeholder="출발지를 지정해주세요."
         />
 
         <PlaceSelectField
-          label="?꾩갑吏"
+          label="도착지"
           onPress={() =>
             onPlacePress("destination")
           }
           place={places.destination}
-          placeholder="?꾩갑吏瑜?吏?뺥빐二쇱꽭??
+          placeholder="도착지를 지정해주세요."
         />
       </View>
 
@@ -1235,8 +1236,8 @@ export function ScheduleRouteMapStep({
             placeholder={
               activePlaceType ===
               "origin"
-                ? "異쒕컻吏 ?μ냼紐??먮뒗 嫄대Ъ紐낆쑝濡?寃??
-                : "?꾩갑吏 ?μ냼紐??먮뒗 嫄대Ъ紐낆쑝濡?寃??
+                ? "출발지 장소명 또는 건물명으로 검색"
+                : "도착지 장소명 또는 건물명으로 검색"
             }
             placeholderTextColor={
               colors.gray06
@@ -1715,7 +1716,7 @@ export function ScheduleRouteResultStep({
         }
       >
         <Pressable
-          accessibilityLabel="?ㅻ줈媛湲?
+          accessibilityLabel="뒤로가기"
           accessibilityRole="button"
           hitSlop={12}
           onPress={
@@ -1900,7 +1901,7 @@ export function ScheduleRouteResultStep({
                 }
               >
                 {primarySegment?.transitName ||
-                  "?以묎탳??}
+                  "대중교통"}
               </Text>
 
               <Text
@@ -2032,13 +2033,13 @@ function ScheduleAlarmFinalStep({
   });
 
   const days = [
-    "??,
-    "??,
-    "??,
-    "紐?,
-    "湲?,
-    "??,
-    "??,
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일",
   ];
 
   const primarySegment =
@@ -2059,7 +2060,7 @@ function ScheduleAlarmFinalStep({
     ]
       .filter(Boolean)
       .join("-") ||
-    "寃쎈줈1";
+    "경로1";
 
   const targetArrivalTime =
     toTargetArrivalTime(
@@ -2291,7 +2292,7 @@ function ScheduleAlarmFinalStep({
             }
           >
             {primarySegment?.transitName ||
-              "?以묎탳??}
+              "대중교통"}
           </Text>
 
           <Text
@@ -2581,6 +2582,7 @@ function ScheduleAlarmFinalStep({
               {isSubmitting
                 ? "저장 중"
                 : "저장"}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -2614,13 +2616,13 @@ function ReminderModal({
   visible,
 }) {
   const options = [
-    ["1", "1遺???],
-    ["3", "3遺???],
-    ["5", "5遺???],
-    ["10", "10遺???],
-    ["15", "15遺???],
-    ["30", "30遺???],
-    ["60", "1?쒓컙 ??],
+    ["1", "1분 전"],
+    ["3", "3분 전"],
+    ["5", "5분 전"],
+    ["10", "10분 전"],
+    ["15", "15분 전"],
+    ["30", "30분 전"],
+    ["60", "1시간 전"],
   ];
 
   return (
