@@ -405,7 +405,7 @@ export function MyPageScreen({
                     accessibilityRole="button"
                     disabled={isWithdrawing}
                     onPress={closeWithdrawModal}
-                    style={styles.cancelButton}
+                    style={styles.withdrawConfirmCancelButton}
                   >
                     <Text style={[styles.modalButtonText, styles.cancelText]}>
                       취소
@@ -416,7 +416,7 @@ export function MyPageScreen({
                     disabled={isWithdrawing}
                     onPress={handleWithdrawPress}
                     style={[
-                      styles.withdrawButton,
+                      styles.withdrawConfirmButton,
                       isWithdrawing && styles.withdrawButtonDisabled,
                     ]}
                   >
@@ -447,7 +447,7 @@ export function MyPageScreen({
                 <Pressable
                   accessibilityRole="button"
                   onPress={handleWithdrawCompletePress}
-                  style={styles.completeButton}
+                  style={styles.withdrawConfirmCancelButton}
                 >
                   <Text style={[styles.modalButtonText, styles.completeText]}>
                     확인
@@ -675,6 +675,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
     backgroundColor: colors.main,
+  },
+  withdrawConfirmCancelButton: {
+    display: "flex",
+    paddingVertical: 8,
+    paddingHorizontal: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    borderRadius: 50,
+    backgroundColor: colors.gray04,
+  },
+  withdrawConfirmButton: {
+    display: "flex",
+    paddingVertical: 8,
+    paddingHorizontal: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    borderRadius: 50,
+    backgroundColor: colors.point,
   },
   withdrawButtonDisabled: {
     opacity: 0.7,
