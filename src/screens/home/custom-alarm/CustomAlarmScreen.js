@@ -23,6 +23,7 @@ import {
 import {
   deleteArrivalNotifications,
   getArrivalNotifications,
+  hideArrivalNotificationsLocally,
   updateArrivalNotificationStatus,
 } from "../../../api/notifications/arrival";
 import { colors, typography } from "../../../theme";
@@ -43,6 +44,34 @@ function getArrivalNotificationId(alarm) {
   const id = alarm?.notificationId ?? alarm?.id;
 
   return typeof id === "string" ? id.replace(/^arrival-/, "") : id;
+}
+
+function getDepotNotificationId(alarm) {
+  return (
+    alarm?.userBusId ??
+    alarm?.payload?.userBusId ??
+    alarm?.raw?.userBusId ??
+    alarm?.notification?.userBusId
+  );
+}
+
+async function deleteScheduleAlarm(alarm, notificationId) {
+  const userBusId = getDepotNotificationId(alarm);
+
+  if (userBusId !== undefined && userBusId !== null && userBusId !== "") {
+    return deleteDepotNotification({ userBusId });
+  }
+
+  try {
+    return await deleteArrivalNotifications({ ids: [notificationId] });
+  } catch (error) {
+    if (error?.status >= 500) {
+      hideArrivalNotificationsLocally([notificationId]);
+      return { code: "LOCAL_HIDDEN" };
+    }
+
+    throw error;
+  }
 }
 
 function breakRouteNumberAtParenthesis(routeNumber) {
@@ -260,20 +289,17 @@ export function CustomAlarmScreen({
           deleteDepotNotification({ userBusId: alarm.userBusId ?? alarm.id }),
         ),
       );
-      const scheduleResult =
-        scheduleTargetIds.length > 0
-          ? await deleteArrivalNotifications({ ids: scheduleTargetIds }).then(
-              () => ({ status: "fulfilled" }),
-              () => ({ status: "rejected" }),
-            )
-          : { status: "fulfilled" };
+      const scheduleResults = await Promise.allSettled(
+        scheduleTargets.map((alarm, index) =>
+          deleteScheduleAlarm(alarm, scheduleTargetIds[index]),
+        ),
+      );
       const deletedGarageIds = garageTargets
         .filter((_, index) => garageResults[index]?.status === "fulfilled")
         .map((alarm) => alarm.id);
-      const deletedScheduleIds =
-        scheduleResult.status === "fulfilled"
-          ? scheduleTargets.map((alarm) => alarm.id)
-          : [];
+      const deletedScheduleIds = scheduleTargets
+        .filter((_, index) => scheduleResults[index]?.status === "fulfilled")
+        .map((alarm) => alarm.id);
       const deletedIds = [...deletedGarageIds, ...deletedScheduleIds];
 
       setGarageAlarms((current) =>
@@ -289,7 +315,7 @@ export function CustomAlarmScreen({
 
       if (
         garageResults.some((result) => result.status === "rejected") ||
-        scheduleResult.status === "rejected"
+        scheduleResults.some((result) => result.status === "rejected")
       ) {
         Alert.alert("알림 삭제 실패", "일부 알림을 삭제하지 못했습니다.");
       }

@@ -9,6 +9,7 @@ import {
 } from "../homeCache";
 
 const ARRIVAL_NOTIFICATIONS_ENDPOINT = "/api/notifications/arrival";
+const HIDDEN_ARRIVAL_NOTIFICATIONS_CACHE_KEY = "hiddenArrivalNotifications";
 
 function buildArrivalNotificationEndpoint(id) {
   return `${ARRIVAL_NOTIFICATIONS_ENDPOINT}/${encodeURIComponent(id)}`;
@@ -95,6 +96,49 @@ function pickArrivalNotificationList(response) {
   const data = response?.data ?? response;
 
   return Array.isArray(data) ? data : [];
+}
+
+function normalizeHiddenArrivalNotificationId(id) {
+  if (id === undefined || id === null || id === "") {
+    return null;
+  }
+
+  return String(id).replace(/^arrival-/, "");
+}
+
+function readHiddenArrivalNotificationIds() {
+  const hiddenIds = readHomeCache(HIDDEN_ARRIVAL_NOTIFICATIONS_CACHE_KEY, []);
+
+  return Array.isArray(hiddenIds) ? hiddenIds.map(String) : [];
+}
+
+function isHiddenArrivalNotification(notification) {
+  const hiddenIds = readHiddenArrivalNotificationIds();
+  const notificationId = normalizeHiddenArrivalNotificationId(
+    notification?.notificationId ?? notification?.id,
+  );
+
+  return notificationId ? hiddenIds.includes(notificationId) : false;
+}
+
+export function hideArrivalNotificationsLocally(ids = []) {
+  const nextIds = ids
+    .map(normalizeHiddenArrivalNotificationId)
+    .filter(Boolean);
+
+  if (nextIds.length === 0) {
+    return [];
+  }
+
+  const hiddenIds = new Set(readHiddenArrivalNotificationIds());
+
+  nextIds.forEach((id) => hiddenIds.add(id));
+  removeHomeCache(homeCacheKeys.arrivalNotifications);
+
+  return writeHomeCache(
+    HIDDEN_ARRIVAL_NOTIFICATIONS_CACHE_KEY,
+    Array.from(hiddenIds),
+  );
 }
 
 function formatTwoDigits(value) {
@@ -222,7 +266,9 @@ export async function getArrivalNotifications({
 
   return writeHomeCache(
     homeCacheKeys.arrivalNotifications,
-    pickArrivalNotificationList(response).map(normalizeArrivalNotification),
+    pickArrivalNotificationList(response)
+      .filter((notification) => !isHiddenArrivalNotification(notification))
+      .map(normalizeArrivalNotification),
   );
 }
 
