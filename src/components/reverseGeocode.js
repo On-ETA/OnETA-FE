@@ -1,61 +1,126 @@
 import * as Location from "expo-location";
 import { Platform } from "react-native";
 
-let permissionGranted = false;
+let permissionPromise = null;
 
-async function ensureLocationPermission() {
-  /*
-   * Android reverseGeocodeAsync는
-   * foreground location 권한이 필요함.
-   */
-  if (Platform.OS !== "android") {
-    return;
-  }
-
-  if (permissionGranted) {
-    return;
-  }
-
-  const currentPermission =
-    await Location.getForegroundPermissionsAsync();
-
-  if (currentPermission.status === "granted") {
-    permissionGranted = true;
-    return;
-  }
-
-  const requestedPermission =
-    await Location.requestForegroundPermissionsAsync();
-
-  if (requestedPermission.status !== "granted") {
+async function ensureForegroundLocationPermission() {
+  if (Platform.OS === "web") {
     throw new Error(
-      "주소 확인을 위해 위치 권한이 필요합니다.",
+      "현재 위치 기능은 웹 환경에서 사용할 수 없습니다.",
     );
   }
 
-  permissionGranted = true;
+  if (!permissionPromise) {
+    permissionPromise = (async () => {
+      let permission =
+        await Location.getForegroundPermissionsAsync();
+
+      if (permission.status !== "granted") {
+        permission =
+          await Location.requestForegroundPermissionsAsync();
+      }
+
+      if (permission.status !== "granted") {
+        const error = new Error(
+          "위치 기능을 사용하려면 위치 권한이 필요합니다.",
+        );
+
+        error.code = "LOCATION_PERMISSION_DENIED";
+
+        throw error;
+      }
+
+      return true;
+    })().catch((error) => {
+      permissionPromise = null;
+
+      throw error;
+    });
+  }
+
+  return permissionPromise;
 }
 
-function cleanAddress(address) {
-  if (!address) {
+function normalizeCoordinate({
+  latitude,
+  longitude,
+} = {}) {
+  const resolvedLatitude =
+    Number(latitude);
+
+  const resolvedLongitude =
+    Number(longitude);
+
+  if (
+    !Number.isFinite(
+      resolvedLatitude,
+    ) ||
+    !Number.isFinite(
+      resolvedLongitude,
+    )
+  ) {
+    throw new Error(
+      "올바르지 않은 위치 좌표입니다.",
+    );
+  }
+
+  return {
+    latitude: resolvedLatitude,
+    longitude: resolvedLongitude,
+  };
+}
+
+function cleanAddress(value) {
+  if (!value) {
     return "";
   }
 
-  return String(address)
+  return String(value)
     .replace(/^대한민국\s*/, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function buildAddressFromParts(result) {
+function removeDuplicateParts(values) {
+  const result = [];
+
+  values
+    .filter(Boolean)
+    .map((value) =>
+      String(value).trim(),
+    )
+    .filter(Boolean)
+    .forEach((value) => {
+      if (!result.includes(value)) {
+        result.push(value);
+      }
+    });
+
+  return result;
+}
+
+function buildRoadAddress(result) {
   if (!result) {
     return "";
   }
 
-  /*
-   * Android에서는 formattedAddress가 제공될 수 있으므로
-   * 이것을 가장 먼저 사용.
-   */
+  if (result.street) {
+    const address = cleanAddress(
+      removeDuplicateParts([
+        result.region,
+        result.city,
+        result.district,
+        result.subregion,
+        result.street,
+        result.streetNumber,
+      ]).join(" "),
+    );
+
+    if (address) {
+      return address;
+    }
+  }
+
   const formattedAddress = cleanAddress(
     result.formattedAddress,
   );
@@ -64,59 +129,65 @@ function buildAddressFromParts(result) {
     return formattedAddress;
   }
 
-  /*
-   * formattedAddress가 없을 경우
-   * 각각의 주소 요소를 조합.
-   */
-  const parts = [
-    result.region,
-    result.city,
-    result.district,
-    result.street,
-    result.streetNumber,
-  ]
-    .filter(Boolean)
-    .map((value) => String(value).trim())
-    .filter(
-      (value, index, array) =>
-        array.indexOf(value) === index,
-    );
+  return cleanAddress(
+    removeDuplicateParts([
+      result.region,
+      result.city,
+      result.district,
+      result.subregion,
+      result.street,
+      result.streetNumber,
+      result.name,
+    ]).join(" "),
+  );
+}
 
-  return cleanAddress(parts.join(" "));
+export async function getCurrentCoordinate() {
+  await ensureForegroundLocationPermission();
+
+  const lastKnownPosition =
+    await Location.getLastKnownPositionAsync({
+      maxAge: 60 * 1000,
+      requiredAccuracy: 200,
+    });
+
+  if (lastKnownPosition?.coords) {
+    return normalizeCoordinate({
+      latitude:
+        lastKnownPosition.coords.latitude,
+      longitude:
+        lastKnownPosition.coords.longitude,
+    });
+  }
+
+  const position =
+    await Location.getCurrentPositionAsync({
+      accuracy:
+        Location.Accuracy.Balanced,
+    });
+
+  return normalizeCoordinate({
+    latitude: position?.coords?.latitude,
+    longitude: position?.coords?.longitude,
+  });
 }
 
 export async function reverseGeocode({
   latitude,
   longitude,
 } = {}) {
-  const resolvedLatitude = Number(latitude);
-  const resolvedLongitude = Number(longitude);
+  const coordinate =
+    normalizeCoordinate({
+      latitude,
+      longitude,
+    });
 
-  if (
-    !Number.isFinite(resolvedLatitude) ||
-    !Number.isFinite(resolvedLongitude)
-  ) {
-    throw new Error(
-      "올바르지 않은 지도 좌표입니다.",
-    );
-  }
-
-  /*
-   * 현재 프로젝트는 Android 앱 사용을 기준으로 함.
-   */
-  if (Platform.OS === "web") {
-    throw new Error(
-      "현재 Reverse Geocoding은 앱 환경에서 사용하도록 구성되어 있습니다.",
-    );
-  }
-
-  await ensureLocationPermission();
+  await ensureForegroundLocationPermission();
 
   const results =
-    await Location.reverseGeocodeAsync({
-      latitude: resolvedLatitude,
-      longitude: resolvedLongitude,
-    });
+    await Location.reverseGeocodeAsync(
+      coordinate,
+    );
 
   const result = results?.[0];
 
@@ -126,29 +197,21 @@ export async function reverseGeocode({
     );
   }
 
-  const address = buildAddressFromParts(result);
+  const roadAddress =
+    buildRoadAddress(result);
 
-  if (!address) {
+  if (!roadAddress) {
     throw new Error(
       "선택한 위치의 주소 정보가 없습니다.",
     );
   }
 
   return {
-    address,
-
-    /*
-     * Android Geocoder는 네이버처럼
-     * roadAddress / jibunAddress를 명확하게
-     * 구분해서 반환하지 않음.
-     *
-     * 서버 검색용 주소로 address를 사용.
-     */
-    roadAddress: address,
-
-    latitude: resolvedLatitude,
-    longitude: resolvedLongitude,
-
+    address: roadAddress,
+    roadAddress,
+    latitude: coordinate.latitude,
+    longitude: coordinate.longitude,
+    name: result.name ?? "",
     raw: result,
   };
 }
