@@ -24,8 +24,8 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.messagin
     self.registration.showNotification(title, {
       body,
       data: payload,
-      icon: "/images/on-eta_logo.png",
-      badge: "/images/on-eta_logo.png",
+      icon: "/images/pabicon.png",
+      badge: "/images/pabicon.png",
     });
   });
 }

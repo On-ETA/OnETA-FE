@@ -2,12 +2,21 @@
   "expo": {
     "name": "oneta",
     "slug": "oneta",
+    "icon": "./assets/images/pabicon.png",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
       "**/*"
     ],
+    "web": {
+      "favicon": "./assets/images/pabicon.png",
+      "name": "ON-ETA",
+      "shortName": "ON-ETA",
+      "display": "standalone",
+      "themeColor": "#FFFFFF",
+      "backgroundColor": "#FFFFFF"
+    },
     "android": {
       "package": "com.oneta.app",
       "permissions": [
