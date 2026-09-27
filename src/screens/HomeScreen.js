@@ -4,7 +4,12 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAddresses } from "../api/addresses";
-import { homeCacheKeys, readHomeCache, writeHomeCache } from "../api/homeCache";
+import {
+  homeCacheKeys,
+  readHomeCache,
+  readHomeCacheAsync,
+  writeHomeCache,
+} from "../api/homeCache";
 import {
   createTransitNotification,
   getTransitNotifications,
@@ -220,6 +225,20 @@ export function HomeScreen({
   );
   const [customAlarmRefreshKey, setCustomAlarmRefreshKey] = useState(0);
 
+  useEffect(() => {
+    let isActive = true;
+
+    readHomeCacheAsync(homeCacheKeys.firstLastRoute, null).then((cachedSummary) => {
+      if (isActive && cachedSummary) {
+        setFirstLastRouteSummary((current) => current ?? cachedSummary);
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const loadFirstLastTransitNotifications = useCallback(async ({
     signal,
   } = {}) => {
@@ -290,14 +309,10 @@ export function HomeScreen({
     };
   }, [loadFirstLastTransitNotifications]);
 
-  const handleFirstLastRouteConfigured = useCallback(async (route, places) => {
+  const saveFirstLastRoute = useCallback(async (route, places) => {
     const summary = createFirstLastRouteSummary(route, places);
 
     setFirstLastRouteSummary(writeCachedFirstLastRouteSummary(summary));
-    blurActiveElement();
-    setIsScheduleAlarmAddVisible(false);
-    setScheduleAlarmInitialStep("form");
-
     try {
       const notificationResponse = await createTransitNotification({
         payload: createTransitNotificationPayload(route, places, summary),
@@ -317,7 +332,14 @@ export function HomeScreen({
     } catch (error) {
       console.warn("첫막차 경로 등록 실패:", error?.code ?? error?.message);
     }
-  }, [loadFirstLastTransitNotifications]);
+  }, []);
+
+  const handleFirstLastRouteConfigured = useCallback(async (route, places) => {
+    await saveFirstLastRoute(route, places);
+    blurActiveElement();
+    setIsScheduleAlarmAddVisible(false);
+    setScheduleAlarmInitialStep("form");
+  }, [saveFirstLastRoute]);
 
   const handleScheduleAlarmSaved = useCallback(() => {
     blurActiveElement();
@@ -426,11 +448,7 @@ export function HomeScreen({
                   setFirstLastRouteSetupStep("map");
                 }}
                 onRouteSelect={(route, places) => {
-                  setFirstLastRouteSummary(
-                    writeCachedFirstLastRouteSummary(
-                      createFirstLastRouteSummary(route, places),
-                    ),
-                  );
+                  saveFirstLastRoute(route, places);
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
                 }}

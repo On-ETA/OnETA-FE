@@ -157,6 +157,11 @@ export function normalizeArrivalNotification(notification) {
   const routeName = notification?.routeName ?? notification?.title ?? "도착 알림";
   const arrivalTime = formatTargetArrivalTime(notification?.targetArrivalTime);
   const routeDescription = createRouteDescription(notification);
+  const isActive =
+    notification?.isActive ??
+    notification?.active ??
+    notification?.enabled ??
+    notification?.status === "ACTIVE";
   const timeLabel =
     notification?.timeLabel ||
     arrivalTime ||
@@ -188,7 +193,7 @@ export function normalizeArrivalNotification(notification) {
     routeDetails: notification?.routeDetails,
     route: notification?.route,
     scheduleType: notification?.scheduleType,
-    enabled: Boolean(notification?.isActive),
+    enabled: Boolean(isActive),
     payload: notification,
     raw: notification,
   };
@@ -249,13 +254,17 @@ export async function deleteArrivalNotifications({
     throw new Error("삭제할 도착 알림 id가 필요합니다.");
   }
 
-  return requestArrivalNotificationJson({
+  const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationsDeleteEndpoint(ids),
     method: "DELETE",
     accessToken,
     signal,
     errorMessage: "도착 알림 삭제에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.arrivalNotifications);
+
+  return response;
 }
 
 export async function getArrivalNotificationById({
@@ -290,7 +299,7 @@ export async function updateArrivalNotification({
     throw new Error("도착 알림 id가 필요합니다.");
   }
 
-  return requestArrivalNotificationJson({
+  const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationEndpoint(id),
     method: "PATCH",
     body: payload,
@@ -298,6 +307,10 @@ export async function updateArrivalNotification({
     signal,
     errorMessage: "도착 알림 수정에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.arrivalNotifications);
+
+  return response;
 }
 
 export async function updateArrivalNotificationStatus({
@@ -310,7 +323,7 @@ export async function updateArrivalNotificationStatus({
     throw new Error("도착 알림 id가 필요합니다.");
   }
 
-  return requestArrivalNotificationJson({
+  const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationStatusEndpoint(id),
     method: "PATCH",
     body: payload,
@@ -318,4 +331,8 @@ export async function updateArrivalNotificationStatus({
     signal,
     errorMessage: "도착 알림 상태 변경에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.arrivalNotifications);
+
+  return response;
 }

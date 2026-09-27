@@ -2,6 +2,7 @@
 import {
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -358,142 +359,149 @@ export function ScheduleAlarmEditScreen({
           <Text style={styles.statusText}>{alarmError}</Text>
         </View>
       ) : null}
-      <View style={styles.routeHeader}>
-        <View style={styles.routeTopRow}>
-          <View style={styles.busInfo}>
-            <View style={styles.busIconCircle}>
-              <BigBusAsset width={9} height={10} />
-            </View>
-            <Text style={styles.busNumber}>
-              {primarySegment?.transitName || "대중교통"}
-            </Text>
-            {primarySegment?.endStation ? (
-              <View style={styles.busDirectionRow}>
-                <DirectionCircleAsset width={3} height={3} />
-                <Text numberOfLines={1} style={styles.busDirection}>
-                  {`${primarySegment.endStation} 방면`}
-                </Text>
+      <ScrollView
+        contentContainerStyle={styles.editScrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        style={styles.editScroll}
+      >
+        <View style={styles.routeHeader}>
+          <View style={styles.routeTopRow}>
+            <View style={styles.busInfo}>
+              <View style={styles.busIconCircle}>
+                <BigBusAsset width={9} height={10} />
               </View>
-            ) : null}
-          </View>
-          <View style={styles.totalTime}>
-            <Text style={styles.totalTimeNumber}>{totalDuration}</Text>
-            <Text style={styles.totalTimeUnit}>분</Text>
-          </View>
-        </View>
-
-        <View style={styles.stopRows}>
-          <StopLineAsset height={34} style={styles.stopLine} width={1} />
-          <StopRow
-            active
-            label="승차"
-            name={getSegmentStopName(primarySegment, "start") || "승차 정류장"}
-          />
-          <StopRow
-            label="하차"
-            name={getSegmentStopName(primarySegment, "end") || "하차 정류장"}
-            style={styles.dropoffRow}
-          />
-        </View>
-
-        {timelineSegments.length > 0 ? (
-          <RouteTimeline segments={timelineSegments} style={styles.routeTimeline} />
-        ) : null}
-      </View>
-
-      <View style={styles.timeSection}>
-        <View style={styles.timeSummaryRow}>
-          <View style={styles.timeSummaryBlock}>
-            <Text style={styles.fieldLabel}>출발 적정 시간</Text>
-            <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>{formattedStartTime}</Text>
+              <Text style={styles.busNumber}>
+                {primarySegment?.transitName || "대중교통"}
+              </Text>
+              {primarySegment?.endStation ? (
+                <View style={styles.busDirectionRow}>
+                  <DirectionCircleAsset width={3} height={3} />
+                  <Text numberOfLines={1} style={styles.busDirection}>
+                    {`${primarySegment.endStation} 방면`}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.totalTime}>
+              <Text style={styles.totalTimeNumber}>{totalDuration}</Text>
+              <Text style={styles.totalTimeUnit}>분</Text>
             </View>
           </View>
-          <ChevronRightIcon />
-          <View style={styles.timeSummaryBlock}>
-            <Text style={styles.fieldLabel}>도착 예정 시간</Text>
-            <View style={styles.timeCard}>
-              <Text style={styles.timeCardText}>{formattedArrivalTime}</Text>
+
+          <View style={styles.stopRows}>
+            <StopLineAsset height={34} style={styles.stopLine} width={1} />
+            <StopRow
+              active
+              label="승차"
+              name={getSegmentStopName(primarySegment, "start") || "승차 정류장"}
+            />
+            <StopRow
+              label="하차"
+              name={getSegmentStopName(primarySegment, "end") || "하차 정류장"}
+              style={styles.dropoffRow}
+            />
+          </View>
+
+          {timelineSegments.length > 0 ? (
+            <RouteTimeline segments={timelineSegments} style={styles.routeTimeline} />
+          ) : null}
+        </View>
+
+        <View style={styles.timeSection}>
+          <View style={styles.timeSummaryRow}>
+            <View style={styles.timeSummaryBlock}>
+              <Text style={styles.fieldLabel}>출발 적정 시간</Text>
+              <View style={styles.timeCard}>
+                <Text style={styles.timeCardText}>{formattedStartTime}</Text>
+              </View>
+            </View>
+            <ChevronRightIcon />
+            <View style={styles.timeSummaryBlock}>
+              <Text style={styles.fieldLabel}>도착 예정 시간</Text>
+              <View style={styles.timeCard}>
+                <Text style={styles.timeCardText}>{formattedArrivalTime}</Text>
+              </View>
             </View>
           </View>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onResetRoutePress}
-          style={styles.resetButton}
-        >
-          <Text style={styles.resetButtonText}>경로 및 시간 재설정</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.formSection}>
-        <Text style={styles.sectionLabel}>경로 이름</Text>
-        <TextInput
-          onChangeText={setRouteName}
-          placeholder="경로 이름"
-          placeholderTextColor={colors.gray06}
-          style={styles.nameInput}
-          value={routeName}
-        />
-
-        <Text style={styles.sectionLabel}>출발 알림</Text>
-        <Pressable accessibilityRole="button" style={styles.reminderSelect}>
-          <Text style={styles.reminderText}>{reminderText}</Text>
-          <ChevronDownIcon />
-        </Pressable>
-
-        <View style={styles.dayRow}>
-          {days.map((day) => {
-            const selected = selectedDays.includes(day);
-
-            return (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                key={day}
-                onPress={() => toggleDay(day)}
-                style={[styles.dayButton, selected && styles.dayButtonSelected]}
-              >
-                <Text
-                  style={[
-                    styles.dayButtonText,
-                    selected && styles.dayButtonTextSelected,
-                  ]}
-                >
-                  {day}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={styles.footer}>
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>{arrivalTime}까지 도착하실 수 있도록,</Text>
-          <Text style={styles.infoText}>
-            설정된 출발 전 알림 시간에 맞춰 알려드릴게요.
-          </Text>
-        </View>
-        <View style={styles.footerButtons}>
-          <Pressable accessibilityRole="button" onPress={onBackPress} style={styles.cancelButton}>
-            <Text style={styles.cancelText}>취소</Text>
-          </Pressable>
           <Pressable
             accessibilityRole="button"
-            disabled={isSavingAlarm}
-            onPress={handleSave}
-            style={[
-              styles.saveButton,
-              isSavingAlarm && styles.saveButtonDisabled,
-            ]}
+            onPress={onResetRoutePress}
+            style={styles.resetButton}
           >
-            <Text style={styles.saveText}>
-              {isSavingAlarm ? "저장 중" : "저장"}
-            </Text>
+            <Text style={styles.resetButtonText}>경로 및 시간 재설정</Text>
           </Pressable>
         </View>
-      </View>
+
+        <View style={styles.formSection}>
+          <Text style={styles.sectionLabel}>경로 이름</Text>
+          <TextInput
+            onChangeText={setRouteName}
+            placeholder="경로 이름"
+            placeholderTextColor={colors.gray06}
+            style={styles.nameInput}
+            value={routeName}
+          />
+
+          <Text style={styles.sectionLabel}>출발 알림</Text>
+          <Pressable accessibilityRole="button" style={styles.reminderSelect}>
+            <Text style={styles.reminderText}>{reminderText}</Text>
+            <ChevronDownIcon />
+          </Pressable>
+
+          <View style={styles.dayRow}>
+            {days.map((day) => {
+              const selected = selectedDays.includes(day);
+
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  key={day}
+                  onPress={() => toggleDay(day)}
+                  style={[styles.dayButton, selected && styles.dayButtonSelected]}
+                >
+                  <Text
+                    style={[
+                      styles.dayButtonText,
+                      selected && styles.dayButtonTextSelected,
+                    ]}
+                  >
+                    {day}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>{arrivalTime}까지 도착하실 수 있도록,</Text>
+            <Text style={styles.infoText}>
+              설정된 출발 전 알림 시간에 맞춰 알려드릴게요.
+            </Text>
+          </View>
+          <View style={styles.footerButtons}>
+            <Pressable accessibilityRole="button" onPress={onBackPress} style={styles.cancelButton}>
+              <Text style={styles.cancelText}>취소</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isSavingAlarm}
+              onPress={handleSave}
+              style={[
+                styles.saveButton,
+                isSavingAlarm && styles.saveButtonDisabled,
+              ]}
+            >
+              <Text style={styles.saveText}>
+                {isSavingAlarm ? "저장 중" : "저장"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -762,6 +770,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.head01Sb,
     color: colors.black,
+  },
+  editScroll: {
+    flex: 1,
+  },
+  editScrollContent: {
+    flexGrow: 1,
+    backgroundColor: colors.white,
   },
   routeHeader: {
     paddingHorizontal: 20,

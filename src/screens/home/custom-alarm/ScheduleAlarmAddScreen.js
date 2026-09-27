@@ -2475,6 +2475,18 @@ function ScheduleAlarmFinalStep({
         type="back"
       />
 
+      <ScrollView
+        contentContainerStyle={
+          styles.finalScrollContent
+        }
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={
+          false
+        }
+        style={
+          styles.finalScroll
+        }
+      >
       <View
         style={
           styles.finalRouteHeader
@@ -2847,6 +2859,7 @@ function ScheduleAlarmFinalStep({
           </Pressable>
         </View>
       </View>
+      </ScrollView>
 
       <ReminderModal
         onClose={() => {
@@ -4628,6 +4641,16 @@ const styles =
       flex: 1,
       backgroundColor:
         colors.gray01,
+    },
+
+    finalScroll: {
+      flex: 1,
+    },
+
+    finalScrollContent: {
+      flexGrow: 1,
+      backgroundColor:
+        colors.white,
     },
 
     finalRouteHeader: {
