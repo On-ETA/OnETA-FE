@@ -11,7 +11,10 @@ import {
   View,
 } from "react-native";
 
-import { sendEmailVerificationCode } from "../api/auth/email/send";
+import {
+  EMAIL_VERIFICATION_TYPES,
+  sendEmailVerificationCode,
+} from "../api/auth/email/send";
 import { login } from "../api/auth/login";
 import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
 import { verifyEmailCode } from "../api/auth/email/verify";
@@ -130,7 +133,10 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
     setIsSendingEmail(true);
 
     try {
-      await sendEmailVerificationCode({ email: trimmedEmail });
+      await sendEmailVerificationCode({
+        email: trimmedEmail,
+        type: EMAIL_VERIFICATION_TYPES.passwordReset,
+      });
       setVerifiedEmail("");
       setEmailVerifyAttempts(0);
       setEmailAuthStatus(EMAIL_AUTH_STATUS.sent);

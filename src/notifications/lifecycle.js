@@ -17,6 +17,17 @@ import { invalidateNotifications } from "./events";
 let tokenOperation = Promise.resolve();
 let needsTokenDeletion = false;
 
+function maskToken(token) {
+  if (!token) return "empty";
+  if (token.length <= 12) return `${token.length} chars`;
+  return `${token.slice(0, 6)}...${token.slice(-6)} (${token.length} chars)`;
+}
+
+function fcmDiag(message, details) {
+  if (typeof __DEV__ !== "undefined" && !__DEV__) return;
+  console.warn("[FCM_DIAG]", message, details ?? "");
+}
+
 async function deletePendingToken() {
   if (!needsTokenDeletion) return;
   await deleteFcmToken();
@@ -24,6 +35,7 @@ async function deletePendingToken() {
 }
 
 export function startFcm({ onForegroundMessage, onNotificationOpen, onSessionEnd }) {
+  fcmDiag("startFcm called", { supportsFcm, appState: AppState.currentState });
   if (!supportsFcm) return () => {};
 
   let disposed = false;
@@ -44,24 +56,37 @@ export function startFcm({ onForegroundMessage, onNotificationOpen, onSessionEnd
 
   function schedule(delay = 0) {
     clearTimeout(timer);
-    if (!isActive()) return;
+    if (!isActive()) {
+      fcmDiag("schedule skipped: app is not active", { appState: AppState.currentState });
+      return;
+    }
     if (running) {
+      fcmDiag("schedule deferred: sync already running");
       rerun = true;
       return;
     }
+    fcmDiag("sync scheduled", { delay });
     timer = setTimeout(sync, delay);
   }
 
   async function sync() {
-    if (!isActive()) return;
+    if (!isActive()) {
+      fcmDiag("sync skipped: app is not active", { appState: AppState.currentState });
+      return;
+    }
     running = true;
     const startedSession = getAuthSessionId();
     controller = new AbortController();
     const signal = controller.signal;
     try {
+      fcmDiag("sync started", {
+        hasAccessToken: Boolean(getAccessToken()),
+        sessionId: startedSession,
+      });
       const prompt = !prompted;
       prompted = true;
       const granted = await requestNotificationPermission(prompt);
+      fcmDiag("permission result", { granted, prompt });
       if (!granted || disposed || signal.aborted) return;
 
       const tokenRequest = tokenOperation.then(async () => {
@@ -70,9 +95,19 @@ export function startFcm({ onForegroundMessage, onNotificationOpen, onSessionEnd
       });
       tokenOperation = tokenRequest.then(() => {}, () => {});
       const token = await tokenRequest;
-      if (disposed || signal.aborted || startedSession !== getAuthSessionId()) return;
+      fcmDiag("token acquired", { token: maskToken(token) });
+      if (disposed || signal.aborted || startedSession !== getAuthSessionId()) {
+        fcmDiag("registration skipped after token", {
+          disposed,
+          aborted: signal.aborted,
+          startedSession,
+          currentSession: getAuthSessionId(),
+        });
+        return;
+      }
       setSavedDeviceToken(token);
-      await registerSavedDeviceToken({ deviceToken: token, signal });
+      const result = await registerSavedDeviceToken({ deviceToken: token, signal });
+      fcmDiag("server registration result", result);
       retries = 0;
     } catch (error) {
       if (!disposed && !signal.aborted) {
@@ -106,17 +141,23 @@ export function startFcm({ onForegroundMessage, onNotificationOpen, onSessionEnd
   }
 
   const unsubscribeMessage = listenForegroundMessage((message) => {
+    fcmDiag("foreground message received", { messageId: message?.messageId ?? null });
     if (!isActive() || !getAccessToken() || !firstDelivery(seenMessages, message)) return;
     invalidateNotifications();
     onForegroundMessage(message);
   });
   const unsubscribeOpen = listenNotificationOpen(open);
   const unsubscribeToken = listenTokenRefresh((token) => {
+    fcmDiag("token refresh received", { token: maskToken(token) });
     setSavedDeviceToken(token);
     retries = 0;
     schedule();
   });
   const unsubscribeAuth = subscribeAuthTokens(({ accessToken }) => {
+    fcmDiag("auth token change", {
+      hasAccessToken: Boolean(accessToken),
+      sessionId: getAuthSessionId(),
+    });
     // Access-token refresh does not change the device/account binding.
     if (sessionId === getAuthSessionId()) return;
     sessionId = getAuthSessionId();
@@ -134,6 +175,7 @@ export function startFcm({ onForegroundMessage, onNotificationOpen, onSessionEnd
     schedule();
   });
   const appStateSubscription = AppState.addEventListener("change", (state) => {
+    fcmDiag("app state changed", { state });
     if (state === "active") {
       retries = 0;
       invalidateNotifications();

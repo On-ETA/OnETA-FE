@@ -12,7 +12,10 @@ import {
   View,
 } from "react-native";
 
-import { sendEmailVerificationCode } from "../api/auth/email/send";
+import {
+  EMAIL_VERIFICATION_TYPES,
+  sendEmailVerificationCode,
+} from "../api/auth/email/send";
 import { verifyEmailCode } from "../api/auth/email/verify";
 import { signup } from "../api/auth/signup";
 import { extractAuthTokens } from "../api/auth/tokens";
@@ -147,7 +150,10 @@ export function SignupScreen({ onBackPress, onNextPress }) {
     setIsSendingEmail(true);
 
     try {
-      await sendEmailVerificationCode({ email: trimmedEmail });
+      await sendEmailVerificationCode({
+        email: trimmedEmail,
+        type: EMAIL_VERIFICATION_TYPES.signup,
+      });
       setVerifiedEmail("");
       setEmailVerifyAttempts(0);
       setEmailAuthStatus(EMAIL_AUTH_STATUS.sent);

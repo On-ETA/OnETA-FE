@@ -4,7 +4,8 @@
 
   요청:
   {
-    "email": "string"
+    "email": "string",
+    "type": "SIGNUP" | "PASSWORD_RESET"
   }
 
   성공 응답 예시:
@@ -51,13 +52,23 @@ import { requestJson } from "../../client";
 
 const EMAIL_SEND_ENDPOINT = "/api/auth/email/send";
 
-export async function sendEmailVerificationCode({ email, signal }) {
+export const EMAIL_VERIFICATION_TYPES = {
+  signup: "SIGNUP",
+  passwordReset: "PASSWORD_RESET",
+};
+
+export async function sendEmailVerificationCode({
+  email,
+  type = EMAIL_VERIFICATION_TYPES.signup,
+  signal,
+}) {
   try {
     return await requestJson({
       path: EMAIL_SEND_ENDPOINT,
       method: "POST",
       body: {
         email,
+        type,
       },
       signal,
       timeoutMs: 30000,

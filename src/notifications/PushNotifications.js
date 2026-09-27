@@ -9,18 +9,24 @@ export function PushNotifications() {
   const [message, setMessage] = useState(null);
   const insets = useSafeAreaInsets();
 
-  useEffect(() => startFcm({
-    onForegroundMessage: (nextMessage) => {
-      if (nextMessage.notification?.title || nextMessage.data?.title) {
-        setMessage(nextMessage);
-      }
-    },
-    onNotificationOpen: openNotificationInbox,
-    onSessionEnd: () => {
-      setMessage(null);
-      clearPendingNotification();
-    },
-  }), []);
+  useEffect(() => {
+    if (typeof __DEV__ === "undefined" || __DEV__) {
+      console.warn("[FCM_DIAG]", "PushNotifications mounted");
+    }
+
+    return startFcm({
+      onForegroundMessage: (nextMessage) => {
+        if (nextMessage.notification?.title || nextMessage.data?.title) {
+          setMessage(nextMessage);
+        }
+      },
+      onNotificationOpen: openNotificationInbox,
+      onSessionEnd: () => {
+        setMessage(null);
+        clearPendingNotification();
+      },
+    });
+  }, []);
 
   useEffect(() => {
     if (!message) return undefined;
