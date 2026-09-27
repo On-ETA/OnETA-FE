@@ -24,7 +24,11 @@ import {
 } from "./src/screens";
 import { linking } from "./linking";
 import { routes } from "./src/navigation/routes";
-import { getAccessToken, setAuthTokens } from "./src/api/auth/tokens";
+import {
+  extractAuthTokens,
+  getAccessToken,
+  setAuthTokens,
+} from "./src/api/auth/tokens";
 import { blurActiveElement } from "./src/utils/accessibility";
 import { PushNotifications } from "./src/notifications/PushNotifications";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
@@ -172,6 +176,7 @@ function SignupRoute({ navigation }) {
 
 function TermsAgreementRoute({ navigation, route }) {
   const googleConflictMessage = getGoogleSignupConflictMessage(route.params);
+  const tempId = route.params?.tempId;
   const signupTokens =
     route.params?.signupTokens ??
     (route.params?.accessToken
@@ -198,13 +203,17 @@ function TermsAgreementRoute({ navigation, route }) {
   return (
     <TermsAgreementScreen
       onBackPress={() => goBackOrReset(navigation, routes.signup)}
-      onConfirmPress={() =>
+      onConfirmPress={(response) => {
+        const consentTokens = extractAuthTokens(response);
+
         resetTo(navigation, routes.signupComplete, {
           email: route.params?.email,
           password: route.params?.password,
-        })
-      }
+          signupTokens: consentTokens.accessToken ? consentTokens : signupTokens,
+        });
+      }}
       signupTokens={signupTokens}
+      tempId={tempId}
     />
   );
 }
@@ -212,13 +221,18 @@ function TermsAgreementRoute({ navigation, route }) {
 function SignupCompleteRoute({ navigation, route }) {
   return (
     <SignupCompleteScreen
-      onLoginPress={() =>
+      onLoginPress={() => {
+        if (route.params?.signupTokens?.accessToken) {
+          resetTo(navigation, routes.home, route.params.signupTokens);
+          return;
+        }
+
         resetTo(navigation, routes.login, {
           email: route.params?.email,
           password: route.params?.password,
           remember: true,
-        })
-      }
+        });
+      }}
     />
   );
 }
