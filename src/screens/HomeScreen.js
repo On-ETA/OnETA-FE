@@ -93,6 +93,14 @@ function toLocalTimeObject(value) {
   };
 }
 
+function getRouteValue(source, key) {
+  return source?.[key] ?? source?.raw?.[key];
+}
+
+function getPrimaryTransitSegment(route) {
+  return route?.segments?.find((segment) => segment.transitType !== "WALK");
+}
+
 function getRouteTargetArrivalTime(route, summary) {
   const routeArrivalTime =
     getRouteValue(route, "arrivalTime") ??
@@ -145,6 +153,10 @@ function getCurrentAddressLabel(addresses) {
   const displayAddress = currentAddress ?? addresses[0];
 
   return displayAddress?.name ?? "";
+}
+
+function getCreatedNotificationId(response) {
+  return response?.notificationId ?? response?.id ?? response;
 }
 
 export function HomeScreen({
@@ -248,9 +260,11 @@ export function HomeScreen({
     setScheduleAlarmInitialStep("form");
 
     try {
-      const notificationId = await createTransitNotification({
+      const notificationResponse = await createTransitNotification({
         payload: createTransitNotificationPayload(route, places, summary),
       });
+      const notificationId = getCreatedNotificationId(notificationResponse);
+
       if (notificationId !== undefined && notificationId !== null) {
         setFirstLastRouteSummary((current) =>
           current
@@ -417,6 +431,7 @@ export function HomeScreen({
             ) : isRouteDetailVisible ? (
               <FirstLastRouteDetailScreen
                 notificationId={firstLastRouteSummary?.notificationId}
+                routeSummary={firstLastRouteSummary}
                 onBackPress={() => {
                   blurActiveElement();
                   setIsRouteDetailVisible(false);
