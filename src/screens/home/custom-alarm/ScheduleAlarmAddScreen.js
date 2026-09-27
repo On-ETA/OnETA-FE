@@ -35,7 +35,10 @@ import { RouteTimeline } from "../../../components/RouteTimeline";
 import { AddressManagementScreen } from "../../AddressManagementScreen";
 import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
-import { normalizeTimelineSegments } from "../../../utils/routeSegments";
+import {
+  getSegmentDurationMinutes,
+  normalizeTimelineSegments,
+} from "../../../utils/routeSegments";
 
 const DEFAULT_TIME = {
   period: "오전",
@@ -61,10 +64,38 @@ const MINUTE_OPTIONS = Array.from(
 );
 
 function getPrimaryTransitSegment(route) {
-  return route?.segments?.find(
-    (segment) =>
-      segment.transitType !== "WALK",
-  );
+  return getRouteSegments(route).find((segment) => !isWalkSegment(segment));
+}
+
+function getRouteSegments(route) {
+  return route?.segments ?? route?.route?.segments ?? route?.raw?.segments ?? [];
+}
+
+function isWalkSegment(segment) {
+  const type = segment?.transitType ?? segment?.type ?? segment?.mode ?? segment?.raw?.transitType ?? segment?.raw?.type ?? segment?.raw?.mode;
+  return String(type ?? "").toUpperCase() === "WALK";
+}
+
+function getLastTransitSegment(route) {
+  const segments = getRouteSegments(route);
+
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    if (!isWalkSegment(segments[index])) {
+      return segments[index];
+    }
+  }
+
+  return null;
+}
+
+function getTrailingWalkSegment(route) {
+  const segments = getRouteSegments(route);
+  const lastSegment = segments[segments.length - 1];
+  const durationMinutes = getSegmentDurationMinutes(lastSegment);
+
+  return isWalkSegment(lastSegment) && Number(durationMinutes ?? 0) > 0
+    ? { ...lastSegment, durationMinutes }
+    : null;
 }
 
 function createRoutePlace(place) {
@@ -98,6 +129,96 @@ function createRoutePlace(place) {
     address: place || "",
     x: undefined,
     y: undefined,
+  };
+}
+
+function parseInitialArrivalTime(value) {
+  if (!value) {
+    return DEFAULT_TIME;
+  }
+
+  let hourNumber;
+  let minuteNumber;
+
+  if (typeof value === "string") {
+    const [hour = "0", minute = "0"] = value.split(":");
+    hourNumber = Number(hour);
+    minuteNumber = Number(minute);
+  } else {
+    hourNumber = Number(value.hour ?? 0);
+    minuteNumber = Number(value.minute ?? 0);
+  }
+
+  if (!Number.isFinite(hourNumber) || !Number.isFinite(minuteNumber)) {
+    return DEFAULT_TIME;
+  }
+
+  const period = hourNumber >= 12 ? "오후" : "오전";
+  let hour12 = hourNumber % 12;
+
+  if (hour12 === 0) {
+    hour12 = 12;
+  }
+
+  return {
+    period,
+    hour: String(hour12).padStart(2, "0"),
+    minute: String(minuteNumber).padStart(2, "0"),
+  };
+}
+
+function createInitialRoutePlaces(initialValues) {
+  const initialPlaces = initialValues?.routePlaces;
+
+  if (initialPlaces?.origin || initialPlaces?.destination) {
+    return {
+      origin: createRoutePlace(initialPlaces.origin),
+      destination: createRoutePlace(initialPlaces.destination),
+    };
+  }
+
+  const routeDetails = initialValues?.routeDetails ?? initialValues?.route;
+
+  if (!routeDetails) {
+    return {
+      origin: createRoutePlace(""),
+      destination: createRoutePlace(""),
+    };
+  }
+
+  return {
+    origin: createRoutePlace({
+      label:
+        routeDetails.originPlace?.label ??
+        routeDetails.originPlace?.name ??
+        routeDetails.originPlace?.placeName ??
+        routeDetails.origin ??
+        routeDetails.route?.origin ??
+        routeDetails.originAddress ??
+        routeDetails.route?.originAddress ??
+        "",
+      address:
+        routeDetails.originPlace?.address ??
+        routeDetails.originPlace?.detail ??
+        routeDetails.originAddress ??
+        routeDetails.route?.originAddress,
+    }),
+    destination: createRoutePlace({
+      label:
+        routeDetails.destinationPlace?.label ??
+        routeDetails.destinationPlace?.name ??
+        routeDetails.destinationPlace?.placeName ??
+        routeDetails.destination ??
+        routeDetails.route?.destination ??
+        routeDetails.destinationAddress ??
+        routeDetails.route?.destinationAddress ??
+        "",
+      address:
+        routeDetails.destinationPlace?.address ??
+        routeDetails.destinationPlace?.detail ??
+        routeDetails.destinationAddress ??
+        routeDetails.route?.destinationAddress,
+    }),
   };
 }
 
@@ -320,18 +441,24 @@ function getArrivalRegistrationErrorContent(error) {
 
 export function ScheduleAlarmAddScreen({
   initialStep = "form",
+  initialValues,
   mapTitle = "알림 추가",
   onBackPress,
   onRouteConfigured,
   onSaveComplete,
 }) {
   const [routeName, setRouteName] =
-    useState("");
+    useState(() => initialValues?.routeName ?? "");
 
   const [
     arrivalTime,
     setArrivalTime,
-  ] = useState(DEFAULT_TIME);
+  ] = useState(() =>
+    parseInitialArrivalTime(
+      initialValues?.arrivalTime ??
+        initialValues?.targetArrivalTime,
+    ),
+  );
 
   const [
     isTimePickerVisible,
@@ -349,10 +476,7 @@ export function ScheduleAlarmAddScreen({
   const [
     routePlaces,
     setRoutePlaces,
-  ] = useState({
-    origin: createRoutePlace(""),
-    destination: createRoutePlace(""),
-  });
+  ] = useState(() => createInitialRoutePlaces(initialValues));
 
   const [
     activePlaceType,
@@ -529,6 +653,9 @@ export function ScheduleAlarmAddScreen({
         }
         route={
           selectedRoute
+        }
+        routePlaces={
+          routePlaces
         }
         routeName={
           routeName
@@ -2000,6 +2127,8 @@ export function ScheduleRouteResultStep({
         ) : (
           routes.map((selectedRoute, routeIndex) => {
             const primarySegment = getPrimaryTransitSegment(selectedRoute);
+            const finalTransitSegment = getLastTransitSegment(selectedRoute) ?? primarySegment;
+            const trailingWalkSegment = getTrailingWalkSegment(selectedRoute);
             const displayDuration = selectedRoute.realTimeDurationMinutes ?? selectedRoute.totalDurationMinutes ?? 0;
             return (
           <View key={selectedRoute.id ?? `route-${routeIndex}`} style={styles.routeResultCard}>
@@ -2085,11 +2214,11 @@ export function ScheduleRouteResultStep({
                   styles.routeBusNumber
                 }
               >
-                {primarySegment?.transitName ||
+                {finalTransitSegment?.transitName ||
                   "대중교통"}
               </Text>
 
-              {primarySegment?.endStation ? (
+              {finalTransitSegment?.endStation ? (
                 <View style={styles.routeBusDirectionRow}>
                   <DirectionCircleAsset width={3} height={3} />
                   <Text
@@ -2097,7 +2226,7 @@ export function ScheduleRouteResultStep({
                       styles.routeBusDirection
                     }
                   >
-                    {`${primarySegment.endStation} 방면`}
+                    {`${finalTransitSegment.endStation} 방면`}
                   </Text>
                 </View>
               ) : null}
@@ -2108,13 +2237,17 @@ export function ScheduleRouteResultStep({
                 styles.routeStops
               }
             >
-              <StopLineAsset width={1} height={35} style={styles.resultStopLine} />
+              <StopLineAsset
+                width={1}
+                height={trailingWalkSegment ? 69 : 35}
+                style={styles.resultStopLine}
+              />
               <StopRow
                 active
                 label="승차"
                 name={
                   getSegmentStopName(
-                    primarySegment,
+                    finalTransitSegment,
                     "start",
                   ) ||
                   getRoutePlaceText(
@@ -2127,7 +2260,7 @@ export function ScheduleRouteResultStep({
                 label="하차"
                 name={
                   getSegmentStopName(
-                    primarySegment,
+                    finalTransitSegment,
                     "end",
                   ) ||
                   getRoutePlaceText(
@@ -2135,6 +2268,15 @@ export function ScheduleRouteResultStep({
                   )
                 }
               />
+
+              {trailingWalkSegment ? (
+                <StopRow
+                  label="도보"
+                  name={`${getRoutePlaceText(destination) || "목적지"}까지 ${
+                    trailingWalkSegment.durationMinutes
+                  }분`}
+                />
+              ) : null}
             </View>
 
             <Pressable
@@ -2191,6 +2333,7 @@ function ScheduleAlarmFinalStep({
   onResetRoutePress,
   onSavePress,
   route,
+  routePlaces,
   routeName,
 }) {
   const [
@@ -2240,6 +2383,11 @@ function ScheduleAlarmFinalStep({
     getPrimaryTransitSegment(
       route,
     );
+  const finalTransitSegment =
+    getLastTransitSegment(route) ??
+    primarySegment;
+  const trailingWalkSegment =
+    getTrailingWalkSegment(route);
   const timelineSegments =
     normalizeTimelineSegments(
       route?.segments ?? [],
@@ -2250,8 +2398,7 @@ function ScheduleAlarmFinalStep({
       reminders,
     );
   const canSaveAlarm =
-    selectedReminderOffsets.length > 0 &&
-    selectedDays.length > 0;
+    selectedReminderOffsets.length > 0;
 
   const selectedRouteName =
     routeName.trim() ||
@@ -2405,15 +2552,6 @@ function ScheduleAlarmFinalStep({
         return;
       }
 
-      if (selectedDays.length === 0) {
-        Alert.alert(
-          "알림 등록 실패",
-          "반복 요일을 선택해주세요.",
-        );
-
-        return;
-      }
-
       setIsSubmitting(true);
 
       try {
@@ -2440,8 +2578,32 @@ function ScheduleAlarmFinalStep({
 
               routeDetails:
                 JSON.stringify(
-                  route.raw ??
-                    route,
+                  {
+                    ...(route.raw ?? route),
+                    route:
+                      route.raw ??
+                      route,
+                    origin:
+                      getRoutePlaceText(
+                        routePlaces?.origin,
+                      ),
+                    destination:
+                      getRoutePlaceText(
+                        routePlaces?.destination,
+                      ),
+                    originAddress:
+                      getRoutePlaceAddress(
+                        routePlaces?.origin,
+                      ),
+                    destinationAddress:
+                      getRoutePlaceAddress(
+                        routePlaces?.destination,
+                      ),
+                    originPlace:
+                      routePlaces?.origin,
+                    destinationPlace:
+                      routePlaces?.destination,
+                  },
                 ),
             },
           },
@@ -2511,20 +2673,20 @@ function ScheduleAlarmFinalStep({
                 styles.routeBusNumber
               }
             >
-              {primarySegment?.transitName ||
+              {finalTransitSegment?.transitName ||
                 "대중교통"}
             </Text>
 
-            {primarySegment?.endStation ? (
+            {finalTransitSegment?.endStation ? (
               <View style={styles.routeBusDirectionRow}>
                 <DirectionCircleAsset width={3} height={3} />
                 <Text
                   numberOfLines={1}
                   style={
-                    styles.routeBusDirection
+                  styles.routeBusDirection
                   }
                 >
-                  {`${primarySegment.endStation} 방면`}
+                  {`${finalTransitSegment.endStation} 방면`}
                 </Text>
               </View>
             ) : null}
@@ -2555,7 +2717,7 @@ function ScheduleAlarmFinalStep({
 
         <View style={styles.finalStops}>
           <StopLineAsset
-            height={34}
+            height={trailingWalkSegment ? 68 : 34}
             style={styles.finalStopLine}
             width={1}
           />
@@ -2565,7 +2727,7 @@ function ScheduleAlarmFinalStep({
             label="승차"
             name={
               getSegmentStopName(
-                primarySegment,
+                finalTransitSegment,
                 "start",
               ) || "승차 정류장"
             }
@@ -2576,7 +2738,7 @@ function ScheduleAlarmFinalStep({
             label="하차"
             name={
               getSegmentStopName(
-                primarySegment,
+                finalTransitSegment,
                 "end",
               ) || "하차 정류장"
             }
@@ -2585,6 +2747,21 @@ function ScheduleAlarmFinalStep({
               styles.finalDropoffRow,
             ]}
           />
+
+          {trailingWalkSegment ? (
+            <StopRow
+              label="도보"
+              name={`${
+                route?.destination ??
+                route?.destinationAddress ??
+                "목적지"
+              }까지 ${trailingWalkSegment.durationMinutes}분`}
+              style={[
+                styles.finalStopRow,
+                styles.finalDropoffRow,
+              ]}
+            />
+          ) : null}
         </View>
 
         {timelineSegments.length > 0 ? (

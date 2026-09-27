@@ -216,6 +216,8 @@ export function HomeScreen({
     useState(false);
   const [scheduleAlarmInitialStep, setScheduleAlarmInitialStep] =
     useState("form");
+  const [scheduleAlarmInitialValues, setScheduleAlarmInitialValues] =
+    useState(null);
   const [isGarageDepartureAddVisible, setIsGarageDepartureAddVisible] =
     useState(false);
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
@@ -339,12 +341,14 @@ export function HomeScreen({
     blurActiveElement();
     setIsScheduleAlarmAddVisible(false);
     setScheduleAlarmInitialStep("form");
+    setScheduleAlarmInitialValues(null);
   }, [saveFirstLastRoute]);
 
   const handleScheduleAlarmSaved = useCallback(() => {
     blurActiveElement();
     setIsScheduleAlarmAddVisible(false);
     setScheduleAlarmInitialStep("form");
+    setScheduleAlarmInitialValues(null);
     setActiveTab("home");
     setActiveHomeTab("customAlarm");
     setCustomAlarmRefreshKey((current) => current + 1);
@@ -357,6 +361,7 @@ export function HomeScreen({
     setFirstLastRouteSetupStep(null);
     setIsScheduleAlarmAddVisible(false);
     setScheduleAlarmInitialStep("form");
+    setScheduleAlarmInitialValues(null);
     setIsGarageDepartureAddVisible(false);
     setEditingCustomAlarm(null);
 
@@ -408,6 +413,7 @@ export function HomeScreen({
             ) : isScheduleAlarmAddVisible ? (
               <ScheduleAlarmAddScreen
                 initialStep={scheduleAlarmInitialStep}
+                initialValues={scheduleAlarmInitialValues}
                 mapTitle={
                   scheduleAlarmInitialStep === "routeSetup"
                     ? "경로 재설정"
@@ -417,6 +423,7 @@ export function HomeScreen({
                   blurActiveElement();
                   setIsScheduleAlarmAddVisible(false);
                   setScheduleAlarmInitialStep("form");
+                  setScheduleAlarmInitialValues(null);
                 }}
                 onSaveComplete={handleScheduleAlarmSaved}
                 onRouteConfigured={
@@ -460,11 +467,12 @@ export function HomeScreen({
                   blurActiveElement();
                   setEditingCustomAlarm(null);
                 }}
-                onResetRoutePress={() => {
+                onResetRoutePress={(initialValues) => {
                   blurActiveElement();
                   setEditingCustomAlarm(null);
                   setIsScheduleAlarmAddVisible(true);
                   setScheduleAlarmInitialStep("form");
+                  setScheduleAlarmInitialValues(initialValues ?? null);
                 }}
                 onSavePress={() => {
                   blurActiveElement();
@@ -527,11 +535,14 @@ export function HomeScreen({
                   blurActiveElement();
                   setIsScheduleAlarmAddVisible(true);
                   setScheduleAlarmInitialStep("routeSetup");
+                  setScheduleAlarmInitialValues(null);
                 }}
                 firstLastRouteSummary={firstLastRouteSummary}
                 onScheduleAlarmAddPress={() => {
                   blurActiveElement();
                   setIsScheduleAlarmAddVisible(true);
+                  setScheduleAlarmInitialStep("form");
+                  setScheduleAlarmInitialValues(null);
                 }}
                 onGarageAlarmEditPress={(alarm) => {
                   blurActiveElement();

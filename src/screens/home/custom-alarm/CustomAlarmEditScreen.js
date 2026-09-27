@@ -110,11 +110,15 @@ function parseRouteDetails(routeDetails) {
 }
 
 function getAlarmRoute(alarm) {
+  const parsedRouteDetails =
+    parseRouteDetails(alarm?.routeDetails) ??
+    parseRouteDetails(alarm?.raw?.routeDetails);
+
   return (
     alarm?.route ??
     alarm?.raw?.route ??
-    parseRouteDetails(alarm?.routeDetails) ??
-    parseRouteDetails(alarm?.raw?.routeDetails)
+    parsedRouteDetails?.route ??
+    parsedRouteDetails
   );
 }
 
@@ -426,7 +430,17 @@ export function ScheduleAlarmEditScreen({
           </View>
           <Pressable
             accessibilityRole="button"
-            onPress={onResetRoutePress}
+            onPress={() =>
+              onResetRoutePress?.({
+                routeName,
+                arrivalTime:
+                  arrivalAlarm?.targetArrivalTime ??
+                  arrivalAlarm?.arrivalTime,
+                routeDetails:
+                  parseRouteDetails(getRouteDetails(arrivalAlarm)) ??
+                  getAlarmRoute(arrivalAlarm),
+              })
+            }
             style={styles.resetButton}
           >
             <Text style={styles.resetButtonText}>경로 및 시간 재설정</Text>
