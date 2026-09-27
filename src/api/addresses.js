@@ -1,6 +1,12 @@
 import { getAccessToken } from "./auth/tokens";
 import { reissueAuthTokens } from "./auth/reissue";
 import { requestJson } from "./client";
+import {
+  homeCacheKeys,
+  readHomeCache,
+  removeHomeCache,
+  writeHomeCache,
+} from "./homeCache";
 
 const ADDRESSES_ENDPOINT = "/api/addresses";
 
@@ -108,8 +114,17 @@ export function normalizeAddress(address) {
 
 export async function getAddresses({
   accessToken = getAccessToken(),
+  forceRefresh = false,
   signal,
 } = {}) {
+  if (!forceRefresh) {
+    const cachedAddresses = readHomeCache(homeCacheKeys.addresses);
+
+    if (cachedAddresses) {
+      return cachedAddresses;
+    }
+  }
+
   const response = await requestAddressJson({
     path: ADDRESSES_ENDPOINT,
     method: "GET",
@@ -120,7 +135,10 @@ export async function getAddresses({
 
   const addresses = Array.isArray(response?.data) ? response.data : response;
 
-  return Array.isArray(addresses) ? addresses.map(normalizeAddress) : [];
+  return writeHomeCache(
+    homeCacheKeys.addresses,
+    Array.isArray(addresses) ? addresses.map(normalizeAddress) : [],
+  );
 }
 
 export async function createAddress({
@@ -132,7 +150,7 @@ export async function createAddress({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
-  return requestAddressJson({
+  const response = await requestAddressJson({
     path: ADDRESSES_ENDPOINT,
     method: "POST",
     body: payload ?? {
@@ -145,6 +163,11 @@ export async function createAddress({
     signal,
     errorMessage: "주소 등록에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.addresses);
+  await getAddresses({ accessToken, forceRefresh: true, signal }).catch(() => null);
+
+  return response;
 }
 
 export async function updateAddress({
@@ -161,7 +184,7 @@ export async function updateAddress({
     throw new Error("주소 id가 필요합니다.");
   }
 
-  return requestAddressJson({
+  const response = await requestAddressJson({
     path: buildAddressEndpoint(addressId),
     method: "PATCH",
     body: payload ?? compactPayload({
@@ -174,6 +197,11 @@ export async function updateAddress({
     signal,
     errorMessage: "주소 수정에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.addresses);
+  await getAddresses({ accessToken, forceRefresh: true, signal }).catch(() => null);
+
+  return response;
 }
 
 export async function deleteAddress({
@@ -183,6 +211,17 @@ export async function deleteAddress({
 } = {}) {
   if (addressId === undefined || addressId === null || addressId === "") {
     throw new Error("주소 id가 필요합니다.");
+  }
+
+  const cachedAddresses = readHomeCache(homeCacheKeys.addresses);
+
+  if (Array.isArray(cachedAddresses)) {
+    writeHomeCache(
+      homeCacheKeys.addresses,
+      cachedAddresses.filter(
+        (address) => String(address.addressId ?? address.id) !== String(addressId),
+      ),
+    );
   }
 
   return requestAddressJson({
@@ -203,11 +242,16 @@ export async function setCurrentAddress({
     throw new Error("주소 id가 필요합니다.");
   }
 
-  return requestAddressJson({
+  const response = await requestAddressJson({
     path: buildCurrentAddressEndpoint(addressId),
     method: "PUT",
     accessToken,
     signal,
     errorMessage: "현재 주소 설정에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.addresses);
+  await getAddresses({ accessToken, forceRefresh: true, signal }).catch(() => null);
+
+  return response;
 }

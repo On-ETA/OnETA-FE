@@ -1,6 +1,7 @@
 import { getAccessToken } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
+import { homeCacheKeys, readHomeCache, writeHomeCache } from "../homeCache";
 
 const TRANSIT_NOTIFICATIONS_ENDPOINT = "/api/notifications/transit";
 
@@ -149,8 +150,17 @@ export function normalizeTransitNotification(notification) {
 
 export async function getTransitNotifications({
   accessToken = getAccessToken(),
+  forceRefresh = false,
   signal,
 } = {}) {
+  if (!forceRefresh) {
+    const cachedNotifications = readHomeCache(homeCacheKeys.transitNotifications);
+
+    if (cachedNotifications) {
+      return cachedNotifications;
+    }
+  }
+
   const response = await requestTransitNotificationJson({
     path: TRANSIT_NOTIFICATIONS_ENDPOINT,
     method: "GET",
@@ -159,7 +169,10 @@ export async function getTransitNotifications({
     errorMessage: "첫막차 경로 목록을 불러오지 못했습니다.",
   });
 
-  return pickTransitNotificationList(response).map(normalizeTransitNotification);
+  return writeHomeCache(
+    homeCacheKeys.transitNotifications,
+    pickTransitNotificationList(response).map(normalizeTransitNotification),
+  );
 }
 
 export async function getTransitNotification({
@@ -192,11 +205,18 @@ export async function createTransitNotification({
   const response = await requestTransitNotificationJson({
     path: TRANSIT_NOTIFICATIONS_ENDPOINT,
     method: "POST",
-    body: payload,
+    body: {
+      ...payload,
+      scheduleType: payload?.scheduleType ?? "FIRST_TRANSIT",
+    },
     accessToken,
     signal,
     errorMessage: "첫막차 경로 등록에 실패했습니다.",
   });
 
-  return response?.data ?? response;
+  const notification = response?.data ?? response;
+
+  await getTransitNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+
+  return notification;
 }

@@ -18,6 +18,7 @@
 import { reissueAuthTokens } from "./auth/reissue";
 import { clearAuthTokens, getAccessToken } from "./auth/tokens";
 import { requestJson } from "./client";
+import { clearHomeCache } from "./homeCache";
 
 const USER_ENDPOINT = "/api/user";
 
@@ -104,6 +105,8 @@ export async function getUser({ accessToken = getAccessToken(), signal } = {}) {
 }
 
 export async function deleteUser({ accessToken = getAccessToken(), signal } = {}) {
+  clearHomeCache();
+
   const data = await requestUserJson({
     path: USER_ENDPOINT,
     method: "DELETE",

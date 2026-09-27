@@ -8,6 +8,7 @@ import {
   writeHomeCache,
 } from "../homeCache";
 
+const SCHEDULE_NOTIFICATIONS_ENDPOINT = "/api/notifications/schedules";
 const ARRIVAL_NOTIFICATIONS_ENDPOINT = "/api/notifications/arrival";
 const HIDDEN_ARRIVAL_NOTIFICATIONS_CACHE_KEY = "hiddenArrivalNotifications";
 
@@ -133,7 +134,7 @@ export function hideArrivalNotificationsLocally(ids = []) {
   const hiddenIds = new Set(readHiddenArrivalNotificationIds());
 
   nextIds.forEach((id) => hiddenIds.add(id));
-  removeHomeCache(homeCacheKeys.arrivalNotifications);
+  removeHomeCache(homeCacheKeys.scheduleNotifications);
 
   return writeHomeCache(
     HIDDEN_ARRIVAL_NOTIFICATIONS_CACHE_KEY,
@@ -249,7 +250,7 @@ export async function getArrivalNotifications({
   signal,
 } = {}) {
   if (!forceRefresh) {
-    const cachedNotifications = readHomeCache(homeCacheKeys.arrivalNotifications);
+    const cachedNotifications = readHomeCache(homeCacheKeys.scheduleNotifications);
 
     if (cachedNotifications) {
       return cachedNotifications;
@@ -257,7 +258,7 @@ export async function getArrivalNotifications({
   }
 
   const response = await requestArrivalNotificationJson({
-    path: ARRIVAL_NOTIFICATIONS_ENDPOINT,
+    path: SCHEDULE_NOTIFICATIONS_ENDPOINT,
     method: "GET",
     accessToken,
     signal,
@@ -265,7 +266,7 @@ export async function getArrivalNotifications({
   });
 
   return writeHomeCache(
-    homeCacheKeys.arrivalNotifications,
+    homeCacheKeys.scheduleNotifications,
     pickArrivalNotificationList(response)
       .filter((notification) => !isHiddenArrivalNotification(notification))
       .map(normalizeArrivalNotification),
@@ -278,15 +279,19 @@ export async function createArrivalNotification({
   signal,
 } = {}) {
   const response = await requestArrivalNotificationJson({
-    path: ARRIVAL_NOTIFICATIONS_ENDPOINT,
+    path: SCHEDULE_NOTIFICATIONS_ENDPOINT,
     method: "POST",
-    body: payload,
+    body: {
+      ...payload,
+      scheduleType: payload?.scheduleType ?? "NORMAL",
+    },
     accessToken,
     signal,
     errorMessage: "도착 알림 등록에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.arrivalNotifications);
+  removeHomeCache(homeCacheKeys.scheduleNotifications);
+  await getArrivalNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
 
   return response;
 }
@@ -300,6 +305,21 @@ export async function deleteArrivalNotifications({
     throw new Error("삭제할 도착 알림 id가 필요합니다.");
   }
 
+  const cachedNotifications = readHomeCache(homeCacheKeys.scheduleNotifications);
+  const normalizedIds = ids.map(String);
+
+  if (Array.isArray(cachedNotifications)) {
+    writeHomeCache(
+      homeCacheKeys.scheduleNotifications,
+      cachedNotifications.filter(
+        (notification) =>
+          !normalizedIds.includes(
+            String(notification.notificationId ?? notification.id).replace(/^arrival-/, ""),
+          ),
+      ),
+    );
+  }
+
   const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationsDeleteEndpoint(ids),
     method: "DELETE",
@@ -308,9 +328,29 @@ export async function deleteArrivalNotifications({
     errorMessage: "도착 알림 삭제에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.arrivalNotifications);
-
   return response;
+}
+
+function getScheduleNotificationCacheId(notification) {
+  return String(notification?.notificationId ?? notification?.id ?? "").replace(/^arrival-/, "");
+}
+
+function updateScheduleNotificationsCache(id, updater) {
+  const cachedNotifications = readHomeCache(homeCacheKeys.scheduleNotifications);
+  const normalizedId = String(id);
+
+  if (!Array.isArray(cachedNotifications)) {
+    return;
+  }
+
+  writeHomeCache(
+    homeCacheKeys.scheduleNotifications,
+    cachedNotifications.map((notification) =>
+      getScheduleNotificationCacheId(notification) === normalizedId
+        ? updater(notification)
+        : notification,
+    ),
+  );
 }
 
 export async function getArrivalNotificationById({
@@ -345,16 +385,27 @@ export async function updateArrivalNotification({
     throw new Error("도착 알림 id가 필요합니다.");
   }
 
+  updateScheduleNotificationsCache(id, (notification) =>
+    normalizeArrivalNotification({
+      ...notification.raw,
+      ...notification.payload,
+      ...payload,
+      notificationId: notification.notificationId ?? id,
+      id: notification.notificationId ?? id,
+    }),
+  );
+
   const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationEndpoint(id),
     method: "PATCH",
-    body: payload,
+    body: {
+      ...payload,
+      scheduleType: payload?.scheduleType ?? "NORMAL",
+    },
     accessToken,
     signal,
     errorMessage: "도착 알림 수정에 실패했습니다.",
   });
-
-  removeHomeCache(homeCacheKeys.arrivalNotifications);
 
   return response;
 }
@@ -369,6 +420,26 @@ export async function updateArrivalNotificationStatus({
     throw new Error("도착 알림 id가 필요합니다.");
   }
 
+  const nextActive =
+    payload?.isActive ?? payload?.active ?? payload?.enabled ?? payload?.status === "ACTIVE";
+
+  updateScheduleNotificationsCache(id, (notification) => ({
+    ...notification,
+    enabled: Boolean(nextActive),
+    raw: {
+      ...notification.raw,
+      ...payload,
+      isActive: Boolean(nextActive),
+      active: Boolean(nextActive),
+    },
+    payload: {
+      ...notification.payload,
+      ...payload,
+      isActive: Boolean(nextActive),
+      active: Boolean(nextActive),
+    },
+  }));
+
   const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationStatusEndpoint(id),
     method: "PATCH",
@@ -377,8 +448,6 @@ export async function updateArrivalNotificationStatus({
     signal,
     errorMessage: "도착 알림 상태 변경에 실패했습니다.",
   });
-
-  removeHomeCache(homeCacheKeys.arrivalNotifications);
 
   return response;
 }

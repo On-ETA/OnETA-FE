@@ -9,6 +9,7 @@
   }
 */
 import { requestJson } from "../client";
+import { clearHomeCache } from "../homeCache";
 import { clearAuthTokens, getAccessToken } from "./tokens";
 
 const LOGOUT_ENDPOINT = "/api/auth/logout";
@@ -23,6 +24,8 @@ function isAuthError(error) {
 }
 
 export async function logout({ accessToken = getAccessToken(), signal } = {}) {
+  clearHomeCache();
+
   try {
     const response = await requestJson({
       path: LOGOUT_ENDPOINT,
