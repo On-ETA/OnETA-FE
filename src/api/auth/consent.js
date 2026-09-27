@@ -47,15 +47,22 @@ export async function agreeToSignupTerms({
   serviceTermsAgreement,
   personalInfoAgreement,
   accessToken,
+  tempId,
   signal,
 }) {
+  const body = {
+    serviceTermsAgreement: Boolean(serviceTermsAgreement),
+    personalInfoAgreement: Boolean(personalInfoAgreement),
+  };
+
+  if (tempId) {
+    body.tempId = tempId;
+  }
+
   return requestJson({
     path: SIGNUP_CONSENT_ENDPOINT,
     method: "POST",
-    body: {
-      serviceTermsAgreement: Boolean(serviceTermsAgreement),
-      personalInfoAgreement: Boolean(personalInfoAgreement),
-    },
+    body,
     accessToken,
     signal,
     errorMessage: "약관 동의에 실패했습니다.",
