@@ -8,6 +8,8 @@
     "dev": "expo start",
     "start": "expo start",
     "build": "expo export -p web",
+    "build:apk": "npx eas-cli build -p android --profile preview",
+    "download:apk": "npx eas-cli build:download -p android --latest",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web"
