@@ -73,7 +73,9 @@ function getRouteSegments(route) {
 
 function isWalkSegment(segment) {
   const type = segment?.transitType ?? segment?.type ?? segment?.mode ?? segment?.raw?.transitType ?? segment?.raw?.type ?? segment?.raw?.mode;
-  return String(type ?? "").toUpperCase() === "WALK";
+  return ["WALK", "WALKING", "FOOT", "PEDESTRIAN"].includes(
+    String(type ?? "").toUpperCase(),
+  );
 }
 
 function getLastTransitSegment(route) {
