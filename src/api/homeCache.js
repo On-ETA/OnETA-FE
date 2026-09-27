@@ -4,9 +4,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const CACHE_PREFIX = "oneta.homeCache";
 
 export const homeCacheKeys = {
+  addresses: "addresses",
   firstLastRoute: "firstLastRoute",
   arrivalNotifications: "arrivalNotifications",
+  scheduleNotifications: "scheduleNotifications",
   depotNotifications: "depotNotifications",
+  transitNotifications: "transitNotifications",
   myPage: "myPage",
 };
 

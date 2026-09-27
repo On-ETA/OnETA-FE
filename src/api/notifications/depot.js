@@ -1,6 +1,12 @@
 import { getAccessToken } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
+import {
+  homeCacheKeys,
+  readHomeCache,
+  removeHomeCache,
+  writeHomeCache,
+} from "../homeCache";
 
 const DEPOT_NOTIFICATIONS_ENDPOINT = "/api/notifications/depot";
 const MY_DEPOT_NOTIFICATIONS_ENDPOINT = "/api/notifications/depot/my";
@@ -103,7 +109,7 @@ export async function createDepotNotification({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
-  return requestDepotNotificationJson({
+  const response = await requestDepotNotificationJson({
     path: DEPOT_NOTIFICATIONS_ENDPOINT,
     method: "POST",
     body: payload,
@@ -111,12 +117,26 @@ export async function createDepotNotification({
     signal,
     errorMessage: "차고지 출발 알림 등록에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.depotNotifications);
+  await getMyDepotNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+
+  return response;
 }
 
 export async function getMyDepotNotifications({
   accessToken = getAccessToken(),
+  forceRefresh = false,
   signal,
 } = {}) {
+  if (!forceRefresh) {
+    const cachedNotifications = readHomeCache(homeCacheKeys.depotNotifications);
+
+    if (cachedNotifications) {
+      return cachedNotifications;
+    }
+  }
+
   const response = await requestDepotNotificationJson({
     path: MY_DEPOT_NOTIFICATIONS_ENDPOINT,
     method: "GET",
@@ -125,7 +145,10 @@ export async function getMyDepotNotifications({
     errorMessage: "차고지 출발 알림 목록을 불러오지 못했습니다.",
   });
 
-  return pickDepotNotificationList(response).map(normalizeDepotNotification);
+  return writeHomeCache(
+    homeCacheKeys.depotNotifications,
+    pickDepotNotificationList(response).map(normalizeDepotNotification),
+  );
 }
 
 export async function updateDepotNotification({
@@ -138,7 +161,7 @@ export async function updateDepotNotification({
     throw new Error("사용자 버스 id가 필요합니다.");
   }
 
-  return requestDepotNotificationJson({
+  const response = await requestDepotNotificationJson({
     path: buildDepotNotificationEndpoint(userBusId),
     method: "PATCH",
     body: payload,
@@ -146,6 +169,11 @@ export async function updateDepotNotification({
     signal,
     errorMessage: "차고지 출발 알림 수정에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.depotNotifications);
+  await getMyDepotNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+
+  return response;
 }
 
 export async function deleteDepotNotification({
@@ -155,6 +183,17 @@ export async function deleteDepotNotification({
 } = {}) {
   if (userBusId === undefined || userBusId === null || userBusId === "") {
     throw new Error("사용자 버스 id가 필요합니다.");
+  }
+
+  const cachedNotifications = readHomeCache(homeCacheKeys.depotNotifications);
+
+  if (Array.isArray(cachedNotifications)) {
+    writeHomeCache(
+      homeCacheKeys.depotNotifications,
+      cachedNotifications.filter(
+        (notification) => String(notification.userBusId ?? notification.id) !== String(userBusId),
+      ),
+    );
   }
 
   return requestDepotNotificationJson({

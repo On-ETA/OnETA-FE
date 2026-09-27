@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { login } from "../api/auth/login";
 import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
 import { startGoogleAuth } from "../api/google";
+import { clearHomeCache } from "../api/homeCache";
+import { preloadHomeCache } from "../api/homePreload";
 import {
   AppScreen,
   FormTextInput,
@@ -139,7 +141,9 @@ export function LoginScreen({
       });
       const authTokens = extractAuthTokens(loginResponse);
 
+      clearHomeCache();
       setAuthTokens(authTokens);
+      preloadHomeCache().catch(() => null);
       onLoginPress?.();
     } catch (error) {
       setLoginError(getLoginErrorMessage(error));

@@ -116,6 +116,7 @@ export function CustomAlarmScreen({
 
       try {
         const alarms = await getMyDepotNotifications({
+          forceRefresh: refreshKey > 0,
           signal: controller.signal,
         });
 
@@ -282,6 +283,16 @@ export function CustomAlarmScreen({
     }
 
     setIsDeletingAlarms(true);
+    setGarageAlarms((current) =>
+      current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
+    );
+    setScheduleAlarms((current) =>
+      current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
+    );
+    setSelectedIds((current) =>
+      current.filter((alarmId) => !deleteTargetIds.includes(alarmId)),
+    );
+    setDeleteTargetIds([]);
 
     try {
       const garageResults = await Promise.allSettled(
@@ -294,25 +305,6 @@ export function CustomAlarmScreen({
           deleteScheduleAlarm(alarm, scheduleTargetIds[index]),
         ),
       );
-      const deletedGarageIds = garageTargets
-        .filter((_, index) => garageResults[index]?.status === "fulfilled")
-        .map((alarm) => alarm.id);
-      const deletedScheduleIds = scheduleTargets
-        .filter((_, index) => scheduleResults[index]?.status === "fulfilled")
-        .map((alarm) => alarm.id);
-      const deletedIds = [...deletedGarageIds, ...deletedScheduleIds];
-
-      setGarageAlarms((current) =>
-        current.filter((alarm) => !deletedIds.includes(alarm.id)),
-      );
-      setScheduleAlarms((current) =>
-        current.filter((alarm) => !deletedIds.includes(alarm.id)),
-      );
-      setSelectedIds((current) =>
-        current.filter((alarmId) => !deletedIds.includes(alarmId)),
-      );
-      setDeleteTargetIds([]);
-
       if (
         garageResults.some((result) => result.status === "rejected") ||
         scheduleResults.some((result) => result.status === "rejected")
