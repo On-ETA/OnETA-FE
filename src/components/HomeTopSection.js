@@ -1,8 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import BellIcon from "../../assets/images/icon_bell.svg";
-import BellNoneIcon from "../../assets/images/icon_bell_none.svg";
 import BackIcon from "../../assets/images/L.svg";
 import MyPageIcon from "../../assets/images/icon_mypage.svg";
 import ArrowRightIcon from "../../assets/images/R.svg";
@@ -14,10 +12,8 @@ const homeBackground = colors.gray01;
 export function HomeTopSection({
   activeTab = "firstLast",
   addressLabel = "우리집",
-  notificationCount = 0,
   onAddressPress,
   onBackPress,
-  onBellPress,
   onMyPagePress,
   onTabPress,
   showAddress = true,
@@ -26,8 +22,6 @@ export function HomeTopSection({
   showTabs = true,
   title,
 }) {
-  const HeaderBellIcon = notificationCount > 0 ? BellIcon : BellNoneIcon;
-
   return (
     <>
       <View style={styles.homeTopSection}>
@@ -65,15 +59,6 @@ export function HomeTopSection({
             <View style={styles.emptyLeft} />
           )}
           <View style={styles.headerActions}>
-            <Pressable
-              accessibilityLabel="알림"
-              accessibilityRole="button"
-              hitSlop={12}
-              onPress={onBellPress}
-              style={styles.iconButton}
-            >
-              <HeaderBellIcon height={25} style={styles.headerIcon} width={25} />
-            </Pressable>
             {showMyPageButton ? (
               <Pressable
                 accessibilityLabel="마이페이지"

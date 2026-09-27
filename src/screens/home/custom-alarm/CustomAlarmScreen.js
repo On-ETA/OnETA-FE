@@ -74,12 +74,6 @@ async function deleteScheduleAlarm(alarm, notificationId) {
   }
 }
 
-function breakRouteNumberAtParenthesis(routeNumber) {
-  return typeof routeNumber === "string"
-    ? routeNumber.trim().replace(/\s*\(/, "\n(")
-    : routeNumber;
-}
-
 export function CustomAlarmScreen({
   onGarageDepartureAddPress,
   onGarageAlarmEditPress,
@@ -505,8 +499,7 @@ function GarageAlarmCard({
         style={styles.garageCardTop}
       >
         <Text
-          ellipsizeMode="tail"
-          numberOfLines={2}
+          numberOfLines={1}
           style={styles.garageDirection}
         >
           {alarm.direction}
@@ -514,11 +507,10 @@ function GarageAlarmCard({
         <View style={styles.garageRouteRow}>
           <BusIcon />
           <Text
-            ellipsizeMode="tail"
-            numberOfLines={2}
+            numberOfLines={1}
             style={styles.garageRouteNumber}
           >
-            {breakRouteNumberAtParenthesis(alarm.routeNumber)}
+            {alarm.routeNumber}
           </Text>
         </View>
       </Pressable>
@@ -730,7 +722,7 @@ const styles = StyleSheet.create({
   },
   garageCard: {
     display: "flex",
-    width: 140,
+    minWidth: 140,
     flexShrink: 0,
     flexDirection: "column",
     alignItems: "flex-start",
@@ -747,7 +739,6 @@ const styles = StyleSheet.create({
   garageCardTop: {
     display: "flex",
     height: 68,
-    alignSelf: "stretch",
     padding: 12,
     flexDirection: "column",
     justifyContent: "center",
@@ -755,18 +746,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   garageDirection: {
-    width: "100%",
     ...typography.caption01M,
     color: colors.gray07,
   },
   garageRouteRow: {
     flexDirection: "row",
     alignItems: "center",
-    minWidth: 0,
   },
   garageRouteNumber: {
-    flex: 1,
-    minWidth: 0,
     marginLeft: 5,
     fontFamily: "SUIT",
     fontSize: 17,

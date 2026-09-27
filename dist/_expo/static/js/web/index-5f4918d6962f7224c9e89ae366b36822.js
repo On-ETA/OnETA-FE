@@ -31,4 +31,4 @@ __d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{v
    * See the License for the specific language governing permissions and
    * limitations under the License.
    */
-(0,t.registerVersion)("firebase","12.19.0",'app')},694,[700]);
+(0,t.registerVersion)("firebase","12.17.1",'app')},704,[710]);

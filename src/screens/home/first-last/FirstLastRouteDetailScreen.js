@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+﻿import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -17,15 +17,6 @@ import {
 import { colors, layout } from "../../../theme";
 import { normalizeTimelineSegments } from "../../../utils/routeSegments";
 
-const DAY_LABELS = {
-  MON: "월",
-  TUE: "화",
-  WED: "수",
-  THU: "목",
-  FRI: "금",
-  SAT: "토",
-  SUN: "일",
-};
 
 export function FirstLastRouteDetailScreen({
   onBackPress,
@@ -39,7 +30,7 @@ export function FirstLastRouteDetailScreen({
   const [errorMessage, setErrorMessage] = useState("");
 
   /*
-   * 아래 두 방식 모두 지원
+   * ?꾨옒 ??諛⑹떇 紐⑤몢 吏??
    *
    * 1.
    * <FirstLastRouteDetailScreen notificationId={4} />
@@ -70,20 +61,20 @@ export function FirstLastRouteDetailScreen({
           return;
         }
 
-        throw new Error("조회할 경로 id가 없습니다.");
+        throw new Error("議고쉶??寃쎈줈 id媛 ?놁뒿?덈떎.");
       }
 
       /*
-       * arrival.js의 getArrivalNotifications() 사용
+       * arrival.js??getArrivalNotifications() ?ъ슜
        *
-       * 여기서 이미:
-       * - accessToken 적용
-       * - 401 / 403 / C007 / C005 처리
-       * - 토큰 재발급
-       * - 재요청
+       * ?ш린???대?:
+       * - accessToken ?곸슜
+       * - 401 / 403 / C007 / C005 泥섎━
+       * - ?좏겙 ?щ컻湲?
+       * - ?ъ슂泥?
        * - normalizeArrivalNotification()
        *
-       * 이 수행됨.
+       * ???섑뻾??
        */
       const selectedNotification = await loadSelectedTransitNotification(
         selectedNotificationId,
@@ -91,7 +82,7 @@ export function FirstLastRouteDetailScreen({
 
       if (!selectedNotification) {
         setRouteDetail(null);
-        setErrorMessage("해당 경로를 찾을 수 없습니다.");
+        setErrorMessage("?대떦 寃쎈줈瑜?李얠쓣 ???놁뒿?덈떎.");
         return;
       }
 
@@ -99,11 +90,11 @@ export function FirstLastRouteDetailScreen({
         createRouteDetail(selectedNotification),
       );
     } catch (error) {
-      console.error("첫막차 경로 상세 조회 실패:", error);
+      console.error("泥ル쭑李?寃쎈줈 ?곸꽭 議고쉶 ?ㅽ뙣:", error);
 
       if (isAuthError(error)) {
         setRouteDetail(null);
-        setErrorMessage("다시 로그인해주세요.");
+        setErrorMessage("?ㅼ떆 濡쒓렇?명빐二쇱꽭??");
 
         if (typeof onLoginRequired === "function") {
           onLoginRequired();
@@ -116,7 +107,7 @@ export function FirstLastRouteDetailScreen({
 
       setErrorMessage(
         error?.message ||
-          "경로 정보를 불러오지 못했습니다.",
+          "寃쎈줈 ?뺣낫瑜?遺덈윭?ㅼ? 紐삵뻽?듬땲??",
       );
     } finally {
       setIsLoading(false);
@@ -185,36 +176,6 @@ function RouteDetailContent({ routeDetail }) {
           >
             {routeDetail.routeName}
           </Text>
-
-          <View
-            style={[
-              styles.statusBadge,
-              !routeDetail.isActive &&
-                styles.statusBadgeDisabled,
-            ]}
-          >
-            <Text
-              style={[
-                styles.statusBadgeText,
-                !routeDetail.isActive &&
-                  styles.statusBadgeTextDisabled,
-              ]}
-            >
-              {routeDetail.isActive
-                ? "알림 사용"
-                : "알림 꺼짐"}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.arrivalBox}>
-          <Text style={styles.arrivalLabel}>
-            목표 도착
-          </Text>
-
-          <Text style={styles.arrivalTime}>
-            {routeDetail.targetArrivalTime}
-          </Text>
         </View>
       </View>
 
@@ -266,12 +227,6 @@ function RouteDetailContent({ routeDetail }) {
           }
         />
       </View>
-
-      <View style={styles.divider} />
-
-      <NotificationInfo
-        routeDetail={routeDetail}
-      />
     </ScrollView>
   );
 }
@@ -564,93 +519,6 @@ function BusStep({ step }) {
   );
 }
 
-function NotificationInfo({
-  routeDetail,
-}) {
-  return (
-    <View style={styles.infoSection}>
-      <Text style={styles.sectionTitle}>
-        알림 설정
-      </Text>
-
-      <View style={styles.infoCard}>
-        <InfoRow
-          label="목표 도착 시간"
-          value={
-            routeDetail.targetArrivalTime
-          }
-        />
-
-        <View
-          style={styles.infoDivider}
-        />
-
-        <InfoRow
-          label="도착 알림"
-          value={`${routeDetail.reminderOffsetMinutes}분 전`}
-        />
-
-        <View
-          style={styles.infoDivider}
-        />
-
-        <View style={styles.daysRow}>
-          <Text style={styles.infoLabel}>
-            반복 요일
-          </Text>
-
-          <View
-            style={styles.daysContainer}
-          >
-            {routeDetail.repeatDays
-              .length > 0 ? (
-              routeDetail.repeatDays.map(
-                (day) => (
-                  <View
-                    key={day}
-                    style={
-                      styles.dayBadge
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.dayBadgeText
-                      }
-                    >
-                      {DAY_LABELS[day] ||
-                        day}
-                    </Text>
-                  </View>
-                ),
-              )
-            ) : (
-              <Text
-                style={styles.infoValue}
-              >
-                반복 없음
-              </Text>
-            )}
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function InfoRow({ label, value }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>
-        {label}
-      </Text>
-
-      <Text style={styles.infoValue}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
 function LoadingView() {
   return (
     <View style={styles.centerContainer}>
@@ -689,7 +557,7 @@ function ErrorView({
           <Text
             style={styles.retryButtonText}
           >
-            다시 시도
+            ?ㅼ떆 ?쒕룄
           </Text>
         </Pressable>
       )}
@@ -749,8 +617,7 @@ function createRouteDetailFromSummary(summary) {
 }
 
 /*
- * arrival.js의 normalizeArrivalNotification() 결과를
- * 상세 화면용 구조로 변환
+ * arrival.js??normalizeArrivalNotification() 寃곌낵瑜? * ?곸꽭 ?붾㈃??援ъ“濡?蹂??
  */
 function createRouteDetail(notification) {
   const raw =
@@ -775,7 +642,7 @@ function createRouteDetail(notification) {
     address:
       details?.originAddress ??
       raw?.originAddress,
-    fallbackName: "출발지",
+      fallbackName: "출발지",
   });
 
   const destination =
@@ -792,7 +659,7 @@ function createRouteDetail(notification) {
   const targetArrivalTime =
     notification?.arrivalTime &&
     notification.arrivalTime !==
-      "시간 정보 없음"
+      "?쒓컙 ?뺣낫 ?놁쓬"
       ? notification.arrivalTime
       : formatTime(
           notification
@@ -836,9 +703,9 @@ function createRouteDetail(notification) {
     destination,
 
     /*
-     * 현재 예시 API에는 timeline / steps가 없지만
-     * routeDetails에 나중에 추가되면
-     * 화면 수정 없이 바로 표시 가능.
+     * ?꾩옱 ?덉떆 API?먮뒗 timeline / steps媛 ?놁?留?
+     * routeDetails???섏쨷??異붽??섎㈃
+     * ?붾㈃ ?섏젙 ?놁씠 諛붾줈 ?쒖떆 媛??
      */
     timeline: normalizeTimeline(
       details?.timeline,
@@ -875,7 +742,7 @@ function parseRouteDetails(
     return JSON.parse(routeDetails);
   } catch (error) {
     console.warn(
-      "routeDetails 파싱 실패:",
+      "routeDetails ?뚯떛 ?ㅽ뙣:",
       routeDetails,
       error,
     );
@@ -1793,3 +1660,4 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 });
+
