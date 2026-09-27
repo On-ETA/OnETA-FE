@@ -40,7 +40,9 @@ export function setAuthTokens(
   { accessToken, refreshToken } = {},
   { isRefresh = false } = {},
 ) {
-  if (!isRefresh) sessionId += 1;
+  if (!isRefresh) {
+    sessionId += 1;
+  }
   memoryTokens = {
     accessToken: accessToken ?? null,
     refreshToken: refreshToken ?? null,

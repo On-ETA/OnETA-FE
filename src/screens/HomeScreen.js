@@ -150,7 +150,7 @@ function createTransitNotificationPayload(route, places = {}, summary) {
     reminderOffsetMinutes: [summary?.preDepartureAlarmMinutes ?? 10],
     repeatDays: [],
     routeDetails: JSON.stringify(routeDetails),
-    scheduleType: "NORMAL",
+    scheduleType: summary?.scheduleType ?? route?.scheduleType ?? "FIRST_TRANSIT",
   };
 }
 
@@ -477,6 +477,7 @@ export function HomeScreen({
                 onSavePress={() => {
                   blurActiveElement();
                   setEditingCustomAlarm(null);
+                  setCustomAlarmRefreshKey((current) => current + 1);
                 }}
               />
             ) : editingCustomAlarm?.type === "garage" ? (
@@ -494,6 +495,7 @@ export function HomeScreen({
                 onSavePress={() => {
                   blurActiveElement();
                   setEditingCustomAlarm(null);
+                  setCustomAlarmRefreshKey((current) => current + 1);
                 }}
               />
             ) : isRouteDetailVisible ? (

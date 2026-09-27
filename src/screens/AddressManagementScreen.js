@@ -224,17 +224,21 @@ export function AddressManagementScreen({
     }
 
     const addressId = editingAddress.addressId ?? editingAddress.id;
+    const nextAddresses = addresses.filter(
+      (item) => (item.addressId ?? item.id) !== addressId,
+    );
+    const deletedCurrentAddress = editingAddress.isCurrent;
+    const nextCurrentAddress = deletedCurrentAddress ? nextAddresses[0] : null;
+    let resolvedAddresses = nextAddresses;
 
     setIsDeletingAddress(true);
+    setAddresses(nextAddresses);
+    onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+    setEditingAddress(null);
+    setScreenMode("list");
 
     try {
       await deleteAddressRequest({ addressId });
-      const nextAddresses = addresses.filter(
-        (item) => (item.addressId ?? item.id) !== addressId,
-      );
-      const deletedCurrentAddress = editingAddress.isCurrent;
-      const nextCurrentAddress = deletedCurrentAddress ? nextAddresses[0] : null;
-      let resolvedAddresses = nextAddresses;
 
       if (nextCurrentAddress) {
         const nextCurrentAddressId =
@@ -261,8 +265,6 @@ export function AddressManagementScreen({
 
       setAddresses(resolvedAddresses);
       onCurrentAddressChange?.(getCurrentAddressLabel(resolvedAddresses));
-      setEditingAddress(null);
-      setScreenMode("list");
     } catch (error) {
       Alert.alert("주소 삭제 실패", error?.message ?? "주소 삭제에 실패했습니다.");
     } finally {

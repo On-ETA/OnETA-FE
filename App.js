@@ -30,6 +30,8 @@ import {
   setAuthTokens,
 } from "./src/api/auth/tokens";
 import { blurActiveElement } from "./src/utils/accessibility";
+import { clearHomeCache } from "./src/api/homeCache";
+import { preloadHomeCache } from "./src/api/homePreload";
 import { PushNotifications } from "./src/notifications/PushNotifications";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
 
@@ -108,15 +110,25 @@ function useAuthenticatedRoute(navigation, route) {
   const accessToken = route?.params?.accessToken;
   const refreshToken = route?.params?.refreshToken;
   const [isReady, setIsReady] = React.useState(false);
+  const didPreloadRef = React.useRef(false);
 
   React.useEffect(() => {
     if (accessToken) {
+      clearHomeCache();
       setAuthTokens({ accessToken, refreshToken });
+      if (!didPreloadRef.current) {
+        didPreloadRef.current = true;
+        preloadHomeCache().catch(() => null);
+      }
       setIsReady(true);
       return;
     }
 
     if (getAccessToken()) {
+      if (!didPreloadRef.current) {
+        didPreloadRef.current = true;
+        preloadHomeCache().catch(() => null);
+      }
       setIsReady(true);
       return;
     }
