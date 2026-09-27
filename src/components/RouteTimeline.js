@@ -49,8 +49,6 @@ export function RouteTimeline({ segments: routeSegments = [], style }) {
 
             <View style={styles.textWrap}>
               <Text
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
                 numberOfLines={1}
                 style={isTransit ? styles.textOn : styles.text}
               >

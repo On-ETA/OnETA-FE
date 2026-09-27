@@ -446,7 +446,7 @@ export function HomeScreen({
                   blurActiveElement();
                   setEditingCustomAlarm(null);
                   setIsScheduleAlarmAddVisible(true);
-                  setScheduleAlarmInitialStep("route");
+                  setScheduleAlarmInitialStep("form");
                 }}
                 onSavePress={() => {
                   blurActiveElement();
