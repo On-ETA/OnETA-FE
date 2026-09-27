@@ -9,12 +9,13 @@ import {
   Text,
   View,
 } from "react-native";
-import Svg, { Circle, Path } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 
 import MemoIcon from "../../../../public/images/memo.svg";
 import PlusIcon from "../../../../public/images/plus.svg";
 import BellGreenIcon from "../../../../assets/images/bell_green.svg";
 import BellWhiteIcon from "../../../../assets/images/bell_white.svg";
+import TrashIcon from "../../../../assets/images/trash.svg";
 import {
   deleteDepotNotification,
   getMyDepotNotifications,
@@ -22,6 +23,7 @@ import {
 import {
   deleteArrivalNotifications,
   getArrivalNotifications,
+  hideArrivalNotificationsLocally,
   updateArrivalNotificationStatus,
 } from "../../../api/notifications/arrival";
 import { colors, typography } from "../../../theme";
@@ -42,6 +44,34 @@ function getArrivalNotificationId(alarm) {
   const id = alarm?.notificationId ?? alarm?.id;
 
   return typeof id === "string" ? id.replace(/^arrival-/, "") : id;
+}
+
+function getDepotNotificationId(alarm) {
+  return (
+    alarm?.userBusId ??
+    alarm?.payload?.userBusId ??
+    alarm?.raw?.userBusId ??
+    alarm?.notification?.userBusId
+  );
+}
+
+async function deleteScheduleAlarm(alarm, notificationId) {
+  const userBusId = getDepotNotificationId(alarm);
+
+  if (userBusId !== undefined && userBusId !== null && userBusId !== "") {
+    return deleteDepotNotification({ userBusId });
+  }
+
+  try {
+    return await deleteArrivalNotifications({ ids: [notificationId] });
+  } catch (error) {
+    if (error?.status >= 500) {
+      hideArrivalNotificationsLocally([notificationId]);
+      return { code: "LOCAL_HIDDEN" };
+    }
+
+    throw error;
+  }
 }
 
 function breakRouteNumberAtParenthesis(routeNumber) {
@@ -246,6 +276,11 @@ export function CustomAlarmScreen({
       .map(getArrivalNotificationId)
       .filter((id) => id !== undefined && id !== null && id !== "");
 
+    if (scheduleTargets.length !== scheduleTargetIds.length) {
+      Alert.alert("알림 삭제 실패", "삭제할 내 일정 알림 id를 찾지 못했습니다.");
+      return;
+    }
+
     setIsDeletingAlarms(true);
 
     try {
@@ -254,20 +289,17 @@ export function CustomAlarmScreen({
           deleteDepotNotification({ userBusId: alarm.userBusId ?? alarm.id }),
         ),
       );
-      const scheduleResult =
-        scheduleTargetIds.length > 0
-          ? await deleteArrivalNotifications({ ids: scheduleTargetIds }).then(
-              () => ({ status: "fulfilled" }),
-              () => ({ status: "rejected" }),
-            )
-          : { status: "fulfilled" };
+      const scheduleResults = await Promise.allSettled(
+        scheduleTargets.map((alarm, index) =>
+          deleteScheduleAlarm(alarm, scheduleTargetIds[index]),
+        ),
+      );
       const deletedGarageIds = garageTargets
         .filter((_, index) => garageResults[index]?.status === "fulfilled")
         .map((alarm) => alarm.id);
-      const deletedScheduleIds =
-        scheduleResult.status === "fulfilled"
-          ? scheduleTargets.map((alarm) => alarm.id)
-          : [];
+      const deletedScheduleIds = scheduleTargets
+        .filter((_, index) => scheduleResults[index]?.status === "fulfilled")
+        .map((alarm) => alarm.id);
       const deletedIds = [...deletedGarageIds, ...deletedScheduleIds];
 
       setGarageAlarms((current) =>
@@ -283,7 +315,7 @@ export function CustomAlarmScreen({
 
       if (
         garageResults.some((result) => result.status === "rejected") ||
-        scheduleResult.status === "rejected"
+        scheduleResults.some((result) => result.status === "rejected")
       ) {
         Alert.alert("알림 삭제 실패", "일부 알림을 삭제하지 못했습니다.");
       }
@@ -404,7 +436,7 @@ export function CustomAlarmScreen({
             selectedIds.length === 0 && styles.bulkDeleteButtonDisabled,
           ]}
         >
-          <TrashIcon color={colors.white} size={18} />
+          <TrashIcon height={18} width={18} />
           <Text style={styles.bulkDeleteButtonText}>선택 항목 삭제</Text>
         </Pressable>
       ) : null}
@@ -496,7 +528,7 @@ function GarageAlarmCard({
           onPress={onDeletePress}
           style={styles.garageDeleteArea}
         >
-          <TrashIcon color={colors.gray07} size={18} />
+          <TrashIcon height={18} width={18} />
           <Text style={styles.deleteText}>삭제</Text>
         </Pressable>
       ) : (
@@ -560,7 +592,7 @@ function ScheduleAlarmRow({
           onPress={onDeletePress}
           style={styles.scheduleDeleteButton}
         >
-          <TrashIcon color={colors.gray07} size={22} />
+          <TrashIcon height={22} width={22} />
         </Pressable>
       ) : (
         <Pressable
@@ -622,17 +654,6 @@ function BusIcon() {
         />
       </Svg>
     </View>
-  );
-}
-
-function TrashIcon({ color = colors.gray07, size = 20 }) {
-  return (
-    <Svg height={size} viewBox="0 0 24 24" width={size}>
-      <Path
-        d="M9 4.5h6l.7 1.4H20v2H4v-2h4.3L9 4.5Zm-2.8 5h11.6l-.8 9.2c-.1 1.1-1 1.8-2 1.8H9c-1 0-1.9-.8-2-1.8l-.8-9.2Zm3.5 2.1v6h1.7v-6H9.7Zm3.9 0v6h1.7v-6h-1.7Z"
-        fill={color}
-      />
-    </Svg>
   );
 }
 
@@ -815,7 +836,7 @@ const styles = StyleSheet.create({
     height: 28,
     marginTop: 10,
     paddingLeft: 16,
-    paddingRight: 26,
+    paddingRight: 0,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.gray02,
@@ -837,13 +858,12 @@ const styles = StyleSheet.create({
   },
   arrivalTimeColumn: {
     width: 96,
-    marginRight: 18,
+    marginRight: 0,
     transform: [{ translateX: 3 }],
   },
   alarmColumn: {
     width: 48,
-    paddingRight: 7,
-    textAlign: "right",
+    textAlign: "center",
   },
   scheduleList: {
     marginTop: 12,
@@ -851,10 +871,8 @@ const styles = StyleSheet.create({
   },
   scheduleRow: {
     display: "flex",
-    width: 328,
-    maxWidth: "100%",
+    width: "100%",
     height: 64,
-    paddingHorizontal: 16,
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "flex-start",
@@ -866,6 +884,7 @@ const styles = StyleSheet.create({
   scheduleMainArea: {
     flex: 1,
     alignSelf: "stretch",
+    paddingLeft: 16,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -879,7 +898,7 @@ const styles = StyleSheet.create({
   },
   scheduleTime: {
     width: 96,
-    marginRight: 18,
+    marginRight: 0,
     textAlign: "center",
     fontFamily: "SUIT",
     fontSize: 16,
@@ -888,7 +907,7 @@ const styles = StyleSheet.create({
     color: colors.gray08,
   },
   scheduleDeleteButton: {
-    width: 80,
+    width: 48,
     alignSelf: "stretch",
     alignItems: "center",
     justifyContent: "center",

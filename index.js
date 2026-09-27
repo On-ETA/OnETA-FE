@@ -1,9 +1,19 @@
 import { registerRootComponent } from "expo";
 import React, { useEffect, useState } from "react";
-import { AppState, Platform } from "react-native";
+import { AppState, Platform, Text, TextInput } from "react-native";
 import { isHeadlessLaunch, registerBackgroundFcmHandler } from "./src/service/fcm";
 
 import App from "./App";
+
+function lockNativeFontScale() {
+  [Text, TextInput].forEach((Component) => {
+    Component.defaultProps = Component.defaultProps ?? {};
+    Component.defaultProps.allowFontScaling = false;
+    Component.defaultProps.maxFontSizeMultiplier = 1;
+  });
+}
+
+lockNativeFontScale();
 
 if (Platform.OS === "web") {
   require("./src/theme/fonts.css");

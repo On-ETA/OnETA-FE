@@ -8,6 +8,8 @@
     "dev": "expo start",
     "start": "expo start",
     "build": "expo export -p web",
+    "build:apk": "npx eas-cli build -p android --profile preview",
+    "download:apk": "npx eas-cli build:download -p android --latest",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web"
@@ -25,6 +27,7 @@
     "expo-dev-client": "~6.0.21",
     "expo-location": "~19.0.8",
     "expo-status-bar": "~3.0.8",
+    "firebase": "^12.19.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",

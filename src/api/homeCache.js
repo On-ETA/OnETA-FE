@@ -1,3 +1,6 @@
+import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 const CACHE_PREFIX = "oneta.homeCache";
 
 export const homeCacheKeys = {
@@ -7,7 +10,9 @@ export const homeCacheKeys = {
   myPage: "myPage",
 };
 
-function getStorage() {
+const memoryCache = new Map();
+
+function getWebStorage() {
   if (typeof globalThis === "undefined") {
     return null;
   }
@@ -24,30 +29,53 @@ function getCacheKey(key) {
 }
 
 export function readHomeCache(key, fallbackValue = null) {
-  const storage = getStorage();
+  const cacheKey = getCacheKey(key);
+
+  if (memoryCache.has(cacheKey)) {
+    return memoryCache.get(cacheKey);
+  }
+
+  const storage = getWebStorage();
 
   if (!storage) {
     return fallbackValue;
   }
 
   try {
-    const value = storage.getItem(getCacheKey(key));
+    const value = storage.getItem(cacheKey);
+    const parsedValue = value ? JSON.parse(value) : fallbackValue;
 
-    return value ? JSON.parse(value) : fallbackValue;
+    if (value) {
+      memoryCache.set(cacheKey, parsedValue);
+    }
+
+    return parsedValue;
   } catch {
     return fallbackValue;
   }
 }
 
 export function writeHomeCache(key, value) {
-  const storage = getStorage();
+  const cacheKey = getCacheKey(key);
+
+  memoryCache.set(cacheKey, value);
+
+  if (Platform.OS !== "web") {
+    AsyncStorage.setItem(cacheKey, JSON.stringify(value)).catch(() => {
+      // Cache writes should never block the app flow.
+    });
+
+    return value;
+  }
+
+  const storage = getWebStorage();
 
   if (!storage) {
     return value;
   }
 
   try {
-    storage.setItem(getCacheKey(key), JSON.stringify(value));
+    storage.setItem(cacheKey, JSON.stringify(value));
   } catch {
     // Cache writes should never block the app flow.
   }
@@ -56,14 +84,26 @@ export function writeHomeCache(key, value) {
 }
 
 export function removeHomeCache(key) {
-  const storage = getStorage();
+  const cacheKey = getCacheKey(key);
+
+  memoryCache.delete(cacheKey);
+
+  if (Platform.OS !== "web") {
+    AsyncStorage.removeItem(cacheKey).catch(() => {
+      // Ignore cache cleanup failures.
+    });
+
+    return;
+  }
+
+  const storage = getWebStorage();
 
   if (!storage) {
     return;
   }
 
   try {
-    storage.removeItem(getCacheKey(key));
+    storage.removeItem(cacheKey);
   } catch {
     // Ignore cache cleanup failures.
   }
@@ -71,4 +111,29 @@ export function removeHomeCache(key) {
 
 export function clearHomeCache() {
   Object.values(homeCacheKeys).forEach(removeHomeCache);
+}
+
+export async function readHomeCacheAsync(key, fallbackValue = null) {
+  const cacheKey = getCacheKey(key);
+
+  if (Platform.OS === "web") {
+    return readHomeCache(key, fallbackValue);
+  }
+
+  if (memoryCache.has(cacheKey)) {
+    return memoryCache.get(cacheKey);
+  }
+
+  try {
+    const value = await AsyncStorage.getItem(cacheKey);
+    const parsedValue = value ? JSON.parse(value) : fallbackValue;
+
+    if (value) {
+      memoryCache.set(cacheKey, parsedValue);
+    }
+
+    return parsedValue;
+  } catch {
+    return fallbackValue;
+  }
 }
