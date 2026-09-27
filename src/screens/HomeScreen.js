@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAddresses } from "../api/addresses";
+import { homeCacheKeys, readHomeCache, writeHomeCache } from "../api/homeCache";
 import {
   createTransitNotification,
   getTransitNotifications,
@@ -93,6 +94,14 @@ function toLocalTimeObject(value) {
   };
 }
 
+function getRouteValue(source, key) {
+  return source?.[key] ?? source?.raw?.[key];
+}
+
+function getPrimaryTransitSegment(route) {
+  return route?.segments?.find((segment) => segment.transitType !== "WALK");
+}
+
 function getRouteTargetArrivalTime(route, summary) {
   const routeArrivalTime =
     getRouteValue(route, "arrivalTime") ??
@@ -147,6 +156,33 @@ function getCurrentAddressLabel(addresses) {
   return displayAddress?.name ?? "";
 }
 
+function getCreatedNotificationId(response) {
+  return response?.notificationId ?? response?.id ?? response;
+}
+
+function readCachedFirstLastRouteSummary() {
+  return readHomeCache(homeCacheKeys.firstLastRoute, null);
+}
+
+function writeCachedFirstLastRouteSummary(summary) {
+  if (summary) {
+    writeHomeCache(homeCacheKeys.firstLastRoute, summary);
+  }
+
+  return summary;
+}
+
+function findTransitNotificationById(notifications, notificationId) {
+  if (notificationId === undefined || notificationId === null || notificationId === "") {
+    return null;
+  }
+
+  return notifications.find(
+    (notification) =>
+      String(notification.notificationId) === String(notificationId),
+  ) ?? null;
+}
+
 export function HomeScreen({
   notificationCount = 0,
   initialTab = "home",
@@ -179,19 +215,34 @@ export function HomeScreen({
     useState(false);
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
   const [currentAddressLabel, setCurrentAddressLabel] = useState("");
-  const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(null);
+  const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(
+    readCachedFirstLastRouteSummary,
+  );
   const [customAlarmRefreshKey, setCustomAlarmRefreshKey] = useState(0);
 
   const loadFirstLastTransitNotifications = useCallback(async ({
     signal,
   } = {}) => {
     const notifications = await getTransitNotifications({ signal });
-    const firstNotification = notifications[0] ?? null;
 
-    setFirstLastRouteSummary(
-      firstNotification
-        ? createFirstLastRouteSummaryFromNotification(firstNotification)
-        : null,
+    setFirstLastRouteSummary((current) =>
+    {
+      const cached = readCachedFirstLastRouteSummary();
+      const preferredNotification =
+        findTransitNotificationById(notifications, current?.notificationId) ??
+        findTransitNotificationById(notifications, cached?.notificationId);
+      const fallbackNotification =
+        !current && !cached ? notifications[0] ?? null : null;
+      const selectedNotification = preferredNotification ?? fallbackNotification;
+
+      if (selectedNotification) {
+        return writeCachedFirstLastRouteSummary(
+          createFirstLastRouteSummaryFromNotification(selectedNotification),
+        );
+      }
+
+      return current ?? cached;
+    },
     );
   }, []);
 
@@ -242,26 +293,27 @@ export function HomeScreen({
   const handleFirstLastRouteConfigured = useCallback(async (route, places) => {
     const summary = createFirstLastRouteSummary(route, places);
 
-    setFirstLastRouteSummary(summary);
+    setFirstLastRouteSummary(writeCachedFirstLastRouteSummary(summary));
     blurActiveElement();
     setIsScheduleAlarmAddVisible(false);
     setScheduleAlarmInitialStep("form");
 
     try {
-      const notificationId = await createTransitNotification({
+      const notificationResponse = await createTransitNotification({
         payload: createTransitNotificationPayload(route, places, summary),
       });
+      const notificationId = getCreatedNotificationId(notificationResponse);
+
       if (notificationId !== undefined && notificationId !== null) {
         setFirstLastRouteSummary((current) =>
           current
-            ? {
+            ? writeCachedFirstLastRouteSummary({
                 ...current,
                 notificationId,
-              }
+              })
             : current,
         );
       }
-      await loadFirstLastTransitNotifications();
     } catch (error) {
       console.warn("첫막차 경로 등록 실패:", error?.code ?? error?.message);
     }
@@ -335,7 +387,7 @@ export function HomeScreen({
               <ScheduleAlarmAddScreen
                 initialStep={scheduleAlarmInitialStep}
                 mapTitle={
-                  scheduleAlarmInitialStep === "route"
+                  scheduleAlarmInitialStep === "routeSetup"
                     ? "경로 재설정"
                     : "알림 추가"
                 }
@@ -346,7 +398,7 @@ export function HomeScreen({
                 }}
                 onSaveComplete={handleScheduleAlarmSaved}
                 onRouteConfigured={
-                  scheduleAlarmInitialStep === "route"
+                  scheduleAlarmInitialStep === "routeSetup"
                     ? handleFirstLastRouteConfigured
                     : undefined
                 }
@@ -374,7 +426,11 @@ export function HomeScreen({
                   setFirstLastRouteSetupStep("map");
                 }}
                 onRouteSelect={(route, places) => {
-                  setFirstLastRouteSummary(createFirstLastRouteSummary(route, places));
+                  setFirstLastRouteSummary(
+                    writeCachedFirstLastRouteSummary(
+                      createFirstLastRouteSummary(route, places),
+                    ),
+                  );
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
                 }}
@@ -390,7 +446,7 @@ export function HomeScreen({
                   blurActiveElement();
                   setEditingCustomAlarm(null);
                   setIsScheduleAlarmAddVisible(true);
-                  setScheduleAlarmInitialStep("route");
+                  setScheduleAlarmInitialStep("form");
                 }}
                 onSavePress={() => {
                   blurActiveElement();
@@ -417,6 +473,7 @@ export function HomeScreen({
             ) : isRouteDetailVisible ? (
               <FirstLastRouteDetailScreen
                 notificationId={firstLastRouteSummary?.notificationId}
+                routeSummary={firstLastRouteSummary}
                 onBackPress={() => {
                   blurActiveElement();
                   setIsRouteDetailVisible(false);
@@ -449,7 +506,7 @@ export function HomeScreen({
                 onRouteSetupPress={() => {
                   blurActiveElement();
                   setIsScheduleAlarmAddVisible(true);
-                  setScheduleAlarmInitialStep("route");
+                  setScheduleAlarmInitialStep("routeSetup");
                 }}
                 firstLastRouteSummary={firstLastRouteSummary}
                 onScheduleAlarmAddPress={() => {

@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,31 +20,11 @@ export function InquiryScreen({ onBackPress }) {
   const [content, setContent] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
 
-  const showResultAndGoBack = (message) => {
-    // React Native Web
-    if (Platform.OS === "web") {
-      window.alert(message);
-      onBackPress?.();
-      return;
-    }
-
-    // iOS / Android
-    Alert.alert(
-      "문의하기",
-      message,
-      [
-        {
-          text: "확인",
-          onPress: () => {
-            onBackPress?.();
-          },
-        },
-      ],
-      {
-        cancelable: false,
-      },
-    );
+  const handleSuccessModalClose = () => {
+    setIsSuccessModalVisible(false);
+    onBackPress?.();
   };
 
   const handleSubmit = async () => {
@@ -60,13 +41,11 @@ export function InquiryScreen({ onBackPress }) {
         content: content.trim(),
       });
 
-      showResultAndGoBack("문의가 등록되었습니다.");
+      setIsSuccessModalVisible(true);
     } catch (error) {
       const message = getInquiryErrorMessage(error);
 
       setErrorMessage(message);
-
-      showResultAndGoBack(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -135,6 +114,27 @@ export function InquiryScreen({ onBackPress }) {
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
+      <Modal
+        animationType="fade"
+        onRequestClose={handleSuccessModalClose}
+        transparent
+        visible={isSuccessModalVisible}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>문의가 등록되었습니다.</Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleSuccessModalClose}
+                style={styles.modalConfirmButton}
+              >
+                <Text style={styles.modalConfirmText}>확인</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </AppScreen>
   );
 }
@@ -245,5 +245,66 @@ const styles = StyleSheet.create({
   submitText: {
     ...typography.body01Sb,
     color: colors.white,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(52, 56, 59, 0.32)",
+  },
+  modalCard: {
+    width: 328,
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.gray03,
+    backgroundColor: colors.white,
+    shadowColor: "#B9C8D0",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    boxShadow: "0 0 20px rgba(185, 200, 208, 0.15)",
+    elevation: 3,
+  },
+  modalTitle: {
+    width: "100%",
+    fontFamily: typography.body01Sb.fontFamily,
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 22.4,
+    letterSpacing: -0.16,
+    color: colors.gray09,
+    textAlign: "center",
+  },
+  modalActions: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalConfirmButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderRadius: 50,
+    backgroundColor: colors.main,
+  },
+  modalConfirmText: {
+    fontFamily: typography.body03M.fontFamily,
+    fontSize: 13,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 18.2,
+    letterSpacing: -0.13,
+    color: colors.white,
+    textAlign: "center",
   },
 });

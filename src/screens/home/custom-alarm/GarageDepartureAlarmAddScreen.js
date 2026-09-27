@@ -10,10 +10,12 @@ import {
   View,
 } from "react-native";
 
+import BigBusAsset from "../../../../assets/images/bigbus.svg";
+import SearchAsset from "../../../../assets/images/search.svg";
+import ClearAsset from "../../../../assets/images/x.svg";
 import { Header } from "../../../components";
 import {
   getBusRouteDirections,
-  getBusRouteLocations,
   searchBusRoutes,
 } from "../../../api/busRoutes";
 import { createDepotNotification } from "../../../api/notifications/depot";
@@ -60,38 +62,6 @@ function formatBusInterval(interval) {
   }
 
   return interval === "-" ? "배차 간격 정보 없음" : `배차 간격 ${interval}분`;
-}
-
-function getDirectionDepartureInfo(direction, locations) {
-  if (!locations) {
-    return "";
-  }
-
-  const directionType = direction?.type ?? direction?.id;
-  const isDepotDirection = directionType === "DEPOT";
-  const departed = isDepotDirection
-    ? locations.depotDeparted
-    : locations.turnaroundDeparted;
-  const busNo = isDepotDirection
-    ? locations.depotDepartedBusNo
-    : locations.turnaroundDepartedBusNo;
-
-  if (!departed) {
-    return "아직 출발 정보가 없습니다.";
-  }
-
-  return busNo ? `최근 출발 차량 ${busNo}` : "최근 출발 차량이 있습니다.";
-}
-
-function getLocationSummary(locations) {
-  if (!locations) {
-    return "";
-  }
-
-  const activeBusCount = locations.activeBuses.length;
-  const atStopCount = locations.activeBuses.filter((bus) => bus.atStop).length;
-
-  return `현재 운행 중 ${activeBusCount}대 · 정류장 정차 ${atStopCount}대`;
 }
 
 function getBusNumber(bus) {
@@ -143,9 +113,6 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchErrorMessage, setSearchErrorMessage] = useState("");
   const [loadingDirectionRouteId, setLoadingDirectionRouteId] = useState(null);
-  const [busLocations, setBusLocations] = useState(null);
-  const [isLoadingBusLocations, setIsLoadingBusLocations] = useState(false);
-  const [busLocationError, setBusLocationError] = useState("");
   const [isSubmittingAlarm, setIsSubmittingAlarm] = useState(false);
   const isDirectionStep = Boolean(selectedBus);
   const trimmedSearchText = searchText.trim();
@@ -285,54 +252,6 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
     }
   };
 
-  useEffect(() => {
-    const routeId = selectedBus?.routeId ?? selectedBus?.id;
-
-    if (!routeId) {
-      setBusLocations(null);
-      setBusLocationError("");
-      setIsLoadingBusLocations(false);
-      return undefined;
-    }
-
-    let isActive = true;
-    const controller = new AbortController();
-
-    async function loadBusLocations() {
-      setIsLoadingBusLocations(true);
-      setBusLocationError("");
-
-      try {
-        const locations = await getBusRouteLocations({
-          routeId,
-          signal: controller.signal,
-        });
-
-        if (isActive) {
-          setBusLocations(locations);
-        }
-      } catch (error) {
-        if (isActive) {
-          setBusLocations(null);
-          setBusLocationError(
-            error?.message ?? "버스 위치 정보를 불러오지 못했습니다.",
-          );
-        }
-      } finally {
-        if (isActive) {
-          setIsLoadingBusLocations(false);
-        }
-      }
-    }
-
-    loadBusLocations();
-
-    return () => {
-      isActive = false;
-      controller.abort();
-    };
-  }, [selectedBus?.id, selectedBus?.routeId]);
-
   return (
     <View style={styles.screen}>
       <Header
@@ -346,9 +265,6 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
       {isDirectionStep ? (
         <BusDirectionStep
           bus={selectedBus}
-          busLocationError={busLocationError}
-          busLocations={busLocations}
-          isLoadingBusLocations={isLoadingBusLocations}
           isSubmitting={isSubmittingAlarm}
           onChangeBus={() => {
             setSelectedBus(null);
@@ -401,7 +317,7 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
               contentContainerStyle={styles.resultList}
               showsVerticalScrollIndicator
             >
-              {busResults.map((bus, index) => (
+              {busResults.map((bus) => (
                 <Pressable
                   accessibilityRole="button"
                   disabled={loadingDirectionRouteId === (bus.routeId ?? bus.id)}
@@ -409,24 +325,18 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
                   onPress={() => handleBusPress(bus)}
                   style={[
                     styles.resultItem,
-                    index < busResults.length - 1 && styles.resultItemDivider,
                     loadingDirectionRouteId === (bus.routeId ?? bus.id) &&
                       styles.resultItemDisabled,
                   ]}
                 >
-                  <BusIcon />
-                  <View style={styles.resultTextGroup}>
+                  <View style={styles.resultTitleRow}>
+                    <BusIcon />
                     <Text style={styles.resultTitle}>{bus.name}</Text>
-                    <Text style={styles.resultDescription}>
-                      {formatBusInterval(bus.interval)}
-                      {bus.route ? ` · ${bus.route}` : ""}
-                    </Text>
-                    {loadingDirectionRouteId === (bus.routeId ?? bus.id) ? (
-                      <Text style={styles.resultLoadingText}>
-                        방향 정보를 불러오는 중입니다.
-                      </Text>
-                    ) : null}
                   </View>
+                  <Text style={styles.resultDescription}>
+                    {formatBusInterval(bus.interval)}
+                    {bus.route ? ` · ${bus.route}` : ""}
+                  </Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -439,9 +349,6 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
 
 function BusDirectionStep({
   bus,
-  busLocationError,
-  busLocations,
-  isLoadingBusLocations,
   isSubmitting,
   onChangeBus,
   onDirectionPress,
@@ -449,21 +356,20 @@ function BusDirectionStep({
   selectedDirectionId,
 }) {
   const canSubmit = Boolean(selectedDirectionId) && !isSubmitting;
-  const locationSummary = getLocationSummary(busLocations);
 
   return (
     <View style={styles.directionStep}>
       <View style={styles.directionContent}>
         <View style={styles.selectedBusHeader}>
-          <View style={styles.selectedBusTitleRow}>
-            <BusIcon />
-            <View style={styles.selectedBusTextGroup}>
+          <View style={styles.selectedBusTextGroup}>
+            <View style={styles.selectedBusTitleRow}>
+              <BusIcon />
               <Text style={styles.selectedBusName}>{bus.name}</Text>
-              <Text style={styles.selectedBusDescription}>
-                {formatBusInterval(bus.interval)}
-                {bus.route ? ` · ${bus.route}` : ""}
-              </Text>
             </View>
+            <Text style={styles.selectedBusDescription}>
+              {formatBusInterval(bus.interval)}
+              {bus.route ? ` · ${bus.route}` : ""}
+            </Text>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -496,19 +402,6 @@ function BusDirectionStep({
                 <Text style={styles.directionDescription}>
                   {direction.description}
                 </Text>
-                {isLoadingBusLocations ? (
-                  <Text style={styles.directionMeta}>
-                    실시간 위치를 불러오는 중입니다.
-                  </Text>
-                ) : null}
-                {!isLoadingBusLocations && getDirectionDepartureInfo(
-                  direction,
-                  busLocations,
-                ) ? (
-                  <Text style={styles.directionMeta}>
-                    {getDirectionDepartureInfo(direction, busLocations)}
-                  </Text>
-                ) : null}
               </Pressable>
             );
           })}
@@ -521,10 +414,7 @@ function BusDirectionStep({
             버스가 차고지에서 출발할 때 알려드릴게요.
           </Text>
           <Text style={styles.infoText}>
-            {isLoadingBusLocations
-              ? "실시간 버스 위치를 확인하고 있습니다."
-              : busLocationError || locationSummary ||
-                "알림은 1회 발송 후 자동으로 꺼지니 필요할 때 다시 켜주세요."}
+            알림은 1회 발송 후 자동으로 꺼지니 필요할 때 다시 켜주세요.
           </Text>
         </View>
         <Pressable
@@ -548,37 +438,17 @@ function BusDirectionStep({
 }
 
 function SearchIcon() {
-  return (
-    <View pointerEvents="none" style={styles.searchIcon}>
-      <View style={styles.searchIconCircle} />
-      <View style={styles.searchIconHandle} />
-    </View>
-  );
+  return <SearchAsset height={20} width={20} />;
 }
 
 function ClearIcon() {
-  return (
-    <View pointerEvents="none" style={styles.clearIcon}>
-      <View style={[styles.clearIconLine, styles.clearIconLineA]} />
-      <View style={[styles.clearIconLine, styles.clearIconLineB]} />
-    </View>
-  );
+  return <ClearAsset height={20} width={20} />;
 }
 
 function BusIcon() {
   return (
     <View style={styles.busIconCircle}>
-      <View style={styles.busBody}>
-        <View style={styles.busWindowRow}>
-          <View style={styles.busWindow} />
-          <View style={styles.busWindow} />
-        </View>
-        <View style={styles.busFront} />
-        <View style={styles.busWheelRow}>
-          <View style={styles.busWheel} />
-          <View style={styles.busWheel} />
-        </View>
-      </View>
+      <BigBusAsset height={10} width={9} />
     </View>
   );
 }
@@ -597,61 +467,48 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingTop: 36,
-    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingHorizontal: 16,
     backgroundColor: colors.white,
   },
   heading: {
     fontFamily: "SUIT",
-    fontSize: 18,
+    fontSize: 20,
     fontStyle: "normal",
     fontWeight: "600",
-    lineHeight: 10,
-    letterSpacing: -0.22,
-    color: colors.black,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+    color: colors.gray09,
   },
   searchBox: {
-    height: 42,
-    marginTop: 30,
-    paddingHorizontal: 5,
+    display: "flex",
+    width: 328,
+    maxWidth: "100%",
+    height: 48,
+    marginTop: 20,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    flexShrink: 0,
     borderWidth: 1,
-    borderColor: colors.gray04,
-    borderRadius: 12,
+    borderColor: colors.gray03,
+    borderRadius: 8,
     backgroundColor: colors.white,
-  },
-  searchIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 14,
-  },
-  searchIconCircle: {
-    position: "absolute",
-    top: 3,
-    left: 3,
-    width: 14,
-    height: 14,
-    borderWidth: 2,
-    borderColor: colors.gray05,
-    borderRadius: 7,
-  },
-  searchIconHandle: {
-    position: "absolute",
-    right: 3,
-    bottom: 3,
-    width: 9,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: colors.gray05,
-    transform: [{ rotate: "55deg" }],
   },
   searchInput: {
     flex: 1,
-    height: "80%",
+    height: "100%",
     minWidth: 0,
-    ...typography.body02M,
-    color: colors.black,
+    marginHorizontal: 8,
+    fontFamily: "SUIT",
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 22.4,
+    letterSpacing: -0.16,
+    textAlign: "left",
+    color: colors.gray09,
     ...Platform.select({
       web: {
         outlineColor: "transparent",
@@ -662,33 +519,15 @@ const styles = StyleSheet.create({
     }),
   },
   clearButton: {
-    width: 32,
-    height: 32,
-    marginLeft: 8,
+    width: 20,
+    height: 20,
     alignItems: "center",
     justifyContent: "center",
   },
-  clearIcon: {
-    width: 22,
-    height: 22,
-  },
-  clearIconLine: {
-    position: "absolute",
-    top: 10,
-    left: 1,
-    width: 20,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: colors.gray05,
-  },
-  clearIconLineA: {
-    transform: [{ rotate: "45deg" }],
-  },
-  clearIconLineB: {
-    transform: [{ rotate: "-45deg" }],
-  },
   resultList: {
-    marginTop: 24,
+    width: 328,
+    maxWidth: "100%",
+    marginTop: 8,
     paddingBottom: 32,
   },
   searchStateText: {
@@ -697,11 +536,15 @@ const styles = StyleSheet.create({
     color: colors.gray07,
   },
   resultItem: {
-    minHeight: 96,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  resultItemDivider: {
+    display: "flex",
+    width: 328,
+    maxWidth: "100%",
+    height: 72,
+    paddingVertical: 16,
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    gap: 4,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray03,
   },
@@ -709,75 +552,37 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   busIconCircle: {
-    width: 32,
-    height: 32,
-    marginRight: 14,
+    display: "flex",
+    width: 20,
+    height: 20,
+    gap: 12.5,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
-    backgroundColor: colors.bus,
+    borderRadius: 50,
+    backgroundColor: colors.main,
   },
-  busBody: {
-    width: 16,
-    height: 18,
+  resultTitleRow: {
+    flexDirection: "row",
     alignItems: "center",
-    borderRadius: 4,
-    backgroundColor: colors.white,
-  },
-  busWindowRow: {
-    width: 12,
-    marginTop: 3,
-    flexDirection: "row",
-    gap: 2,
-  },
-  busWindow: {
-    flex: 1,
-    height: 5,
-    borderRadius: 1,
-    backgroundColor: colors.bus,
-  },
-  busFront: {
-    width: 10,
-    height: 3,
-    marginTop: 2,
-    borderRadius: 1.5,
-    backgroundColor: colors.bus,
-  },
-  busWheelRow: {
-    position: "absolute",
-    bottom: 2,
-    width: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  busWheel: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: colors.bus,
-  },
-  resultTextGroup: {
-    flex: 1,
-    minWidth: 0,
+    gap: 4,
   },
   resultTitle: {
     fontFamily: "SUIT",
-    fontSize: 20,
+    fontSize: 18,
     fontStyle: "normal",
     fontWeight: "600",
-    lineHeight: 28,
+    lineHeight: 20,
     letterSpacing: -0.2,
     color: colors.gray09,
   },
   resultDescription: {
-    marginTop: 4,
-    ...typography.body03M,
+    fontFamily: "SUIT",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 16.8,
+    letterSpacing: -0.12,
     color: colors.gray07,
-  },
-  resultLoadingText: {
-    marginTop: 4,
-    ...typography.caption01M,
-    color: colors.gray06,
   },
   resultStatus: {
     minHeight: 96,
@@ -803,15 +608,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   selectedBusTitleRow: {
-    flex: 1,
-    minWidth: 0,
     flexDirection: "row",
-    alignItems: "flex-start",
-    paddingRight: 12,
+    alignItems: "center",
+    gap: 4,
   },
   selectedBusTextGroup: {
     flex: 1,
     minWidth: 0,
+    paddingRight: 12,
   },
   selectedBusName: {
     fontFamily: "SUIT",
@@ -821,18 +625,25 @@ const styles = StyleSheet.create({
     color: colors.gray09,
   },
   selectedBusDescription: {
-    marginTop: 4,
-    ...typography.body03M,
+    marginTop: 5,
+    fontFamily: "SUIT",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.2,
+    letterSpacing: -0.12,
     color: colors.gray07,
   },
   changeBusButton: {
-    height: 34,
-    paddingHorizontal: 15,
+    display: "flex",
+    paddingVertical: 4,
+    paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
+    gap: 10,
     borderWidth: 1,
     borderColor: colors.gray05,
-    borderRadius: 17,
+    borderRadius: 100,
     backgroundColor: colors.white,
   },
   changeBusButtonText: {
@@ -843,17 +654,19 @@ const styles = StyleSheet.create({
     color: colors.gray08,
   },
   directionList: {
-    paddingTop: 28,
+    paddingTop: 16,
     paddingBottom: 24,
     gap: 12,
   },
   directionCard: {
-    minHeight: 110,
-    paddingVertical: 24,
-    paddingHorizontal: 22,
-    justifyContent: "center",
+    display: "flex",
+    padding: 16,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+    gap: 4,
     borderWidth: 1,
-    borderColor: colors.gray04,
+    borderColor: colors.gray03,
     borderRadius: 8,
     backgroundColor: colors.white,
   },
@@ -863,23 +676,21 @@ const styles = StyleSheet.create({
   },
   directionTitle: {
     fontFamily: "SUIT",
-    fontSize: 18,
-    fontWeight: "800",
-    lineHeight: 25.2,
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 22.4,
+    letterSpacing: -0.16,
     color: colors.gray08,
   },
   directionDescription: {
-    marginTop: 9,
     fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19.6,
+    fontSize: 13,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 18.2,
+    letterSpacing: -0.13,
     color: colors.gray06,
-  },
-  directionMeta: {
-    marginTop: 8,
-    ...typography.caption01M,
-    color: colors.gray07,
   },
   directionFooter: {
     paddingHorizontal: 20,
@@ -895,15 +706,21 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontFamily: "SUIT",
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 22,
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.2,
+    letterSpacing: -0.12,
     color: colors.gray07,
   },
   alarmButton: {
-    height: 80,
+    display: "flex",
+    height: 54,
+    padding: 10,
     alignItems: "center",
     justifyContent: "center",
+    gap: 10,
+    alignSelf: "stretch",
     borderRadius: 8,
     backgroundColor: colors.gray05,
   },

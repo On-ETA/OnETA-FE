@@ -4,6 +4,10 @@ import { requestJson } from "../client";
 
 const TRANSIT_NOTIFICATIONS_ENDPOINT = "/api/notifications/transit";
 
+function buildTransitNotificationEndpoint(notificationId) {
+  return `${TRANSIT_NOTIFICATIONS_ENDPOINT}/${encodeURIComponent(notificationId)}`;
+}
+
 function isAuthError(error) {
   return (
     error?.status === 401 ||
@@ -156,6 +160,28 @@ export async function getTransitNotifications({
   });
 
   return pickTransitNotificationList(response).map(normalizeTransitNotification);
+}
+
+export async function getTransitNotification({
+  notificationId,
+  accessToken = getAccessToken(),
+  signal,
+} = {}) {
+  if (notificationId === undefined || notificationId === null || notificationId === "") {
+    throw new Error("조회할 경로 id가 없습니다.");
+  }
+
+  const response = await requestTransitNotificationJson({
+    path: buildTransitNotificationEndpoint(notificationId),
+    method: "GET",
+    accessToken,
+    signal,
+    errorMessage: "경로 상세 정보를 불러오지 못했습니다.",
+  });
+
+  const notification = response?.data ?? response;
+
+  return normalizeTransitNotification(notification);
 }
 
 export async function createTransitNotification({

@@ -10,8 +10,12 @@ import {
 import Svg, { Circle, Path } from "react-native-svg";
 
 import BackIcon from "../../../../assets/images/L.svg";
-import { getTransitNotifications } from "../../../api/notifications/transit";
+import {
+  getTransitNotification,
+  getTransitNotifications,
+} from "../../../api/notifications/transit";
 import { colors, layout } from "../../../theme";
+import { normalizeTimelineSegments } from "../../../utils/routeSegments";
 
 const DAY_LABELS = {
   MON: "월",
@@ -26,6 +30,7 @@ const DAY_LABELS = {
 export function FirstLastRouteDetailScreen({
   onBackPress,
   notificationId,
+  routeSummary,
   route,
   onLoginRequired,
 }) {
@@ -60,6 +65,11 @@ export function FirstLastRouteDetailScreen({
         selectedNotificationId === undefined ||
         selectedNotificationId === ""
       ) {
+        if (routeSummary?.route || Array.isArray(routeSummary?.segments)) {
+          setRouteDetail(createRouteDetailFromSummary(routeSummary));
+          return;
+        }
+
         throw new Error("조회할 경로 id가 없습니다.");
       }
 
@@ -75,12 +85,8 @@ export function FirstLastRouteDetailScreen({
        *
        * 이 수행됨.
        */
-      const notifications = await getTransitNotifications();
-
-      const selectedNotification = notifications.find(
-        (item) =>
-          String(item.notificationId) ===
-          String(selectedNotificationId),
+      const selectedNotification = await loadSelectedTransitNotification(
+        selectedNotificationId,
       );
 
       if (!selectedNotification) {
@@ -115,7 +121,7 @@ export function FirstLastRouteDetailScreen({
     } finally {
       setIsLoading(false);
     }
-  }, [selectedNotificationId, onLoginRequired]);
+  }, [selectedNotificationId, routeSummary, onLoginRequired]);
 
   useEffect(() => {
     loadRouteDetail();
@@ -691,6 +697,57 @@ function ErrorView({
   );
 }
 
+async function loadSelectedTransitNotification(notificationId) {
+  try {
+    return await getTransitNotification({ notificationId });
+  } catch (error) {
+    if (isAuthError(error)) {
+      throw error;
+    }
+  }
+
+  const notifications = await getTransitNotifications();
+
+  return notifications.find(
+    (item) => String(item.notificationId) === String(notificationId),
+  );
+}
+
+function createRouteDetailFromSummary(summary) {
+  const route = summary?.route ?? {
+    segments: summary?.segments ?? [],
+    totalDurationMinutes: summary?.totalDurationMinutes,
+    arrivalTime: summary?.arrivalTime,
+  };
+  const originName =
+    route?.originAddress ??
+    route?.origin ??
+    summary?.originAddress ??
+    "출발지";
+  const destinationName =
+    route?.destinationAddress ??
+    route?.destination ??
+    summary?.destinationAddress ??
+    "도착지";
+
+  return createRouteDetail({
+    notificationId: summary?.notificationId,
+    routeName: summary?.routeName ?? "첫막차 경로",
+    arrivalTime: summary?.arrivalTime,
+    targetArrivalTime: summary?.arrivalTime,
+    reminderOffsetMinutes: [summary?.preDepartureAlarmMinutes ?? 10],
+    repeatDays: [],
+    enabled: true,
+    route: {
+      route,
+      origin: originName,
+      destination: destinationName,
+      originAddress: route?.originAddress ?? "",
+      destinationAddress: route?.destinationAddress ?? "",
+    },
+  });
+}
+
 /*
  * arrival.js의 normalizeArrivalNotification() 결과를
  * 상세 화면용 구조로 변환
@@ -708,6 +765,8 @@ function createRouteDetail(notification) {
     ) ??
     parseRouteDetails(raw?.routeDetails) ??
     {};
+  const route = details?.route ?? details;
+  const segments = normalizeTimelineSegments(route?.segments ?? []);
 
   const origin = normalizePlace({
     place:
@@ -783,10 +842,12 @@ function createRouteDetail(notification) {
      */
     timeline: normalizeTimeline(
       details?.timeline,
+      segments,
     ),
 
     steps: normalizeSteps(
       details?.steps,
+      segments,
     ),
   };
 }
@@ -865,9 +926,12 @@ function normalizePlace({
   };
 }
 
-function normalizeTimeline(timeline) {
+function normalizeTimeline(timeline, segments = []) {
   if (!Array.isArray(timeline)) {
-    return [];
+    return segments.map((segment) => ({
+      type: segment.transitType === "WALK" ? "walk" : "bus",
+      minutes: toNumber(segment.durationMinutes),
+    }));
   }
 
   return timeline
@@ -886,9 +950,9 @@ function normalizeTimeline(timeline) {
     );
 }
 
-function normalizeSteps(steps) {
+function normalizeSteps(steps, segments = []) {
   if (!Array.isArray(steps)) {
-    return [];
+    return normalizeStepsFromSegments(segments);
   }
 
   return steps
@@ -950,6 +1014,47 @@ function normalizeSteps(steps) {
       }
 
       return null;
+    })
+    .filter(Boolean);
+}
+
+function normalizeStepsFromSegments(segments = []) {
+  return segments
+    .map((segment) => {
+      if (segment.transitType === "WALK") {
+        return {
+          type: "walk",
+          distanceText:
+            segment.distanceText ??
+            segment.distance ??
+            segment.raw?.distanceText ??
+            segment.raw?.distance ??
+            "도보 이동",
+          minutes: toNumber(segment.durationMinutes),
+        };
+      }
+
+      const stations = Array.isArray(segment.stations) ? segment.stations : [];
+      const boardingStop =
+        segment.startStation || stations[0]?.name || "승차 정류장";
+      const arrivalStop =
+        segment.endStation || stations[stations.length - 1]?.name || "하차 정류장";
+      const viaStops = stations
+        .slice(1, Math.max(stations.length - 1, 1))
+        .map((station) => station.name)
+        .filter(Boolean);
+
+      return {
+        type: "bus",
+        routeNumber: segment.transitName || "버스",
+        stopCount: viaStops.length + 1,
+        minutes: toNumber(segment.durationMinutes),
+        boardingStopName: boardingStop,
+        boardingTime: segment.boardingTime ?? segment.startTime ?? "",
+        arrivalStopName: arrivalStop,
+        arrivalTime: segment.arrivalTime ?? segment.endTime ?? "",
+        viaStops,
+      };
     })
     .filter(Boolean);
 }
