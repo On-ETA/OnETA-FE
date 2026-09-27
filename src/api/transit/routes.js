@@ -91,13 +91,37 @@ function normalizeStation(station) {
   };
 }
 
+function normalizeTransitType(segment) {
+  const type = String(
+    segment?.transitType ?? segment?.type ?? segment?.mode ?? "",
+  ).toUpperCase();
+
+  return ["WALK", "WALKING", "FOOT", "PEDESTRIAN"].includes(type)
+    ? "WALK"
+    : segment?.transitType ?? type;
+}
+
+function getDurationMinutes(segment) {
+  const value =
+    segment?.durationMinutes ??
+    segment?.walkTime ??
+    segment?.walkingTime ??
+    segment?.walkDurationMinutes ??
+    segment?.walkDuration ??
+    segment?.duration ??
+    segment?.time;
+  const number = Number(value);
+
+  return Number.isFinite(number) && number >= 0 ? number : undefined;
+}
+
 function normalizeSegment(segment, index) {
   return {
     id: `${segment?.transitType ?? "segment"}-${index}`,
-    transitType: segment?.transitType ?? "",
+    transitType: normalizeTransitType(segment),
     startStation: segment?.startStation ?? "",
     endStation: segment?.endStation ?? "",
-    durationMinutes: segment?.durationMinutes,
+    durationMinutes: getDurationMinutes(segment),
     transitName: segment?.transitName ?? "",
     stations: Array.isArray(segment?.stations)
       ? segment.stations.map(normalizeStation)

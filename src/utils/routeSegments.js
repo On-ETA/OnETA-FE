@@ -4,12 +4,14 @@ export function getSegmentDurationMinutes(segment) {
     segment?.walkTime ??
     segment?.walkingTime ??
     segment?.walkDurationMinutes ??
+    segment?.walkDuration ??
     segment?.duration ??
     segment?.time ??
     segment?.raw?.durationMinutes ??
     segment?.raw?.walkTime ??
     segment?.raw?.walkingTime ??
     segment?.raw?.walkDurationMinutes ??
+    segment?.raw?.walkDuration ??
     segment?.raw?.duration ??
     segment?.raw?.time;
   const number = Number(value);
