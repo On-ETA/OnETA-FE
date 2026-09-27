@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAddresses } from "../api/addresses";
+import { homeCacheKeys, readHomeCache, writeHomeCache } from "../api/homeCache";
 import {
   createTransitNotification,
   getTransitNotifications,
@@ -159,6 +160,29 @@ function getCreatedNotificationId(response) {
   return response?.notificationId ?? response?.id ?? response;
 }
 
+function readCachedFirstLastRouteSummary() {
+  return readHomeCache(homeCacheKeys.firstLastRoute, null);
+}
+
+function writeCachedFirstLastRouteSummary(summary) {
+  if (summary) {
+    writeHomeCache(homeCacheKeys.firstLastRoute, summary);
+  }
+
+  return summary;
+}
+
+function findTransitNotificationById(notifications, notificationId) {
+  if (notificationId === undefined || notificationId === null || notificationId === "") {
+    return null;
+  }
+
+  return notifications.find(
+    (notification) =>
+      String(notification.notificationId) === String(notificationId),
+  ) ?? null;
+}
+
 export function HomeScreen({
   notificationCount = 0,
   initialTab = "home",
@@ -191,19 +215,34 @@ export function HomeScreen({
     useState(false);
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
   const [currentAddressLabel, setCurrentAddressLabel] = useState("");
-  const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(null);
+  const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(
+    readCachedFirstLastRouteSummary,
+  );
   const [customAlarmRefreshKey, setCustomAlarmRefreshKey] = useState(0);
 
   const loadFirstLastTransitNotifications = useCallback(async ({
     signal,
   } = {}) => {
     const notifications = await getTransitNotifications({ signal });
-    const firstNotification = notifications[0] ?? null;
 
-    setFirstLastRouteSummary(
-      firstNotification
-        ? createFirstLastRouteSummaryFromNotification(firstNotification)
-        : null,
+    setFirstLastRouteSummary((current) =>
+    {
+      const cached = readCachedFirstLastRouteSummary();
+      const preferredNotification =
+        findTransitNotificationById(notifications, current?.notificationId) ??
+        findTransitNotificationById(notifications, cached?.notificationId);
+      const fallbackNotification =
+        !current && !cached ? notifications[0] ?? null : null;
+      const selectedNotification = preferredNotification ?? fallbackNotification;
+
+      if (selectedNotification) {
+        return writeCachedFirstLastRouteSummary(
+          createFirstLastRouteSummaryFromNotification(selectedNotification),
+        );
+      }
+
+      return current ?? cached;
+    },
     );
   }, []);
 
@@ -254,7 +293,7 @@ export function HomeScreen({
   const handleFirstLastRouteConfigured = useCallback(async (route, places) => {
     const summary = createFirstLastRouteSummary(route, places);
 
-    setFirstLastRouteSummary(summary);
+    setFirstLastRouteSummary(writeCachedFirstLastRouteSummary(summary));
     blurActiveElement();
     setIsScheduleAlarmAddVisible(false);
     setScheduleAlarmInitialStep("form");
@@ -268,14 +307,13 @@ export function HomeScreen({
       if (notificationId !== undefined && notificationId !== null) {
         setFirstLastRouteSummary((current) =>
           current
-            ? {
+            ? writeCachedFirstLastRouteSummary({
                 ...current,
                 notificationId,
-              }
+              })
             : current,
         );
       }
-      await loadFirstLastTransitNotifications();
     } catch (error) {
       console.warn("첫막차 경로 등록 실패:", error?.code ?? error?.message);
     }
@@ -388,7 +426,11 @@ export function HomeScreen({
                   setFirstLastRouteSetupStep("map");
                 }}
                 onRouteSelect={(route, places) => {
-                  setFirstLastRouteSummary(createFirstLastRouteSummary(route, places));
+                  setFirstLastRouteSummary(
+                    writeCachedFirstLastRouteSummary(
+                      createFirstLastRouteSummary(route, places),
+                    ),
+                  );
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
                 }}
