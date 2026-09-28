@@ -55,7 +55,10 @@ export async function agreeToSignupTerms({
     personalInfoAgreement: Boolean(personalInfoAgreement),
   };
 
-  if (tempId) {
+  if (
+    (typeof tempId === "string" && tempId.trim().length > 0) ||
+    typeof tempId === "number"
+  ) {
     body.tempId = tempId;
   }
 
