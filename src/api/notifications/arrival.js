@@ -290,8 +290,20 @@ export async function createArrivalNotification({
     errorMessage: "도착 알림 등록에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.scheduleNotifications);
-  await getArrivalNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  const createdNotification = response?.data ?? response;
+  const createdSchedule = normalizeArrivalNotification({
+    ...payload,
+    ...createdNotification,
+    scheduleType: createdNotification?.scheduleType ?? payload?.scheduleType ?? "NORMAL",
+  });
+  const cachedNotifications = readHomeCache(homeCacheKeys.scheduleNotifications);
+
+  writeHomeCache(
+    homeCacheKeys.scheduleNotifications,
+    Array.isArray(cachedNotifications)
+      ? [...cachedNotifications, createdSchedule]
+      : [createdSchedule],
+  );
 
   return response;
 }

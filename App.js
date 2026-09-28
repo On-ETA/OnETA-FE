@@ -175,11 +175,12 @@ function SignupRoute({ navigation }) {
   return (
     <SignupScreen
       onBackPress={() => goBackOrReset(navigation, routes.login)}
-      onNextPress={({ email, password, signupTokens }) =>
+      onNextPress={({ email, password, signupTokens, tempId }) =>
         navigateTo(navigation, routes.termsAgreement, {
           email,
           password,
           signupTokens,
+          tempId,
         })
       }
     />

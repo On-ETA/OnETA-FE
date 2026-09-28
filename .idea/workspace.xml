@@ -4,7 +4,12 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="752266d0-9ca4-4be7-8977-1f0008d35584" name="Changes" comment="" />
+    <list default="true" id="752266d0-9ca4-4be7-8977-1f0008d35584" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/App.js" beforeDir="false" afterPath="$PROJECT_DIR$/App.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/api/auth/consent.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/api/auth/consent.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/SignupScreen.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/screens/SignupScreen.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/TermsAgreementScreen.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/screens/TermsAgreementScreen.js" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -35,7 +40,7 @@
     "cf.first.check.clang-format": "false",
     "cidr.known.project.marker": "true",
     "com.google.services.firebase.aqiPopupShown": "true",
-    "git-widget-placeholder": "navermap-pin",
+    "git-widget-placeholder": "naver-pin",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "C:/DB/homerun/HomeRun-FE"
   }

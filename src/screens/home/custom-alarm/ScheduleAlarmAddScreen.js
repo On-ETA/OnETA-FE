@@ -32,6 +32,10 @@ import { searchTransitRoutes } from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { NaverMapView } from "../../../components/NaverMapView";
 import { RouteTimeline } from "../../../components/RouteTimeline";
+import {
+  getCurrentCoordinate,
+  reverseGeocode,
+} from "../../../components/reverseGeocode";
 import { AddressManagementScreen } from "../../AddressManagementScreen";
 import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
@@ -243,6 +247,53 @@ function createRoutePlaceFromSearchResult(
 
     x: result?.x,
     y: result?.y,
+
+    raw:
+      result?.raw ??
+      result,
+  });
+}
+
+function createRoutePlaceFromMapSearchResult(
+  result,
+  coordinate,
+) {
+  const latitude = Number(
+    coordinate?.latitude,
+  );
+  const longitude = Number(
+    coordinate?.longitude,
+  );
+
+  return createRoutePlace({
+    label:
+      result?.name ||
+      result?.address ||
+      result?.roadAddress ||
+      "",
+
+    name: result?.name,
+
+    address:
+      result?.address ||
+      result?.roadAddress ||
+      "",
+
+    x: Number.isFinite(longitude)
+      ? longitude
+      : result?.x,
+
+    y: Number.isFinite(latitude)
+      ? latitude
+      : result?.y,
+
+    latitude: Number.isFinite(latitude)
+      ? latitude
+      : result?.latitude,
+
+    longitude: Number.isFinite(longitude)
+      ? longitude
+      : result?.longitude,
 
     raw:
       result?.raw ??
@@ -1111,6 +1162,34 @@ export function ScheduleRouteMapStep({
     setUserLocation,
   ] = useState(null);
 
+  const [
+    mapSelectedCoordinate,
+    setMapSelectedCoordinate,
+  ] = useState(null);
+
+  const [
+    mapSelectedResults,
+    setMapSelectedResults,
+  ] = useState([]);
+
+  const [
+    selectedMapResultIndex,
+    setSelectedMapResultIndex,
+  ] = useState(0);
+
+  const [
+    isReverseGeocoding,
+    setIsReverseGeocoding,
+  ] = useState(false);
+
+  const [
+    mapSelectionError,
+    setMapSelectionError,
+  ] = useState("");
+
+  const mapPressRequestIdRef =
+    useRef(0);
+
   const trimmedPlaceKeyword =
     placeKeyword.trim();
 
@@ -1126,48 +1205,29 @@ export function ScheduleRouteMapStep({
     );
 
   const searchReferenceCenter =
-    userLocation ?? selectedPlaceCenter;
+    mapSelectedCoordinate ??
+    userLocation ??
+    selectedPlaceCenter;
 
   useEffect(() => {
-    const geolocation =
-      globalThis.navigator?.geolocation;
-
-    if (!geolocation) {
-      return undefined;
-    }
-
     let isActive = true;
 
-    geolocation.getCurrentPosition(
-      (position) => {
-        if (!isActive) {
-          return;
-        }
+    async function loadCurrentLocation() {
+      try {
+        const coordinate =
+          await getCurrentCoordinate();
 
-        const latitude = Number(
-          position?.coords?.latitude,
-        );
-        const longitude = Number(
-          position?.coords?.longitude,
-        );
-
-        if (
-          Number.isFinite(latitude) &&
-          Number.isFinite(longitude)
-        ) {
-          setUserLocation({
-            latitude,
-            longitude,
-          });
+        if (isActive) {
+          setUserLocation(
+            coordinate,
+          );
         }
-      },
-      () => {},
-      {
-        enableHighAccuracy: true,
-        maximumAge: 60000,
-        timeout: 8000,
-      },
-    );
+      } catch {
+        // Current location is optional for this screen.
+      }
+    }
+
+    loadCurrentLocation();
 
     return () => {
       isActive = false;
@@ -1181,6 +1241,9 @@ export function ScheduleRouteMapStep({
     setPlaceKeyword("");
     setPlaceResults([]);
     setPlaceSearchError("");
+    setMapSelectedCoordinate(null);
+    setMapSelectedResults([]);
+    setMapSelectionError("");
 
     requestAnimationFrame(() => {
       placeSearchInputRef.current?.focus?.();
@@ -1415,6 +1478,181 @@ export function ScheduleRouteMapStep({
     trimmedPlaceKeyword,
   ]);
 
+  const handlePlaceKeywordChange = (
+    value,
+  ) => {
+    mapPressRequestIdRef.current +=
+      1;
+
+    setMapSelectedCoordinate(null);
+    setMapSelectedResults([]);
+    setSelectedMapResultIndex(0);
+    setMapSelectionError("");
+    setIsReverseGeocoding(false);
+    setPlaceKeyword(value);
+  };
+
+  const handleMapPress = async ({
+    latitude,
+    longitude,
+  }) => {
+    const resolvedLatitude =
+      Number(latitude);
+    const resolvedLongitude =
+      Number(longitude);
+
+    if (
+      !Number.isFinite(
+        resolvedLatitude,
+      ) ||
+      !Number.isFinite(
+        resolvedLongitude,
+      )
+    ) {
+      return;
+    }
+
+    const requestId =
+      mapPressRequestIdRef.current +
+      1;
+
+    mapPressRequestIdRef.current =
+      requestId;
+
+    const coordinate = {
+      latitude: resolvedLatitude,
+      longitude: resolvedLongitude,
+    };
+
+    setMapSelectedCoordinate(
+      coordinate,
+    );
+    setMapSelectedResults([]);
+    setSelectedMapResultIndex(0);
+    setMapSelectionError("");
+    setPlaceKeyword("");
+    setPlaceResults([]);
+    setPlaceSearchError("");
+    setIsReverseGeocoding(true);
+
+    placeSearchInputRef.current?.blur?.();
+
+    try {
+      const geocoded =
+        await reverseGeocode(
+          coordinate,
+        );
+
+      if (
+        requestId !==
+        mapPressRequestIdRef.current
+      ) {
+        return;
+      }
+
+      const roadAddress =
+        geocoded.roadAddress ||
+        geocoded.address ||
+        "";
+
+      let searchResults = [];
+      let searchErrorMessage = "";
+
+      if (roadAddress) {
+        try {
+          searchResults =
+            await searchAddresses({
+              keyword: roadAddress,
+            });
+        } catch (searchError) {
+          searchErrorMessage =
+            searchError?.message ??
+            "주소 검색 결과를 불러오지 못했습니다.";
+        }
+      }
+
+      if (
+        requestId !==
+        mapPressRequestIdRef.current
+      ) {
+        return;
+      }
+
+      const normalizedResults =
+        Array.isArray(searchResults)
+          ? sortPlacesByDistance(
+              searchResults,
+              coordinate,
+            )
+          : [];
+
+      const fallbackResult = {
+        id: `map-${resolvedLatitude}-${resolvedLongitude}`,
+        name:
+          geocoded.name ||
+          roadAddress ||
+          "선택한 위치",
+        address: roadAddress,
+        roadAddress,
+        x: resolvedLongitude,
+        y: resolvedLatitude,
+        latitude: resolvedLatitude,
+        longitude: resolvedLongitude,
+        raw: geocoded.raw,
+      };
+
+      setMapSelectedResults(
+        normalizedResults.length > 0
+          ? normalizedResults
+          : [fallbackResult],
+      );
+
+      setMapSelectionError(
+        normalizedResults.length === 0
+          ? searchErrorMessage
+          : "",
+      );
+    } catch (error) {
+      if (
+        requestId !==
+        mapPressRequestIdRef.current
+      ) {
+        return;
+      }
+
+      const fallbackResult = {
+        id: `map-${resolvedLatitude}-${resolvedLongitude}`,
+        name: "선택한 위치",
+        address: `${resolvedLatitude.toFixed(6)}, ${resolvedLongitude.toFixed(6)}`,
+        roadAddress: "",
+        x: resolvedLongitude,
+        y: resolvedLatitude,
+        latitude: resolvedLatitude,
+        longitude: resolvedLongitude,
+        raw: {
+          latitude: resolvedLatitude,
+          longitude: resolvedLongitude,
+        },
+      };
+
+      setMapSelectedResults([
+        fallbackResult,
+      ]);
+
+      setMapSelectionError(
+        error?.message ??
+          "선택한 위치의 주소를 찾지 못했습니다.",
+      );
+    } finally {
+      if (
+        requestId ===
+        mapPressRequestIdRef.current
+      ) {
+        setIsReverseGeocoding(false);
+      }
+    }
+  };
+
   const updateTypedPlace = (
     type,
     value,
@@ -1477,6 +1715,63 @@ export function ScheduleRouteMapStep({
     setPlaceKeyword("");
     setPlaceResults([]);
     setPlaceSearchError("");
+    setMapSelectedCoordinate(null);
+    setMapSelectedResults([]);
+    setMapSelectionError("");
+  };
+
+  const applyMapSelectedPlace = () => {
+    const selectedResult =
+      mapSelectedResults[
+        selectedMapResultIndex
+      ] ?? mapSelectedResults[0];
+
+    if (
+      !selectedResult ||
+      !mapSelectedCoordinate
+    ) {
+      return;
+    }
+
+    const nextPlace =
+      createRoutePlaceFromMapSearchResult(
+        selectedResult,
+        mapSelectedCoordinate,
+      );
+
+    if (selectionMode) {
+      onPlaceSelect?.(
+        activePlaceType,
+        nextPlace,
+      );
+      return;
+    }
+
+    if (
+      activePlaceType ===
+      "origin"
+    ) {
+      hasEditedOrigin.current =
+        true;
+
+      setOrigin(nextPlace);
+
+      setActivePlaceType(
+        "destination",
+      );
+    } else {
+      hasEditedDestination.current =
+        true;
+
+      setDestination(
+        nextPlace,
+      );
+    }
+
+    setMapSelectedCoordinate(null);
+    setMapSelectedResults([]);
+    setSelectedMapResultIndex(0);
+    setMapSelectionError("");
   };
 
   const searchResultMarkers =
@@ -1495,10 +1790,20 @@ export function ScheduleRouteMapStep({
         userLocation;
 
   const mapMarkers =
-    hasPlaceKeyword &&
+    mapSelectedCoordinate
+      ? [mapSelectedCoordinate]
+      : hasPlaceKeyword &&
     searchResultMarkers.length > 0
       ? searchResultMarkers
       : undefined;
+
+  const hasMapSelection =
+    Boolean(mapSelectedCoordinate);
+
+  const canApplyMapSelection =
+    hasMapSelection &&
+    !isReverseGeocoding &&
+    mapSelectedResults.length > 0;
 
   return (
     <View
@@ -1510,6 +1815,7 @@ export function ScheduleRouteMapStep({
         center={mapCenter ?? undefined}
         level={hasPlaceKeyword ? 13 : 15}
         markers={mapMarkers}
+        onMapPress={handleMapPress}
         showCenterMarker={Boolean(mapCenter)}
       />
 
@@ -1545,7 +1851,7 @@ export function ScheduleRouteMapStep({
 
           <TextInput
             onChangeText={
-              setPlaceKeyword
+              handlePlaceKeywordChange
             }
             placeholder={
               activePlaceType ===
@@ -1559,6 +1865,7 @@ export function ScheduleRouteMapStep({
             style={
               styles.placeSearchInput
             }
+            ref={placeSearchInputRef}
             value={
               placeKeyword
             }
@@ -1660,7 +1967,7 @@ export function ScheduleRouteMapStep({
         ) : null}
       </View>
 
-      {!selectionMode ? (
+      {!selectionMode || hasMapSelection ? (
       <Animated.View
         style={[
           styles.routeSheet,
@@ -1698,6 +2005,93 @@ export function ScheduleRouteMapStep({
             styles.routeSheetContent
           }
         >
+          {hasMapSelection ? (
+            <>
+              {isReverseGeocoding ? (
+                <Text
+                  style={
+                    styles.placeResultStatus
+                  }
+                >
+                  선택한 위치의 주소를
+                  확인하고 있습니다.
+                </Text>
+              ) : mapSelectionError ? (
+                <Text
+                  style={[
+                    styles.placeResultStatus,
+                    styles.mapSelectionError,
+                  ]}
+                >
+                  {
+                    mapSelectionError
+                  }
+                </Text>
+              ) : null}
+
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator
+                style={
+                  styles.mapSelectionList
+                }
+              >
+                {mapSelectedResults.map(
+                  (result, index) => {
+                    const isSelected =
+                      index ===
+                      selectedMapResultIndex;
+
+                    return (
+                      <Pressable
+                        accessibilityRole="button"
+                        key={
+                          result.id ??
+                          `${result.name}-${result.address}-${result.roadAddress}-${index}`
+                        }
+                        onPress={() =>
+                          setSelectedMapResultIndex(
+                            index,
+                          )
+                        }
+                        style={[
+                          styles.placeResultRow,
+                          isSelected &&
+                            styles.mapSelectedResultRow,
+                        ]}
+                      >
+                        <Text
+                          numberOfLines={
+                            1
+                          }
+                          style={
+                            styles.placeResultName
+                          }
+                        >
+                          {result.name ||
+                            result.roadAddress ||
+                            result.address}
+                        </Text>
+
+                        <Text
+                          numberOfLines={
+                            1
+                          }
+                          style={
+                            styles.placeResultAddress
+                          }
+                        >
+                          {result.roadAddress ||
+                            result.address}
+                        </Text>
+                      </Pressable>
+                    );
+                  },
+                )}
+              </ScrollView>
+            </>
+          ) : (
+            <>
           <Text
             style={
               styles.routeFieldLabel
@@ -1826,26 +2220,42 @@ export function ScheduleRouteMapStep({
               }
             </Text>
           ) : null}
+            </>
+          )}
         </View>
 
         <Pressable
           accessibilityRole="button"
           onPress={() =>
-            onConfirm({
-              origin,
-              destination,
-            })
+            hasMapSelection
+              ? applyMapSelectedPlace()
+              : onConfirm({
+                  origin,
+                  destination,
+                })
           }
-          style={
-            styles.mapConfirmButton
+          disabled={
+            hasMapSelection &&
+            !canApplyMapSelection
           }
+          style={[
+            styles.mapConfirmButton,
+            hasMapSelection &&
+              !canApplyMapSelection &&
+              styles.mapConfirmButtonDisabled,
+          ]}
         >
           <Text
             style={
               styles.mapConfirmButtonText
             }
           >
-            확인
+            {hasMapSelection
+              ? activePlaceType ===
+                "origin"
+                ? "출발지로 지정"
+                : "도착지로 지정"
+              : "확인"}
           </Text>
         </Pressable>
       </Animated.View>
@@ -4374,6 +4784,20 @@ const styles =
       color: "#D14343",
     },
 
+    mapSelectionList: {
+      flex: 1,
+      minHeight: 0,
+    },
+
+    mapSelectedResultRow: {
+      backgroundColor: "#E2F8EA",
+    },
+
+    mapSelectionError: {
+      paddingVertical: 8,
+      color: "#D14343",
+    },
+
     mapConfirmButton: {
       height: 46,
       marginTop: 8,
@@ -4383,6 +4807,11 @@ const styles =
       borderRadius: 8,
       backgroundColor:
         colors.main,
+    },
+
+    mapConfirmButtonDisabled: {
+      backgroundColor:
+        colors.gray04,
     },
 
     mapConfirmButtonText: {

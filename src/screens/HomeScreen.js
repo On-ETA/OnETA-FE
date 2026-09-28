@@ -8,6 +8,7 @@ import {
   homeCacheKeys,
   readHomeCache,
   readHomeCacheAsync,
+  removeHomeCache,
   writeHomeCache,
 } from "../api/homeCache";
 import {
@@ -177,6 +178,11 @@ function writeCachedFirstLastRouteSummary(summary) {
   return summary;
 }
 
+function clearCachedFirstLastRouteSummary() {
+  removeHomeCache(homeCacheKeys.firstLastRoute);
+  return null;
+}
+
 function findTransitNotificationById(notifications, notificationId) {
   if (notificationId === undefined || notificationId === null || notificationId === "") {
     return null;
@@ -225,7 +231,7 @@ export function HomeScreen({
   const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(
     readCachedFirstLastRouteSummary,
   );
-  const [customAlarmRefreshKey, setCustomAlarmRefreshKey] = useState(0);
+  const customAlarmRefreshKey = 0;
 
   useEffect(() => {
     let isActive = true;
@@ -252,14 +258,16 @@ export function HomeScreen({
       const preferredNotification =
         findTransitNotificationById(notifications, current?.notificationId) ??
         findTransitNotificationById(notifications, cached?.notificationId);
-      const fallbackNotification =
-        !current && !cached ? notifications[0] ?? null : null;
-      const selectedNotification = preferredNotification ?? fallbackNotification;
+      const selectedNotification = preferredNotification;
 
       if (selectedNotification) {
         return writeCachedFirstLastRouteSummary(
           createFirstLastRouteSummaryFromNotification(selectedNotification),
         );
+      }
+
+      if (notifications.length === 0) {
+        return clearCachedFirstLastRouteSummary();
       }
 
       return current ?? cached;
@@ -351,7 +359,6 @@ export function HomeScreen({
     setScheduleAlarmInitialValues(null);
     setActiveTab("home");
     setActiveHomeTab("customAlarm");
-    setCustomAlarmRefreshKey((current) => current + 1);
   }, []);
 
   const handleTabPress = (tabKey) => {
@@ -477,7 +484,6 @@ export function HomeScreen({
                 onSavePress={() => {
                   blurActiveElement();
                   setEditingCustomAlarm(null);
-                  setCustomAlarmRefreshKey((current) => current + 1);
                 }}
               />
             ) : editingCustomAlarm?.type === "garage" ? (
@@ -495,7 +501,6 @@ export function HomeScreen({
                 onSavePress={() => {
                   blurActiveElement();
                   setEditingCustomAlarm(null);
-                  setCustomAlarmRefreshKey((current) => current + 1);
                 }}
               />
             ) : isRouteDetailVisible ? (
