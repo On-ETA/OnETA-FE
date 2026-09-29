@@ -2,6 +2,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import SmallBusAsset from "../../assets/images/smallbus.svg";
+import BusGreenAsset from "../../assets/images/bus_g.svg";
 import WalkAsset from "../../assets/images/man.svg";
 import { colors } from "../theme";
 import { normalizeTimelineSegments } from "../utils/routeSegments";
@@ -19,7 +20,8 @@ export function RouteTimeline({ segments: routeSegments = [], style }) {
   );
 
   return (
-    <View style={[styles.timeline, style]}>
+    <View>
+      <View style={[styles.timeline, style]}>
       {segments.map((segment, index) => {
         const isTransit = segment.transitType !== "WALK";
         const duration = Math.max(segment.durationMinutes ?? 0, 0);
@@ -58,6 +60,41 @@ export function RouteTimeline({ segments: routeSegments = [], style }) {
           </View>
         );
       })}
+      </View>
+      <View style={styles.stopDetails}>
+        {segments
+          .filter((segment) => segment.transitType !== "WALK")
+          .map((segment, transitIndex, transitSegments) => {
+            const stations = Array.isArray(segment.stations) ? segment.stations : [];
+            const boardingStop = segment.startStation || segment.boardingStopName || stations[0]?.name || "승차 정류장";
+            const arrivalStop = segment.endStation || segment.arrivalStopName || stations[stations.length - 1]?.name || "하차 정류장";
+            const busNumber = segment.transitName || segment.routeNumber || segment.busNumber || segment.raw?.transitName || "버스";
+            const isFirst = transitIndex === 0;
+            const isLast = transitIndex === transitSegments.length - 1;
+            const rows = [
+              { label: isFirst ? "승차" : "환승", name: boardingStop, active: true },
+              ...(isLast ? [{ label: "하차", name: arrivalStop, active: false }] : []),
+            ];
+
+            return rows.map((row, rowIndex) => (
+              <View key={`${segment.id}-${row.label}-${rowIndex}`} style={styles.stopRow}>
+                <View style={[styles.stopOuter, row.active ? styles.stopOuterActive : null]}>
+                  <View style={[styles.stopInner, row.active ? styles.stopInnerActive : null]}>
+                    <View style={styles.stopCenter} />
+                  </View>
+                </View>
+                <Text style={styles.stopLabel}>{row.label}</Text>
+                <Text numberOfLines={1} style={styles.stopName}>{row.name}</Text>
+                {row.active ? (
+                  <View style={styles.busBadge}>
+                    <BusGreenAsset width={13} height={13} />
+                    <Text style={styles.busNumber}>{busNumber}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ));
+          })}
+      </View>
     </View>
   );
 }
@@ -70,6 +107,81 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderRadius: 10,
     backgroundColor: colors.gray04,
+  },
+  stopDetails: {
+    marginTop: 10,
+    gap: 7,
+  },
+  stopRow: {
+    minHeight: 22,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  stopOuter: {
+    width: 23,
+    height: 23,
+    marginRight: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: colors.gray04,
+  },
+  stopOuterActive: {
+    backgroundColor: colors.sub,
+  },
+  stopInner: {
+    width: 16,
+    height: 16,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.gray06,
+  },
+  stopInnerActive: {
+    backgroundColor: colors.main,
+  },
+  stopCenter: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.white,
+  },
+  stopLabel: {
+    width: 42,
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.gray07,
+  },
+  stopName: {
+    flexShrink: 1,
+    marginLeft: 3,
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.gray08,
+  },
+  busBadge: {
+    minHeight: 24,
+    marginLeft: 8,
+    paddingRight: 6,
+    paddingLeft: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.main,
+    backgroundColor: colors.white,
+  },
+  busNumber: {
+    marginLeft: 3,
+    fontFamily: "SUIT",
+    fontSize: 13,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 18.2,
+    letterSpacing: -0.13,
+    color: colors.main,
   },
   segment: {
     height: "100%",
