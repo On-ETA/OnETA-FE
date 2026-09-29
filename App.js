@@ -27,6 +27,7 @@ import { routes } from "./src/navigation/routes";
 import {
   extractAuthTokens,
   getAccessToken,
+  hydrateAuthTokens,
   setAuthTokens,
 } from "./src/api/auth/tokens";
 import { blurActiveElement } from "./src/utils/accessibility";
@@ -115,7 +116,7 @@ function useAuthenticatedRoute(navigation, route) {
   React.useEffect(() => {
     if (accessToken) {
       clearHomeCache();
-      setAuthTokens({ accessToken, refreshToken });
+      setAuthTokens({ accessToken, refreshToken }, { persist: true });
       if (!didPreloadRef.current) {
         didPreloadRef.current = true;
         preloadHomeCache().catch(() => null);
@@ -467,6 +468,40 @@ function FindPasswordRoute({ navigation }) {
 }
 
 export default function App() {
+  const [isAuthHydrated, setIsAuthHydrated] = React.useState(false);
+  const [initialRouteName, setInitialRouteName] = React.useState(routes.login);
+
+  React.useEffect(() => {
+    let isActive = true;
+
+    hydrateAuthTokens()
+      .then(({ accessToken }) => {
+        if (!isActive) {
+          return;
+        }
+
+        setInitialRouteName(accessToken ? routes.home : routes.login);
+      })
+      .catch(() => {
+        if (isActive) {
+          setInitialRouteName(routes.login);
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsAuthHydrated(true);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  if (!isAuthHydrated) {
+    return null;
+  }
+
   return (
     <SafeAreaProvider>
       <GlobalScrollbarStyle />
@@ -477,7 +512,7 @@ export default function App() {
         onStateChange={flushNotificationNavigation}
       >
         <Stack.Navigator
-          initialRouteName={routes.login}
+          initialRouteName={initialRouteName}
           screenOptions={{
             headerShown: false,
           }}
