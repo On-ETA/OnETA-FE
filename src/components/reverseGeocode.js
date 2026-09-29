@@ -6,7 +6,7 @@ let permissionPromise = null;
 async function ensureForegroundLocationPermission() {
   if (Platform.OS === "web") {
     throw new Error(
-      "현재 위치 기능은 웹 환경에서 사용할 수 없습니다.",
+      "",
     );
   }
 
