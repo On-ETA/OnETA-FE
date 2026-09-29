@@ -38,6 +38,12 @@ const TERMS = [
     description:
       "회원가입 및 서비스 제공을 위해 이메일, 비밀번호 및 선택적으로 입력한 닉네임 등 필요한 개인정보를 수집 및 이용합니다. 수집된 정보는 본인 확인, 계정 관리, 서비스 이용 안내 목적으로 사용되며, 관련 법령에 따른 보관 기간 이후 안전하게 파기됩니다.",
   },
+  {
+    id: "notifications",
+    title: "알림 수신 동의 (필수)",
+    description:
+      "경로 및 일정 알림 등 서비스 이용에 필요한 알림을 제공하기 위해 알림 수신 동의를 받습니다.",
+  },
 ];
 
 function getConsentErrorMessage(error) {
@@ -77,10 +83,11 @@ export function TermsAgreementScreen({
   onConfirmPress,
   tempId,
 }) {
-  const [checkedMap, setCheckedMap] =
+    const [checkedMap, setCheckedMap] =
     useState({
       service: false,
       privacy: false,
+      notifications: false,
     });
 
   const [expandedMap, setExpandedMap] =
@@ -185,6 +192,8 @@ export function TermsAgreementScreen({
             checkedMap.service,
           personalInfoAgreement:
             checkedMap.privacy,
+          notificationAgreement:
+            checkedMap.notifications,
         });
 
       onConfirmPress?.(response);
@@ -445,7 +454,7 @@ const styles = StyleSheet.create({
 
   termsList: {
     marginTop: 32,
-    gap: 10,
+    gap: 16,
   },
 
   termItem: {

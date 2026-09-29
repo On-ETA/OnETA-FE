@@ -10,6 +10,7 @@ import {
 import Svg, { Circle, Path } from "react-native-svg";
 
 import BackIcon from "../../../../assets/images/L.svg";
+import WalkAsset from "../../../../assets/images/man.svg";
 import {
   getTransitNotification,
   getTransitNotifications,
@@ -257,7 +258,7 @@ function TimelineSummary({ items }) {
               {isBus ? (
                 <BusIcon size={12} />
               ) : (
-                <WalkIcon size={12} />
+                <WalkAsset width={8} height={13} />
               )}
             </View>
 
@@ -363,10 +364,7 @@ function WalkStep({ step }) {
     <View style={styles.walkStep}>
       <View style={styles.walkStepInner}>
         <View style={styles.walkStepIcon}>
-          <WalkIcon
-            color={colors.white}
-            size={13}
-          />
+          <WalkAsset width={8} height={13} />
         </View>
 
         <Text style={styles.walkText}>
