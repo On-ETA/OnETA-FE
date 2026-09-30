@@ -2686,95 +2686,6 @@ export function ScheduleRouteResultStep({
               }
             />
 
-            <View
-              style={
-                styles.routeDivider
-              }
-            />
-
-            <View
-              style={
-                styles.routeBusInfo
-              }
-            >
-              <View
-                style={
-                  styles.routeBusBadge
-                }
-              >
-                <BigBusAsset width={9} height={10} />
-              </View>
-
-              <Text
-                style={
-                  styles.routeBusNumber
-                }
-              >
-                {finalTransitSegment?.transitName ||
-                  "대중교통"}
-              </Text>
-
-              {finalTransitSegment?.endStation ? (
-                <View style={styles.routeBusDirectionRow}>
-                  <DirectionCircleAsset width={3} height={3} />
-                  <Text
-                    style={
-                      styles.routeBusDirection
-                    }
-                  >
-                    {`${finalTransitSegment.endStation} 방면`}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-
-            <View
-              style={
-                styles.routeStops
-              }
-            >
-              <StopLineAsset
-                width={1}
-                height={trailingWalkSegment ? 69 : 35}
-                style={styles.resultStopLine}
-              />
-              <StopRow
-                active
-                label="승차"
-                name={
-                  getSegmentStopName(
-                    finalTransitSegment,
-                    "start",
-                  ) ||
-                  getRoutePlaceText(
-                    origin,
-                  )
-                }
-              />
-
-              <StopRow
-                label="하차"
-                name={
-                  getSegmentStopName(
-                    finalTransitSegment,
-                    "end",
-                  ) ||
-                  getRoutePlaceText(
-                    destination,
-                  )
-                }
-              />
-
-              {trailingWalkSegment ? (
-                <StopRow
-                  label="도보"
-                  name={`${getRoutePlaceText(destination) || "목적지"}까지 ${
-                    trailingWalkSegment.durationMinutes
-                  }분`}
-                />
-              ) : null}
-            </View>
-
             <Pressable
               accessibilityRole="button"
               onPress={() =>
@@ -2986,9 +2897,10 @@ function ScheduleAlarmFinalStep({
 
   const finalInfoSubText =
     selectedReminderOffsets.length > 0
-      ? `출발 예정 시간 ${selectedReminderOffsets.join(
-          ", ",
-        )}분 전에 알림을 알려드릴게요.`
+      ? `출발 적정 시간 ${selectedReminderOffsets[0]}분 전인 ${getFormattedStartTime(
+          arrivalTime,
+          displayDuration + Number(selectedReminderOffsets[0]),
+        )}에 알려드릴게요.`
       : "알림 시간을 선택하면 출발 전 알림을 알려드릴게요.";
   const toggleDay = (day) => {
     setSelectedDays(
@@ -3432,6 +3344,11 @@ function ScheduleAlarmFinalStep({
             },
           )}
         </View>
+
+        <View style={styles.finalInfoBox}>
+          <Text style={styles.finalInfoText}>{finalInfoText}</Text>
+          <Text style={styles.finalInfoText}>{finalInfoSubText}</Text>
+        </View>
       </View>
 
       <View
@@ -3439,28 +3356,6 @@ function ScheduleAlarmFinalStep({
           styles.finalFooter
         }
       >
-        <View
-          style={
-            styles.finalInfoBox
-          }
-        >
-          <Text
-            style={
-              styles.finalInfoText
-            }
-          >
-            {finalInfoText}
-          </Text>
-
-          <Text
-            style={
-              styles.finalInfoText
-            }
-          >
-            {finalInfoSubText}
-          </Text>
-        </View>
-
         <View
           style={
             styles.finalButtonRow
@@ -5688,6 +5583,7 @@ const styles =
     },
 
     finalInfoBox: {
+      marginTop: 36,
       paddingVertical: 14,
       paddingHorizontal: 12,
       borderRadius: 4,

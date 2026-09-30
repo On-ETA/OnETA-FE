@@ -475,6 +475,7 @@ function NativeNaverMap({
       isShowScaleBar={false}
       isShowZoomControls={false}
       locale="ko"
+      locationTrackingMode="None"
       style={[styles.container, style]}
       onCameraIdle={handleCameraIdle}
       onTapMap={handleTapMap}

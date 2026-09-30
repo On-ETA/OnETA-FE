@@ -41,6 +41,10 @@ export function FirstLastRouteScreen({
     60: false,
   });
   const hasConfiguredRoute = Boolean(routeSummary);
+  const enabledAlarmLabels = PRE_DEPARTURE_ALARMS
+    .filter((alarm) => alarmSettings[alarm.key])
+    .map((alarm) => alarm.label.replace(" 전", ""));
+  const enabledAlarmText = enabledAlarmLabels.join(", ");
 
   const closeAlarmModal = () => {
     blurActiveElement();
@@ -134,26 +138,6 @@ export function FirstLastRouteScreen({
                 </Text>
               </View>
               <RouteTimeline segments={routeSummary.segments} />
-              {routeSummary.transitLegs.map((leg) => (
-                <React.Fragment key={leg.id}>
-                  <View style={styles.routeSectionDivider} />
-                  <View style={styles.busInfoRow}>
-                    <View style={styles.busBadge}>
-                      <BigBusAsset width={9} height={10} />
-                    </View>
-                    <Text style={styles.busNumber}>{leg.routeNumber}</Text>
-                    <View style={styles.busDirectionRow}>
-                      <DirectionCircleAsset width={3} height={3} />
-                      <Text style={styles.busDirection}>{leg.routeDirection}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.stopRows}>
-                    <StopLineAsset width={1} height={35} style={styles.stopLine} />
-                    <StopRow active label="승차" name={leg.boardingStopName} time={leg.boardingTime} />
-                    <StopRow label="하차" name={leg.arrivalStopName} time={leg.arrivalTime} />
-                  </View>
-                </React.Fragment>
-              ))}
             </>
           ) : (
             <View style={styles.emptyRouteState}>
@@ -179,7 +163,7 @@ export function FirstLastRouteScreen({
       <View style={styles.noticeBubble}>
         <Text style={styles.noticeText}>
           {hasConfiguredRoute
-            ? `출발 ${routeSummary.preDepartureAlarmMinutes}분 전에 알려드릴게요!`
+            ? `출발 ${enabledAlarmText || `${routeSummary.preDepartureAlarmMinutes || ""}분`} 전에 알려드릴게요!`
             : "출발 전 미리 알림을 설정할 수 있어요!"}
         </Text>
         <Pressable

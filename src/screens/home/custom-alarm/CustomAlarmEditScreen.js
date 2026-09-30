@@ -371,40 +371,10 @@ export function ScheduleAlarmEditScreen({
       >
         <View style={styles.routeHeader}>
           <View style={styles.routeTopRow}>
-            <View style={styles.busInfo}>
-              <View style={styles.busIconCircle}>
-                <BigBusAsset width={9} height={10} />
-              </View>
-              <Text style={styles.busNumber}>
-                {primarySegment?.transitName || "대중교통"}
-              </Text>
-              {primarySegment?.endStation ? (
-                <View style={styles.busDirectionRow}>
-                  <DirectionCircleAsset width={3} height={3} />
-                  <Text numberOfLines={1} style={styles.busDirection}>
-                    {`${primarySegment.endStation} 방면`}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
             <View style={styles.totalTime}>
               <Text style={styles.totalTimeNumber}>{totalDuration}</Text>
               <Text style={styles.totalTimeUnit}>분</Text>
             </View>
-          </View>
-
-          <View style={styles.stopRows}>
-            <StopLineAsset height={34} style={styles.stopLine} width={1} />
-            <StopRow
-              active
-              label="승차"
-              name={getSegmentStopName(primarySegment, "start") || "승차 정류장"}
-            />
-            <StopRow
-              label="하차"
-              name={getSegmentStopName(primarySegment, "end") || "하차 정류장"}
-              style={styles.dropoffRow}
-            />
           </View>
 
           {timelineSegments.length > 0 ? (
