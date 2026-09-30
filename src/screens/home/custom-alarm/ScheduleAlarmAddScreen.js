@@ -1202,6 +1202,11 @@ export function ScheduleRouteMapStep({
   ] = useState(null);
 
   const [
+    currentMapCenter,
+    setCurrentMapCenter,
+  ] = useState(null);
+
+  const [
     mapSelectedResults,
     setMapSelectedResults,
   ] = useState([]);
@@ -1239,6 +1244,7 @@ export function ScheduleRouteMapStep({
     );
 
   const searchReferenceCenter =
+    currentMapCenter ??
     mapSelectedCoordinate ??
     userLocation ??
     selectedPlaceCenter;
@@ -1673,10 +1679,7 @@ export function ScheduleRouteMapStep({
         fallbackResult,
       ]);
 
-      setMapSelectionError(
-        error?.message ??
-          "선택한 위치의 주소를 찾지 못했습니다.",
-      );
+      setMapSelectionError("");
     } finally {
       if (
         requestId ===
@@ -1685,6 +1688,50 @@ export function ScheduleRouteMapStep({
         setIsReverseGeocoding(false);
       }
     }
+  };
+
+  const handleMapCameraIdle = ({
+    latitude,
+    longitude,
+  }) => {
+    const resolvedLatitude =
+      Number(latitude);
+    const resolvedLongitude =
+      Number(longitude);
+
+    if (
+      !Number.isFinite(
+        resolvedLatitude,
+      ) ||
+      !Number.isFinite(
+        resolvedLongitude,
+      )
+    ) {
+      return;
+    }
+
+    setCurrentMapCenter(
+      (previousCenter) => {
+        if (
+          previousCenter &&
+          Math.abs(
+            previousCenter.latitude -
+              resolvedLatitude,
+          ) < 0.0000001 &&
+          Math.abs(
+            previousCenter.longitude -
+              resolvedLongitude,
+          ) < 0.0000001
+        ) {
+          return previousCenter;
+        }
+
+        return {
+          latitude: resolvedLatitude,
+          longitude: resolvedLongitude,
+        };
+      },
+    );
   };
 
   const updateTypedPlace = (
@@ -1820,8 +1867,10 @@ export function ScheduleRouteMapStep({
     hasPlaceKeyword &&
     nearestSearchResultCenter
       ? nearestSearchResultCenter
-      : selectedPlaceCenter ??
-        userLocation;
+      : currentMapCenter ??
+        selectedPlaceCenter ??
+        userLocation ??
+        mapSelectedCoordinate;
 
   const mapMarkers =
     mapSelectedCoordinate
@@ -1849,8 +1898,9 @@ export function ScheduleRouteMapStep({
         center={mapCenter ?? undefined}
         level={hasPlaceKeyword ? 13 : 15}
         markers={mapMarkers}
+        onCameraIdle={handleMapCameraIdle}
         onMapPress={handleMapPress}
-        showCenterMarker={Boolean(mapCenter)}
+        showCenterMarker={false}
       />
 
       <View
