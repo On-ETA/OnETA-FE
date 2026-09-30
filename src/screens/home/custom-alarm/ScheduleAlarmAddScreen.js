@@ -23,6 +23,7 @@ import RouteBackIcon from "../../../../assets/images/L.svg";
 import RouteArrowIcon from "../../../../assets/images/R_g.svg";
 import RouteClearIcon from "../../../../assets/images/x.svg";
 import BigBusAsset from "../../../../assets/images/bigbus.svg";
+import BusVectorIcon from "../../../../assets/images/bus_vector.svg";
 import StopLineAsset from "../../../../assets/images/line.svg";
 import DirectionCircleAsset from "../../../../assets/images/circle.svg";
 
@@ -62,10 +63,33 @@ const HOUR_OPTIONS = Array.from(
 );
 
 const MINUTE_OPTIONS = Array.from(
-  { length: 60 },
+  { length: 12 },
   (_, index) =>
-    String(index).padStart(2, "0"),
+    String(index * 5).padStart(2, "0"),
 );
+
+function normalizePickerMinute(minute) {
+  const minuteNumber = Number(minute);
+
+  if (!Number.isFinite(minuteNumber)) {
+    return DEFAULT_TIME.minute;
+  }
+
+  const roundedMinute = Math.min(
+    55,
+    Math.max(0, Math.round(minuteNumber / 5) * 5),
+  );
+
+  return String(roundedMinute).padStart(2, "0");
+}
+
+function normalizePickerTime(time) {
+  return {
+    period: PERIOD_OPTIONS.includes(time?.period) ? time.period : DEFAULT_TIME.period,
+    hour: HOUR_OPTIONS.includes(time?.hour) ? time.hour : DEFAULT_TIME.hour,
+    minute: normalizePickerMinute(time?.minute),
+  };
+}
 
 function getPrimaryTransitSegment(route) {
   return getRouteSegments(route).find((segment) => !isWalkSegment(segment));
@@ -169,7 +193,7 @@ function parseInitialArrivalTime(value) {
   return {
     period,
     hour: String(hour12).padStart(2, "0"),
-    minute: String(minuteNumber).padStart(2, "0"),
+    minute: normalizePickerMinute(minuteNumber),
   };
 }
 
@@ -447,6 +471,16 @@ function mapDayToApiValue(day) {
   };
 
   return dayMap[day];
+}
+
+function formatBusNumberLabel(busNumber) {
+  const text = String(busNumber ?? "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  return text.endsWith("번") ? text : `${text}번`;
 }
 
 function pickReminderOffsets(
@@ -2775,7 +2809,7 @@ function ScheduleAlarmFinalStep({
     1: false,
     3: false,
     5: false,
-    10: false,
+    10: true,
     15: false,
     30: false,
     60: false,
@@ -3069,43 +3103,6 @@ function ScheduleAlarmFinalStep({
         <View style={styles.finalRouteTopRow}>
           <View
             style={
-              styles.finalBusInfo
-            }
-          >
-            <View
-              style={
-                styles.routeBusBadge
-              }
-            >
-              <BusIconPlain />
-            </View>
-
-            <Text
-              style={
-                styles.routeBusNumber
-              }
-            >
-              {finalTransitSegment?.transitName ||
-                "대중교통"}
-            </Text>
-
-            {finalTransitSegment?.endStation ? (
-              <View style={styles.routeBusDirectionRow}>
-                <DirectionCircleAsset width={3} height={3} />
-                <Text
-                  numberOfLines={1}
-                  style={
-                  styles.routeBusDirection
-                  }
-                >
-                  {`${finalTransitSegment.endStation} 방면`}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          <View
-            style={
               styles.finalTotalTime
             }
           >
@@ -3127,6 +3124,13 @@ function ScheduleAlarmFinalStep({
           </View>
         </View>
 
+        {timelineSegments.length > 0 ? (
+          <RouteTimeline
+            segments={timelineSegments}
+            style={styles.finalRouteTimeline}
+          />
+        ) : null}
+
         <View style={styles.finalStops}>
           <StopLineAsset
             height={trailingWalkSegment ? 68 : 34}
@@ -3142,6 +3146,18 @@ function ScheduleAlarmFinalStep({
                 finalTransitSegment,
                 "start",
               ) || "승차 정류장"
+            }
+            accessory={
+              finalTransitSegment?.transitName ? (
+                <View style={styles.stopBusBadge}>
+                  <View style={styles.stopBusIcon}>
+                    <BusVectorIcon height={10} width={9} />
+                  </View>
+                  <Text style={styles.stopBusBadgeText}>
+                    {formatBusNumberLabel(finalTransitSegment.transitName)}
+                  </Text>
+                </View>
+              ) : null
             }
             style={styles.finalStopRow}
           />
@@ -3175,13 +3191,6 @@ function ScheduleAlarmFinalStep({
             />
           ) : null}
         </View>
-
-        {timelineSegments.length > 0 ? (
-          <RouteTimeline
-            segments={timelineSegments}
-            style={styles.finalRouteTimeline}
-          />
-        ) : null}
       </View>
 
       <View
@@ -3318,6 +3327,14 @@ function ScheduleAlarmFinalStep({
 
           <ChevronDownIcon />
         </Pressable>
+
+        <Text
+          style={
+            styles.repeatQuestionText
+          }
+        >
+          요일마다 반복할까요?
+        </Text>
 
         <View
           style={
@@ -3631,6 +3648,7 @@ function ReminderModal({
 }
 
 function StopRow({
+  accessory,
   active = false,
   label,
   name,
@@ -3668,13 +3686,18 @@ function StopRow({
         {label}
       </Text>
 
-      <Text
-        style={
-          styles.stopName
-        }
-      >
-        {name}
-      </Text>
+      <View style={styles.stopNameRow}>
+        <Text
+          numberOfLines={1}
+          style={
+            styles.stopName
+          }
+        >
+          {name}
+        </Text>
+
+        {accessory}
+      </View>
     </View>
   );
 }
@@ -3688,11 +3711,11 @@ function TimePickerSheet({
   const [
     draftTime,
     setDraftTime,
-  ] = useState(value);
+  ] = useState(() => normalizePickerTime(value));
 
   useEffect(() => {
     if (visible) {
-      setDraftTime(value);
+      setDraftTime(normalizePickerTime(value));
     }
   }, [value, visible]);
 
@@ -3794,7 +3817,7 @@ function TimePickerSheet({
                 minute,
               ) =>
                 selectTime({
-                  minute,
+                  minute: normalizePickerMinute(minute),
                 })
               }
               options={
@@ -3841,6 +3864,10 @@ function WheelPickerColumn({
 }) {
   const scrollRef =
     useRef(null);
+  const isMomentumScrollingRef =
+    useRef(false);
+  const dragEndTimerRef =
+    useRef(null);
 
   const selectedIndex =
     Math.max(
@@ -3886,6 +3913,22 @@ function WheelPickerColumn({
     visible,
   ]);
 
+  useEffect(
+    () => () => {
+      if (dragEndTimerRef.current) {
+        clearTimeout(dragEndTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const clearDragEndTimer = () => {
+    if (dragEndTimerRef.current) {
+      clearTimeout(dragEndTimerRef.current);
+      dragEndTimerRef.current = null;
+    }
+  };
+
   const handleScrollEnd = (
     event,
   ) => {
@@ -3921,6 +3964,31 @@ function WheelPickerColumn({
     }
   };
 
+  const handleScrollEndDrag = (
+    event,
+  ) => {
+    const velocityY =
+      event.nativeEvent.velocity?.y ?? 0;
+
+    clearDragEndTimer();
+
+    if (
+      Platform.OS === "android" ||
+      Math.abs(velocityY) > 0.05
+    ) {
+      dragEndTimerRef.current =
+        setTimeout(() => {
+          if (!isMomentumScrollingRef.current) {
+            handleScrollEnd(event);
+          }
+        }, 120);
+
+      return;
+    }
+
+    handleScrollEnd(event);
+  };
+
   return (
     <View
       style={
@@ -3933,11 +4001,25 @@ function WheelPickerColumn({
         }
         decelerationRate="fast"
         nestedScrollEnabled
+        onMomentumScrollBegin={() => {
+          clearDragEndTimer();
+          isMomentumScrollingRef.current = true;
+        }}
         onMomentumScrollEnd={
-          handleScrollEnd
+          (event) => {
+            clearDragEndTimer();
+            isMomentumScrollingRef.current = false;
+            handleScrollEnd(event);
+          }
         }
         onScrollEndDrag={
-          handleScrollEnd
+          (event) => {
+            if (isMomentumScrollingRef.current) {
+              return;
+            }
+
+            handleScrollEndDrag(event);
+          }
         }
         ref={
           scrollRef
@@ -5205,7 +5287,6 @@ const styles =
     },
 
     stopName: {
-      flex: 1,
       flexShrink: 1,
       minWidth: 0,
       overflow: "hidden",
@@ -5264,7 +5345,7 @@ const styles =
     finalRouteHeader: {
       paddingHorizontal: 20,
       paddingTop: 10,
-      paddingBottom: 8,
+      paddingBottom: 18,
       backgroundColor:
         colors.gray02,
     },
@@ -5273,7 +5354,7 @@ const styles =
       flexDirection: "row",
       alignItems: "center",
       justifyContent:
-        "space-between",
+        "flex-start",
     },
 
     finalBusInfo: {
@@ -5287,7 +5368,6 @@ const styles =
       flexDirection: "row",
       alignItems:
         "flex-end",
-      marginLeft: 8,
     },
 
     finalTotalTimeNumber: {
@@ -5299,7 +5379,7 @@ const styles =
     },
 
     finalStops: {
-      marginTop: 16,
+      marginTop: 18,
       position: "relative",
     },
 
@@ -5320,7 +5400,7 @@ const styles =
 
     finalRouteTimeline: {
       height: 16,
-      marginTop: 12,
+      marginTop: 18,
     },
 
     finalTotalTimeUnit: {
@@ -5334,20 +5414,24 @@ const styles =
     },
 
     finalContent: {
-      paddingHorizontal: 20,
-      paddingTop: 22,
-      paddingBottom: 22,
+      paddingHorizontal: 10,
+      paddingTop: 11,
+      paddingBottom: 11,
       backgroundColor:
         colors.white,
     },
 
     finalRouteTimeBox: {
       display: "flex",
-      padding: 16,
+      paddingVertical: 8,
+      paddingHorizontal: 8,
       flexDirection: "column",
       alignItems: "flex-start",
       alignSelf: "stretch",
       gap: 12,
+      borderTopWidth: 1,
+      borderTopColor:
+        colors.gray04,
       backgroundColor:
         colors.gray02,
     },
@@ -5357,7 +5441,7 @@ const styles =
       flexDirection: "row",
       alignItems:
         "flex-end",
-      gap: 12,
+      gap: 6,
     },
 
     timeSummaryBlock: {
@@ -5365,7 +5449,7 @@ const styles =
     },
 
     finalLabel: {
-      marginBottom: 8,
+      marginBottom: 4,
       fontFamily: "SUIT",
       fontSize: 14,
       fontStyle: "normal",
@@ -5428,16 +5512,14 @@ const styles =
     },
 
     questionText: {
-      fontFamily: "SUIT",
-      fontSize: 16,
-      fontWeight: "700",
-      lineHeight: 22.4,
+      ...typography.body01R,
+      fontWeight: "500",
       color: colors.gray09,
     },
 
     reminderSelect: {
       height: 54,
-      marginTop: 16,
+      marginTop: 8,
       paddingHorizontal: 16,
       flexDirection: "row",
       alignItems: "center",
@@ -5459,8 +5541,54 @@ const styles =
       color: colors.gray08,
     },
 
+    stopNameRow: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+
+    stopBusBadge: {
+      flexShrink: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingVertical: 3,
+      paddingHorizontal: 8,
+      borderWidth: 1,
+      borderColor:
+        colors.main,
+      borderRadius: 4,
+      backgroundColor:
+        colors.white,
+    },
+
+    stopBusIcon: {
+      width: 9,
+      height: 10,
+      alignItems: "center",
+      justifyContent:
+        "center",
+    },
+
+    stopBusBadgeText: {
+      fontFamily: "SUIT",
+      fontSize: 13,
+      fontWeight: "700",
+      lineHeight: 18.2,
+      color: colors.main,
+    },
+
+    repeatQuestionText: {
+      marginTop: 14,
+      ...typography.body01R,
+      fontWeight: "500",
+      color: colors.gray09,
+    },
+
     dayRow: {
-      marginTop: 10,
+      marginTop: 8,
       flexDirection: "row",
       justifyContent:
         "space-between",

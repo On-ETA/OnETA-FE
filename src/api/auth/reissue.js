@@ -18,6 +18,7 @@
   }
 */
 import { requestJson } from "../client";
+import { notifyAuthRequired } from "./authEvents";
 import {
   clearAuthTokens,
   extractAuthTokens,
@@ -36,6 +37,7 @@ export async function reissueAuthTokens({
   if (!refreshToken) {
     const error = new Error("Refresh Token이 없습니다.");
     error.code = "C005";
+    notifyAuthRequired({ reason: "missing_refresh_token" });
     throw error;
   }
 
@@ -66,6 +68,7 @@ export async function reissueAuthTokens({
   } catch (error) {
     if (error?.status === 403 && sessionId === getAuthSessionId()) {
       clearAuthTokens();
+      notifyAuthRequired({ reason: "refresh_failed" });
     }
 
     throw error;

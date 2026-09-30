@@ -43,16 +43,46 @@ const initialScheduleAlarms = [];
 function getArrivalNotificationId(alarm) {
   const id = alarm?.notificationId ?? alarm?.id;
 
-  return typeof id === "string" ? id.replace(/^arrival-/, "") : id;
+  if (id === undefined || id === null || id === "") {
+    return null;
+  }
+
+  return String(id).replace(/^arrival-/, "");
 }
 
 function getDepotNotificationId(alarm) {
-  return (
+  const id = (
     alarm?.userBusId ??
     alarm?.payload?.userBusId ??
     alarm?.raw?.userBusId ??
     alarm?.notification?.userBusId
   );
+
+  if (id === undefined || id === null || id === "") {
+    return null;
+  }
+
+  return String(id);
+}
+
+function getGarageAlarmUiId(alarm) {
+  const id = getDepotNotificationId(alarm) ?? alarm?.id;
+
+  if (id === undefined || id === null || id === "") {
+    return null;
+  }
+
+  return `garage-${String(id).replace(/^garage-/, "")}`;
+}
+
+function getScheduleAlarmUiId(alarm) {
+  const id = getArrivalNotificationId(alarm);
+
+  return id ? `schedule-${id}` : null;
+}
+
+function getAlarmFallbackKey(prefix, alarm, index) {
+  return `${prefix}-${alarm?.routeNumber ?? alarm?.routeName ?? alarm?.title ?? "alarm"}-${index}`;
 }
 
 async function deleteScheduleAlarm(alarm, notificationId) {
@@ -178,6 +208,10 @@ export function CustomAlarmScreen({
   };
 
   const toggleSelect = (alarmId) => {
+    if (!alarmId) {
+      return;
+    }
+
     setSelectedIds((current) =>
       current.includes(alarmId)
         ? current.filter((id) => id !== alarmId)
@@ -186,20 +220,33 @@ export function CustomAlarmScreen({
   };
 
   const requestSingleDelete = (alarmId) => {
+    if (!alarmId) {
+      Alert.alert("알림 삭제 실패", "삭제할 알림 id를 찾지 못했습니다.");
+      return;
+    }
+
     blurActiveElement();
     setDeleteTargetIds([alarmId]);
   };
 
   const toggleGarageAlarm = (alarmId) => {
+    if (!alarmId) {
+      return;
+    }
+
     setGarageAlarms((current) =>
       current.map((alarm) =>
-        alarm.id === alarmId ? { ...alarm, enabled: !alarm.enabled } : alarm,
+        getGarageAlarmUiId(alarm) === alarmId
+          ? { ...alarm, enabled: !alarm.enabled }
+          : alarm,
       ),
     );
   };
 
   const toggleScheduleAlarm = async (alarmId) => {
-    const targetAlarm = scheduleAlarms.find((alarm) => alarm.id === alarmId);
+    const targetAlarm = scheduleAlarms.find(
+      (alarm) => getScheduleAlarmUiId(alarm) === alarmId,
+    );
     const notificationId = getArrivalNotificationId(targetAlarm);
 
     if (!targetAlarm || !notificationId) {
@@ -216,7 +263,9 @@ export function CustomAlarmScreen({
     setUpdatingScheduleAlarmIds((current) => [...current, alarmId]);
     setScheduleAlarms((current) =>
       current.map((alarm) =>
-        alarm.id === alarmId ? { ...alarm, enabled: nextEnabled } : alarm,
+        getScheduleAlarmUiId(alarm) === alarmId
+          ? { ...alarm, enabled: nextEnabled }
+          : alarm,
       ),
     );
 
@@ -228,7 +277,7 @@ export function CustomAlarmScreen({
     } catch (error) {
       setScheduleAlarms((current) =>
         current.map((alarm) =>
-          alarm.id === alarmId
+          getScheduleAlarmUiId(alarm) === alarmId
             ? { ...alarm, enabled: targetAlarm.enabled }
             : alarm,
         ),
@@ -262,14 +311,22 @@ export function CustomAlarmScreen({
     }
 
     const garageTargets = garageAlarms.filter((alarm) =>
-      deleteTargetIds.includes(alarm.id),
+      deleteTargetIds.includes(getGarageAlarmUiId(alarm)),
     );
     const scheduleTargets = scheduleAlarms.filter((alarm) =>
-      deleteTargetIds.includes(alarm.id),
+      deleteTargetIds.includes(getScheduleAlarmUiId(alarm)),
     );
+    const garageTargetIds = garageTargets
+      .map(getDepotNotificationId)
+      .filter((id) => id !== undefined && id !== null && id !== "");
     const scheduleTargetIds = scheduleTargets
       .map(getArrivalNotificationId)
       .filter((id) => id !== undefined && id !== null && id !== "");
+
+    if (garageTargets.length !== garageTargetIds.length) {
+      Alert.alert("알림 삭제 실패", "삭제할 차고지 출발 알림 id를 찾지 못했습니다.");
+      return;
+    }
 
     if (scheduleTargets.length !== scheduleTargetIds.length) {
       Alert.alert("알림 삭제 실패", "삭제할 내 일정 알림 id를 찾지 못했습니다.");
@@ -278,10 +335,10 @@ export function CustomAlarmScreen({
 
     setIsDeletingAlarms(true);
     setGarageAlarms((current) =>
-      current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
+      current.filter((alarm) => !deleteTargetIds.includes(getGarageAlarmUiId(alarm))),
     );
     setScheduleAlarms((current) =>
-      current.filter((alarm) => !deleteTargetIds.includes(alarm.id)),
+      current.filter((alarm) => !deleteTargetIds.includes(getScheduleAlarmUiId(alarm))),
     );
     setSelectedIds((current) =>
       current.filter((alarmId) => !deleteTargetIds.includes(alarmId)),
@@ -290,8 +347,8 @@ export function CustomAlarmScreen({
 
     try {
       const garageResults = await Promise.allSettled(
-        garageTargets.map((alarm) =>
-          deleteDepotNotification({ userBusId: alarm.userBusId ?? alarm.id }),
+        garageTargetIds.map((userBusId) =>
+          deleteDepotNotification({ userBusId }),
         ),
       );
       const scheduleResults = await Promise.allSettled(
@@ -338,24 +395,25 @@ export function CustomAlarmScreen({
             horizontal
             showsHorizontalScrollIndicator={false}
           >
-            {garageAlarms.map((alarm) => {
-              const selected = selectedIds.includes(alarm.id);
+            {garageAlarms.map((alarm, index) => {
+              const alarmId = getGarageAlarmUiId(alarm);
+              const selected = alarmId ? selectedIds.includes(alarmId) : false;
 
               return (
                 <GarageAlarmCard
                   alarm={alarm}
                   editMode={editingSections.garage}
-                  key={alarm.id}
-                  onDeletePress={() => requestSingleDelete(alarm.id)}
+                  key={alarmId ?? getAlarmFallbackKey("garage", alarm, index)}
+                  onDeletePress={() => requestSingleDelete(alarmId)}
                   onPress={() => {
                     if (editingSections.garage) {
-                      toggleSelect(alarm.id);
+                      toggleSelect(alarmId);
                       return;
                     }
 
                     onGarageAlarmEditPress?.(alarm);
                   }}
-                  onToggleAlarm={() => toggleGarageAlarm(alarm.id)}
+                  onToggleAlarm={() => toggleGarageAlarm(alarmId)}
                   selected={selected}
                 />
               );
@@ -383,26 +441,27 @@ export function CustomAlarmScreen({
           <EmptyAlarmBox />
         ) : scheduleAlarms.length > 0 ? (
           <View style={styles.scheduleList}>
-            {scheduleAlarms.map((alarm) => {
-              const selected = selectedIds.includes(alarm.id);
+            {scheduleAlarms.map((alarm, index) => {
+              const alarmId = getScheduleAlarmUiId(alarm);
+              const selected = alarmId ? selectedIds.includes(alarmId) : false;
 
               return (
                 <ScheduleAlarmRow
                   alarm={alarm}
                   editMode={editingSections.schedule}
-                  key={alarm.id}
-                  onDeletePress={() => requestSingleDelete(alarm.id)}
+                  key={alarmId ?? getAlarmFallbackKey("schedule", alarm, index)}
+                  onDeletePress={() => requestSingleDelete(alarmId)}
                   onPress={() => {
                     if (editingSections.schedule) {
-                      toggleSelect(alarm.id);
+                      toggleSelect(alarmId);
                       return;
                     }
 
                     onScheduleAlarmEditPress?.(alarm);
                   }}
-                  onToggleAlarm={() => toggleScheduleAlarm(alarm.id)}
+                  onToggleAlarm={() => toggleScheduleAlarm(alarmId)}
                   selected={selected}
-                  updating={updatingScheduleAlarmIds.includes(alarm.id)}
+                  updating={alarmId ? updatingScheduleAlarmIds.includes(alarmId) : false}
                 />
               );
             })}
