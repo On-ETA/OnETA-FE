@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -13,7 +13,7 @@ let naverMapIdSeed = 0;
 function loadNaverMapsScript(clientId) {
   if (typeof document === "undefined") {
     return Promise.reject(
-      new Error("네이버 지도는 웹 환경에서만 로드할 수 있습니다."),
+      new Error(""),
     );
   }
 
@@ -28,7 +28,8 @@ function loadNaverMapsScript(clientId) {
       script.async = true;
       script.src =
         "https://oapi.map.naver.com/openapi/v3/maps.js" +
-        `?ncpKeyId=${encodeURIComponent(clientId)}`;
+        `?ncpKeyId=${encodeURIComponent(clientId)}` +
+        "&submodules=geocoder";
 
       script.onload = () => {
         if (globalThis.naver?.maps) {
@@ -87,11 +88,25 @@ function WebNaverMapView({
   clientId,
   level,
   markers,
+  onCameraIdle,
   onMapPress,
   showCenterMarker,
   style,
 }) {
   const [errorMessage, setErrorMessage] = useState("");
+  const mapsRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRefs = useRef([]);
+  const onCameraIdleRef = useRef(onCameraIdle);
+  const onMapPressRef = useRef(onMapPress);
+
+  useEffect(() => {
+    onCameraIdleRef.current = onCameraIdle;
+  }, [onCameraIdle]);
+
+  useEffect(() => {
+    onMapPressRef.current = onMapPress;
+  }, [onMapPress]);
 
   const markerPositions = useMemo(
     () =>
@@ -123,6 +138,7 @@ function WebNaverMapView({
   useEffect(() => {
     let isActive = true;
     let clickListener = null;
+    let idleListener = null;
 
     setErrorMessage("");
 
@@ -152,15 +168,50 @@ function WebNaverMapView({
           mapDataControl: false,
         });
 
-        markerPositions.forEach((marker) => {
-          new maps.Marker({
-            map,
-            position: new maps.LatLng(
-              marker.latitude,
-              marker.longitude,
-            ),
-          });
-        });
+        mapsRef.current = maps;
+        mapRef.current = map;
+        markerRefs.current = markerPositions.map(
+          (marker) =>
+            new maps.Marker({
+              map,
+              position: new maps.LatLng(
+                marker.latitude,
+                marker.longitude,
+              ),
+            }),
+        );
+
+        idleListener = maps.Event.addListener(
+          map,
+          "idle",
+          () => {
+            const mapCenter = map.getCenter?.();
+
+            const latitude = Number(
+              typeof mapCenter?.lat === "function"
+                ? mapCenter.lat()
+                : mapCenter?.y,
+            );
+
+            const longitude = Number(
+              typeof mapCenter?.lng === "function"
+                ? mapCenter.lng()
+                : mapCenter?.x,
+            );
+
+            if (
+              !Number.isFinite(latitude) ||
+              !Number.isFinite(longitude)
+            ) {
+              return;
+            }
+
+            onCameraIdleRef.current?.({
+              latitude,
+              longitude,
+            });
+          },
+        );
 
         clickListener = maps.Event.addListener(
           map,
@@ -191,7 +242,7 @@ function WebNaverMapView({
               return;
             }
 
-            onMapPress?.({
+            onMapPressRef.current?.({
               latitude,
               longitude,
             });
@@ -211,6 +262,12 @@ function WebNaverMapView({
 
     return () => {
       isActive = false;
+      markerRefs.current.forEach((marker) => {
+        marker.setMap?.(null);
+      });
+      markerRefs.current = [];
+      mapRef.current = null;
+      mapsRef.current = null;
 
       if (
         clickListener &&
@@ -220,16 +277,82 @@ function WebNaverMapView({
           clickListener,
         );
       }
+
+      if (
+        idleListener &&
+        globalThis.naver?.maps?.Event
+      ) {
+        globalThis.naver.maps.Event.removeListener(
+          idleListener,
+        );
+      }
     };
-  }, [
-    center.latitude,
-    center.longitude,
-    clientId,
-    level,
-    mapId,
-    markerKey,
-    onMapPress,
-  ]);
+  }, [clientId, mapId]);
+
+  useEffect(() => {
+    const maps = mapsRef.current;
+    const map = mapRef.current;
+
+    if (!maps || !map) {
+      return;
+    }
+
+    markerRefs.current.forEach((marker) => {
+      marker.setMap?.(null);
+    });
+
+    markerRefs.current = markerPositions.map(
+      (marker) =>
+        new maps.Marker({
+          map,
+          position: new maps.LatLng(
+            marker.latitude,
+            marker.longitude,
+          ),
+        }),
+    );
+  }, [markerKey]);
+
+  useEffect(() => {
+    const maps = mapsRef.current;
+    const map = mapRef.current;
+
+    if (!maps || !map) {
+      return;
+    }
+
+    const currentCenter = map.getCenter?.();
+    const currentLatitude = Number(
+      typeof currentCenter?.lat === "function"
+        ? currentCenter.lat()
+        : currentCenter?.y,
+    );
+    const currentLongitude = Number(
+      typeof currentCenter?.lng === "function"
+        ? currentCenter.lng()
+        : currentCenter?.x,
+    );
+
+    if (
+      Number.isFinite(currentLatitude) &&
+      Number.isFinite(currentLongitude) &&
+      Math.abs(currentLatitude - center.latitude) < 0.0000001 &&
+      Math.abs(currentLongitude - center.longitude) < 0.0000001
+    ) {
+      return;
+    }
+
+    map.setCenter?.(
+      new maps.LatLng(
+        center.latitude,
+        center.longitude,
+      ),
+    );
+  }, [center.latitude, center.longitude]);
+
+  useEffect(() => {
+    mapRef.current?.setZoom?.(level);
+  }, [level]);
 
   return (
     <View style={[styles.container, style]}>
@@ -257,6 +380,7 @@ function NativeNaverMap({
   center,
   level,
   markers,
+  onCameraIdle,
   onMapPress,
   showCenterMarker,
   style,
@@ -313,14 +437,35 @@ function NativeNaverMap({
     });
   };
 
+  const handleCameraIdle = (event) => {
+    const latitude = Number(
+      event?.latitude ??
+        event?.coord?.latitude ??
+        event?.coord?.y,
+    );
+
+    const longitude = Number(
+      event?.longitude ??
+        event?.coord?.longitude ??
+        event?.coord?.x,
+    );
+
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude)
+    ) {
+      return;
+    }
+
+    onCameraIdle?.({
+      latitude,
+      longitude,
+    });
+  };
+
   return (
     <NativeNaverMapView
       camera={{
-        latitude: center.latitude,
-        longitude: center.longitude,
-        zoom: level,
-      }}
-      initialCamera={{
         latitude: center.latitude,
         longitude: center.longitude,
         zoom: level,
@@ -332,6 +477,7 @@ function NativeNaverMap({
       locale="ko"
       locationTrackingMode="None"
       style={[styles.container, style]}
+      onCameraIdle={handleCameraIdle}
       onTapMap={handleTapMap}
     >
       {markerPositions.map((marker, index) => (
@@ -350,6 +496,7 @@ export function NaverMapView({
   clientId = NAVER_MAP_CLIENT_ID,
   level = 15,
   markers,
+  onCameraIdle,
   onMapPress,
   showCenterMarker = true,
   style,
@@ -364,6 +511,7 @@ export function NaverMapView({
         clientId={clientId}
         level={level}
         markers={markers}
+        onCameraIdle={onCameraIdle}
         onMapPress={onMapPress}
         showCenterMarker={showCenterMarker}
         style={style}
@@ -376,6 +524,7 @@ export function NaverMapView({
       center={resolvedCenter}
       level={level}
       markers={markers}
+      onCameraIdle={onCameraIdle}
       onMapPress={onMapPress}
       showCenterMarker={showCenterMarker}
       style={style}
