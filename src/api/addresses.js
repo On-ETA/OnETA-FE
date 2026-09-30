@@ -213,24 +213,18 @@ export async function deleteAddress({
     throw new Error("주소 id가 필요합니다.");
   }
 
-  const cachedAddresses = readHomeCache(homeCacheKeys.addresses);
-
-  if (Array.isArray(cachedAddresses)) {
-    writeHomeCache(
-      homeCacheKeys.addresses,
-      cachedAddresses.filter(
-        (address) => String(address.addressId ?? address.id) !== String(addressId),
-      ),
-    );
-  }
-
-  return requestAddressJson({
+  const response = await requestAddressJson({
     path: buildAddressEndpoint(addressId),
     method: "DELETE",
     accessToken,
     signal,
     errorMessage: "주소 삭제에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.addresses);
+  await getAddresses({ accessToken, forceRefresh: true, signal }).catch(() => null);
+
+  return response;
 }
 
 export async function setCurrentAddress({

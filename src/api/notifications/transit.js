@@ -1,12 +1,60 @@
 import { getAccessToken } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
-import { homeCacheKeys, readHomeCache, writeHomeCache } from "../homeCache";
+import { homeCacheKeys, readHomeCache, writeHomeCacheAsync } from "../homeCache";
 
 const TRANSIT_NOTIFICATIONS_ENDPOINT = "/api/notifications/transit";
+export const TRANSIT_SCHEDULE_TYPES = {
+  first: "FIRST_TRANSIT",
+  last: "LAST_TRANSIT",
+};
+
+function normalizeTransitScheduleType(scheduleType) {
+  return scheduleType === TRANSIT_SCHEDULE_TYPES.last
+    ? TRANSIT_SCHEDULE_TYPES.last
+    : TRANSIT_SCHEDULE_TYPES.first;
+}
+
+function getTransitNotificationsCacheKey(scheduleType) {
+  return normalizeTransitScheduleType(scheduleType) === TRANSIT_SCHEDULE_TYPES.last
+    ? homeCacheKeys.lastTransitNotifications
+    : homeCacheKeys.firstTransitNotifications;
+}
+
+function buildTransitNotificationsPath(scheduleType) {
+  const normalizedScheduleType = normalizeTransitScheduleType(scheduleType);
+
+  return `${TRANSIT_NOTIFICATIONS_ENDPOINT}?scheduleType=${encodeURIComponent(normalizedScheduleType)}`;
+}
 
 function buildTransitNotificationEndpoint(notificationId) {
   return `${TRANSIT_NOTIFICATIONS_ENDPOINT}/${encodeURIComponent(notificationId)}`;
+}
+
+async function writeTransitNotificationsCache(scheduleType, notifications) {
+  const normalizedScheduleType = normalizeTransitScheduleType(scheduleType);
+  const cacheKey = getTransitNotificationsCacheKey(normalizedScheduleType);
+
+  await writeHomeCacheAsync(cacheKey, notifications);
+
+  const cachedNotificationsByType = readHomeCache(
+    homeCacheKeys.transitNotifications,
+    {},
+  );
+  const nextNotificationsByType =
+    cachedNotificationsByType &&
+    typeof cachedNotificationsByType === "object" &&
+    !Array.isArray(cachedNotificationsByType)
+      ? { ...cachedNotificationsByType }
+      : {};
+
+  nextNotificationsByType[normalizedScheduleType] = notifications;
+  await writeHomeCacheAsync(
+    homeCacheKeys.transitNotifications,
+    nextNotificationsByType,
+  );
+
+  return notifications;
 }
 
 function isAuthError(error) {
@@ -151,26 +199,47 @@ export function normalizeTransitNotification(notification) {
 export async function getTransitNotifications({
   accessToken = getAccessToken(),
   forceRefresh = false,
+  scheduleType = TRANSIT_SCHEDULE_TYPES.first,
   signal,
 } = {}) {
+  const normalizedScheduleType = normalizeTransitScheduleType(scheduleType);
+  const cacheKey = getTransitNotificationsCacheKey(normalizedScheduleType);
+
   if (!forceRefresh) {
-    const cachedNotifications = readHomeCache(homeCacheKeys.transitNotifications);
+    const cachedNotifications = readHomeCache(cacheKey);
 
     if (cachedNotifications) {
       return cachedNotifications;
     }
+
+    const cachedNotificationsByType = readHomeCache(
+      homeCacheKeys.transitNotifications,
+      null,
+    );
+    const legacyCachedNotifications =
+      cachedNotificationsByType &&
+      typeof cachedNotificationsByType === "object" &&
+      !Array.isArray(cachedNotificationsByType)
+        ? cachedNotificationsByType[normalizedScheduleType]
+        : null;
+
+    if (legacyCachedNotifications) {
+      writeHomeCacheAsync(cacheKey, legacyCachedNotifications).catch(() => null);
+
+      return legacyCachedNotifications;
+    }
   }
 
   const response = await requestTransitNotificationJson({
-    path: TRANSIT_NOTIFICATIONS_ENDPOINT,
+    path: buildTransitNotificationsPath(normalizedScheduleType),
     method: "GET",
     accessToken,
     signal,
     errorMessage: "첫막차 경로 목록을 불러오지 못했습니다.",
   });
 
-  return writeHomeCache(
-    homeCacheKeys.transitNotifications,
+  return writeTransitNotificationsCache(
+    normalizedScheduleType,
     pickTransitNotificationList(response).map(normalizeTransitNotification),
   );
 }
@@ -210,7 +279,7 @@ export async function createTransitNotification({
       typeof payload?.routeDetails === "string"
         ? payload.routeDetails
         : JSON.stringify(payload?.routeDetails ?? {}),
-    scheduleType: payload?.scheduleType ?? "FIRST_TRANSIT",
+    scheduleType: normalizeTransitScheduleType(payload?.scheduleType),
   };
 
   const response = await requestTransitNotificationJson({
@@ -224,7 +293,12 @@ export async function createTransitNotification({
 
   const notification = response?.data ?? response;
 
-  await getTransitNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  await getTransitNotifications({
+    accessToken,
+    forceRefresh: true,
+    scheduleType: requestBody.scheduleType,
+    signal,
+  }).catch(() => null);
 
   return notification;
 }

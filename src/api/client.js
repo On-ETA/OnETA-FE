@@ -88,13 +88,16 @@ export async function requestJson(options) {
     method = "GET",
     body,
     accessToken,
+    authRequired,
     signal,
     timeoutMs = DEFAULT_TIMEOUT_MS,
   timeoutMessage = "요청 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
     errorMessage = "API request failed",
   } = options;
   const requestUrl = buildApiUrl(path);
-  const requiresAuth = Object.prototype.hasOwnProperty.call(options, "accessToken");
+  const requiresAuth =
+    authRequired ??
+    Object.prototype.hasOwnProperty.call(options, "accessToken");
 
   if (requiresAuth && !accessToken) {
     const error = new Error("로그인이 필요합니다.");

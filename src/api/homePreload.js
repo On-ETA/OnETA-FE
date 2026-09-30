@@ -2,7 +2,10 @@ import { getAddresses } from "./addresses";
 import { getMyPage } from "./mypage";
 import { getArrivalNotifications } from "./notifications/arrival";
 import { getMyDepotNotifications } from "./notifications/depot";
-import { getTransitNotifications } from "./notifications/transit";
+import {
+  getTransitNotifications,
+  TRANSIT_SCHEDULE_TYPES,
+} from "./notifications/transit";
 import {
   clearHomeCacheAsync,
   homeCacheKeys,
@@ -15,7 +18,8 @@ let preloadPromise = null;
 const requiredPreloadCacheKeys = [
   homeCacheKeys.addresses,
   homeCacheKeys.scheduleNotifications,
-  homeCacheKeys.transitNotifications,
+  homeCacheKeys.firstTransitNotifications,
+  homeCacheKeys.lastTransitNotifications,
   homeCacheKeys.depotNotifications,
   homeCacheKeys.myPage,
 ];
@@ -54,7 +58,16 @@ export async function preloadHomeCache({ reset = false, signal } = {}) {
 
     await getCachedFirstLastRouteAsync();
     await getAddresses({ forceRefresh: true, signal });
-    await getTransitNotifications({ forceRefresh: true, signal });
+    await getTransitNotifications({
+      forceRefresh: true,
+      scheduleType: TRANSIT_SCHEDULE_TYPES.first,
+      signal,
+    });
+    await getTransitNotifications({
+      forceRefresh: true,
+      scheduleType: TRANSIT_SCHEDULE_TYPES.last,
+      signal,
+    });
     await getArrivalNotifications({ forceRefresh: true, signal });
     await getMyDepotNotifications({ forceRefresh: true, signal });
     await getMyPage({ forceRefresh: true, signal });

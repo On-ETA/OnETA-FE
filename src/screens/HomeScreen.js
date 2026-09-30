@@ -14,6 +14,7 @@ import {
 import {
   createTransitNotification,
   getTransitNotifications,
+  TRANSIT_SCHEDULE_TYPES,
 } from "../api/notifications/transit";
 import { HomeTopSection } from "../components";
 import { AddressManagementScreen } from "./AddressManagementScreen";
@@ -64,16 +65,17 @@ function createFirstLastRouteSummaryFromNotification(notification) {
     preDepartureAlarmMinutes:
       reminderOffsetMinutes[0] ?? summary.preDepartureAlarmMinutes,
     route,
+    scheduleType: notification?.scheduleType ?? TRANSIT_SCHEDULE_TYPES.first,
   };
 }
 
-function createTransitNotificationPayload(route, summary) {
+function createTransitNotificationPayload(route, summary, scheduleType = TRANSIT_SCHEDULE_TYPES.first) {
   const routeDetails = route?.raw ?? route;
 
   return {
     reminderOffsetMinutes: [summary?.preDepartureAlarmMinutes ?? 10],
     routeDetails: JSON.stringify(routeDetails),
-    scheduleType: summary?.scheduleType ?? route?.scheduleType ?? "FIRST_TRANSIT",
+    scheduleType: summary?.scheduleType ?? route?.scheduleType ?? scheduleType,
   };
 }
 
@@ -88,20 +90,34 @@ function getCreatedNotificationId(response) {
   return response?.notificationId ?? response?.id ?? response;
 }
 
-function readCachedFirstLastRouteSummary() {
-  return readHomeCache(homeCacheKeys.firstLastRoute, null);
+function getFirstLastRouteCacheKey(scheduleType) {
+  return scheduleType === TRANSIT_SCHEDULE_TYPES.last
+    ? homeCacheKeys.lastTransitRoute
+    : homeCacheKeys.firstTransitRoute;
 }
 
-function writeCachedFirstLastRouteSummary(summary) {
+function readCachedFirstLastRouteSummary(scheduleType = TRANSIT_SCHEDULE_TYPES.first) {
+  return readHomeCache(getFirstLastRouteCacheKey(scheduleType), null);
+}
+
+function writeCachedFirstLastRouteSummary(summary, scheduleType = TRANSIT_SCHEDULE_TYPES.first) {
   if (summary) {
-    writeHomeCache(homeCacheKeys.firstLastRoute, summary);
+    writeHomeCache(getFirstLastRouteCacheKey(scheduleType), {
+      ...summary,
+      scheduleType,
+    });
   }
 
-  return summary;
+  return summary
+    ? {
+        ...summary,
+        scheduleType,
+      }
+    : summary;
 }
 
-function clearCachedFirstLastRouteSummary() {
-  removeHomeCache(homeCacheKeys.firstLastRoute);
+function clearCachedFirstLastRouteSummary(scheduleType = TRANSIT_SCHEDULE_TYPES.first) {
+  removeHomeCache(getFirstLastRouteCacheKey(scheduleType));
   return null;
 }
 
@@ -133,6 +149,8 @@ export function HomeScreen({
 }) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [activeHomeTab, setActiveHomeTab] = useState("firstLast");
+  const [activeFirstLastScheduleType, setActiveFirstLastScheduleType] =
+    useState(TRANSIT_SCHEDULE_TYPES.first);
   const [isAddressManagerVisible, setIsAddressManagerVisible] = useState(false);
   const [isRouteDetailVisible, setIsRouteDetailVisible] = useState(false);
   const [firstLastRouteSetupStep, setFirstLastRouteSetupStep] = useState(null);
@@ -151,51 +169,55 @@ export function HomeScreen({
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
   const [currentAddressLabel, setCurrentAddressLabel] = useState("");
   const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(
-    readCachedFirstLastRouteSummary,
+    () => readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.first),
   );
   const customAlarmRefreshKey = 0;
 
   useEffect(() => {
     let isActive = true;
 
-    readHomeCacheAsync(homeCacheKeys.firstLastRoute, null).then((cachedSummary) => {
-      if (isActive && cachedSummary) {
-        setFirstLastRouteSummary((current) => current ?? cachedSummary);
+    readHomeCacheAsync(getFirstLastRouteCacheKey(activeFirstLastScheduleType), null).then((cachedSummary) => {
+      if (isActive) {
+        setFirstLastRouteSummary(cachedSummary);
       }
     });
 
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [activeFirstLastScheduleType]);
 
   const loadFirstLastTransitNotifications = useCallback(async ({
+    scheduleType = activeFirstLastScheduleType,
     signal,
   } = {}) => {
-    const notifications = await getTransitNotifications({ signal });
+    const notifications = await getTransitNotifications({ scheduleType, signal });
 
     setFirstLastRouteSummary((current) =>
     {
-      const cached = readCachedFirstLastRouteSummary();
+      const cached = readCachedFirstLastRouteSummary(scheduleType);
+      const currentForScheduleType =
+        current?.scheduleType === scheduleType ? current : null;
       const preferredNotification =
-        findTransitNotificationById(notifications, current?.notificationId) ??
+        findTransitNotificationById(notifications, currentForScheduleType?.notificationId) ??
         findTransitNotificationById(notifications, cached?.notificationId);
       const selectedNotification = preferredNotification;
 
       if (selectedNotification) {
         return writeCachedFirstLastRouteSummary(
           createFirstLastRouteSummaryFromNotification(selectedNotification),
+          scheduleType,
         );
       }
 
       if (notifications.length === 0) {
-        return clearCachedFirstLastRouteSummary();
+        return cached ?? currentForScheduleType ?? null;
       }
 
-      return current ?? cached;
+      return currentForScheduleType ?? cached;
     },
     );
-  }, []);
+  }, [activeFirstLastScheduleType]);
 
   useEffect(() => {
     let isActive = true;
@@ -229,6 +251,7 @@ export function HomeScreen({
     const controller = new AbortController();
 
     loadFirstLastTransitNotifications({
+      scheduleType: activeFirstLastScheduleType,
       signal: controller.signal,
     }).catch((error) => {
       if (error?.name !== "AbortError") {
@@ -239,32 +262,36 @@ export function HomeScreen({
     return () => {
       controller.abort();
     };
-  }, [loadFirstLastTransitNotifications]);
+  }, [activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
 
   const saveFirstLastRoute = useCallback(async (route, places) => {
-    const summary = createFirstLastRouteSummary(route, places);
+    const scheduleType = activeFirstLastScheduleType;
+    const summary = {
+      ...createFirstLastRouteSummary(route, places),
+      scheduleType,
+    };
 
-    setFirstLastRouteSummary(writeCachedFirstLastRouteSummary(summary));
     try {
       const notificationResponse = await createTransitNotification({
-        payload: createTransitNotificationPayload(route, summary),
+        payload: createTransitNotificationPayload(route, summary, scheduleType),
       });
       const notificationId = getCreatedNotificationId(notificationResponse);
 
-      if (notificationId !== undefined && notificationId !== null) {
-        setFirstLastRouteSummary((current) =>
-          current
-            ? writeCachedFirstLastRouteSummary({
-                ...current,
+      setFirstLastRouteSummary(
+        writeCachedFirstLastRouteSummary(
+          notificationId !== undefined && notificationId !== null
+            ? {
+                ...summary,
                 notificationId,
-              })
-            : current,
-        );
-      }
+              }
+            : summary,
+          scheduleType,
+        ),
+      );
     } catch (error) {
       console.warn("첫막차 경로 등록 실패:", error?.code ?? error?.message);
     }
-  }, []);
+  }, [activeFirstLastScheduleType]);
 
   const handleFirstLastRouteConfigured = useCallback(async (route, places) => {
     await saveFirstLastRoute(route, places);
@@ -453,6 +480,8 @@ export function HomeScreen({
                   setIsGarageDepartureAddVisible(true);
                 }}
                 onHomeTabPress={setActiveHomeTab}
+                activeFirstLastScheduleType={activeFirstLastScheduleType}
+                onFirstLastScheduleTypeChange={setActiveFirstLastScheduleType}
                 onMyPagePress={() => handleTabPress("myPage")}
                 onRouteDetailPress={() => {
                   blurActiveElement();
@@ -490,6 +519,7 @@ export function HomeScreen({
 
 function HomeDashboard({
   activeHomeTab,
+  activeFirstLastScheduleType,
   addressLabel,
   customAlarmRefreshKey,
   notificationCount,
@@ -497,6 +527,7 @@ function HomeDashboard({
   onBellPress,
   onGarageDepartureAddPress,
   onGarageAlarmEditPress,
+  onFirstLastScheduleTypeChange,
   onHomeTabPress,
   onMyPagePress,
   onFirstLastRouteSetupPress,
@@ -528,6 +559,8 @@ function HomeDashboard({
         />
       ) : (
         <FirstLastRouteScreen
+          activeScheduleType={activeFirstLastScheduleType}
+          onScheduleTypeChange={onFirstLastScheduleTypeChange}
           onRouteDetailPress={onRouteDetailPress}
           onRouteSetupPress={onRouteSetupPress}
           routeSummary={firstLastRouteSummary}

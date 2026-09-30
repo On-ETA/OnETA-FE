@@ -24,13 +24,18 @@ const PRE_DEPARTURE_ALARMS = [
   { key: "60", label: "1시간 전" },
 ];
 
+const FIRST_TRANSIT = "FIRST_TRANSIT";
+const LAST_TRANSIT = "LAST_TRANSIT";
+
 export function FirstLastRouteScreen({
+  activeScheduleType = FIRST_TRANSIT,
+  onScheduleTypeChange,
   onRouteDetailPress,
   onRouteSetupPress,
   routeSummary,
 }) {
-  const [isLastRouteFirst, setIsLastRouteFirst] = useState(false);
   const [isAlarmModalVisible, setIsAlarmModalVisible] = useState(false);
+  const isLastRouteActive = activeScheduleType === LAST_TRANSIT;
   const [alarmSettings, setAlarmSettings] = useState({
     1: false,
     3: false,
@@ -74,7 +79,7 @@ export function FirstLastRouteScreen({
           <View style={styles.routeCardTop}>
             <View style={styles.routeTitleGroup}>
               <Text
-                style={isLastRouteFirst ? styles.routeTitleMuted : styles.routeTitle}
+                style={isLastRouteActive ? styles.routeTitleMuted : styles.routeTitle}
               >
                 첫차
               </Text>
@@ -82,13 +87,17 @@ export function FirstLastRouteScreen({
                 accessibilityLabel="첫차 막차 전환"
                 accessibilityRole="button"
                 hitSlop={8}
-                onPress={() => setIsLastRouteFirst((current) => !current)}
+                onPress={() =>
+                  onScheduleTypeChange?.(
+                    isLastRouteActive ? FIRST_TRANSIT : LAST_TRANSIT,
+                  )
+                }
                 style={styles.changeButton}
               >
                 <ChangeIcon height={17} width={17} />
               </Pressable>
               <Text
-                style={isLastRouteFirst ? styles.routeTitle : styles.routeTitleMuted}
+                style={isLastRouteActive ? styles.routeTitle : styles.routeTitleMuted}
               >
                 막차
               </Text>

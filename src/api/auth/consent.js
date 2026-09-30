@@ -66,6 +66,7 @@ export async function agreeToSignupTerms({
     path: SIGNUP_CONSENT_ENDPOINT,
     method: "POST",
     body,
+    authRequired: false,
     accessToken,
     signal,
     errorMessage: "약관 동의에 실패했습니다.",

@@ -6,11 +6,15 @@ const CACHE_PREFIX = "oneta.homeCache";
 export const homeCacheKeys = {
   addresses: "addresses",
   firstLastRoute: "firstLastRoute",
+  firstTransitRoute: "firstTransitRoute",
+  lastTransitRoute: "lastTransitRoute",
   arrivalNotifications: "arrivalNotifications",
   scheduleNotifications: "scheduleNotifications",
   depotNotifications: "depotNotifications",
   hiddenArrivalNotifications: "hiddenArrivalNotifications",
   transitNotifications: "transitNotifications",
+  firstTransitNotifications: "firstTransitNotifications",
+  lastTransitNotifications: "lastTransitNotifications",
   myPage: "myPage",
 };
 
@@ -83,6 +87,32 @@ export function writeHomeCache(key, value) {
   } catch {
     // Cache writes should never block the app flow.
   }
+
+  return value;
+}
+
+export async function writeHomeCacheAsync(key, value) {
+  const cacheKey = getCacheKey(key);
+
+  memoryCache.set(cacheKey, value);
+
+  if (Platform.OS === "web") {
+    const storage = getWebStorage();
+
+    if (!storage) {
+      return value;
+    }
+
+    try {
+      storage.setItem(cacheKey, JSON.stringify(value));
+    } catch {
+      // Cache writes should never block the app flow.
+    }
+
+    return value;
+  }
+
+  await AsyncStorage.setItem(cacheKey, JSON.stringify(value)).catch(() => null);
 
   return value;
 }

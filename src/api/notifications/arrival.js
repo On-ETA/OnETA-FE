@@ -304,21 +304,6 @@ export async function deleteArrivalNotifications({
     throw new Error("삭제할 도착 알림 id가 필요합니다.");
   }
 
-  const cachedNotifications = readHomeCache(homeCacheKeys.scheduleNotifications);
-  const normalizedIds = ids.map(String);
-
-  if (Array.isArray(cachedNotifications)) {
-    writeHomeCache(
-      homeCacheKeys.scheduleNotifications,
-      cachedNotifications.filter(
-        (notification) =>
-          !normalizedIds.includes(
-            String(notification.notificationId ?? notification.id).replace(/^arrival-/, ""),
-          ),
-      ),
-    );
-  }
-
   const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationsDeleteEndpoint(ids),
     method: "DELETE",
@@ -326,6 +311,9 @@ export async function deleteArrivalNotifications({
     signal,
     errorMessage: "도착 알림 삭제에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.scheduleNotifications);
+  await getArrivalNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
 
   return response;
 }
@@ -384,16 +372,6 @@ export async function updateArrivalNotification({
     throw new Error("도착 알림 id가 필요합니다.");
   }
 
-  updateScheduleNotificationsCache(id, (notification) =>
-    normalizeArrivalNotification({
-      ...notification.raw,
-      ...notification.payload,
-      ...payload,
-      notificationId: notification.notificationId ?? id,
-      id: notification.notificationId ?? id,
-    }),
-  );
-
   const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationEndpoint(id),
     method: "PATCH",
@@ -405,6 +383,16 @@ export async function updateArrivalNotification({
     signal,
     errorMessage: "도착 알림 수정에 실패했습니다.",
   });
+
+  updateScheduleNotificationsCache(id, (notification) =>
+    normalizeArrivalNotification({
+      ...notification.raw,
+      ...notification.payload,
+      ...payload,
+      notificationId: notification.notificationId ?? id,
+      id: notification.notificationId ?? id,
+    }),
+  );
 
   return response;
 }
@@ -422,6 +410,15 @@ export async function updateArrivalNotificationStatus({
   const nextActive =
     payload?.isActive ?? payload?.active ?? payload?.enabled ?? payload?.status === "ACTIVE";
 
+  const response = await requestArrivalNotificationJson({
+    path: buildArrivalNotificationStatusEndpoint(id),
+    method: "PATCH",
+    body: payload,
+    accessToken,
+    signal,
+    errorMessage: "도착 알림 상태 변경에 실패했습니다.",
+  });
+
   updateScheduleNotificationsCache(id, (notification) => ({
     ...notification,
     enabled: Boolean(nextActive),
@@ -438,15 +435,6 @@ export async function updateArrivalNotificationStatus({
       active: Boolean(nextActive),
     },
   }));
-
-  const response = await requestArrivalNotificationJson({
-    path: buildArrivalNotificationStatusEndpoint(id),
-    method: "PATCH",
-    body: payload,
-    accessToken,
-    signal,
-    errorMessage: "도착 알림 상태 변경에 실패했습니다.",
-  });
 
   return response;
 }

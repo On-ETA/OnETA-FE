@@ -185,22 +185,16 @@ export async function deleteDepotNotification({
     throw new Error("사용자 버스 id가 필요합니다.");
   }
 
-  const cachedNotifications = readHomeCache(homeCacheKeys.depotNotifications);
-
-  if (Array.isArray(cachedNotifications)) {
-    writeHomeCache(
-      homeCacheKeys.depotNotifications,
-      cachedNotifications.filter(
-        (notification) => String(notification.userBusId ?? notification.id) !== String(userBusId),
-      ),
-    );
-  }
-
-  return requestDepotNotificationJson({
+  const response = await requestDepotNotificationJson({
     path: buildDepotNotificationEndpoint(userBusId),
     method: "DELETE",
     accessToken,
     signal,
     errorMessage: "차고지 출발 알림 삭제에 실패했습니다.",
   });
+
+  removeHomeCache(homeCacheKeys.depotNotifications);
+  await getMyDepotNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+
+  return response;
 }
