@@ -20,6 +20,8 @@
     "android": {
       "package": "com.oneta.app",
       "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.POST_NOTIFICATIONS"
       ],
       "googleServicesFile": "./google-services.json"

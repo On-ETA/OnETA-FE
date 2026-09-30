@@ -315,6 +315,11 @@ function NativeNaverMap({
 
   return (
     <NativeNaverMapView
+      camera={{
+        latitude: center.latitude,
+        longitude: center.longitude,
+        zoom: level,
+      }}
       initialCamera={{
         latitude: center.latitude,
         longitude: center.longitude,
@@ -325,6 +330,7 @@ function NativeNaverMap({
       isShowScaleBar={false}
       isShowZoomControls={false}
       locale="ko"
+      locationTrackingMode="None"
       style={[styles.container, style]}
       onTapMap={handleTapMap}
     >

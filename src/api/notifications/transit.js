@@ -202,13 +202,21 @@ export async function createTransitNotification({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
+  const requestBody = {
+    reminderOffsetMinutes: Array.isArray(payload?.reminderOffsetMinutes)
+      ? payload.reminderOffsetMinutes
+      : [],
+    routeDetails:
+      typeof payload?.routeDetails === "string"
+        ? payload.routeDetails
+        : JSON.stringify(payload?.routeDetails ?? {}),
+    scheduleType: payload?.scheduleType ?? "FIRST_TRANSIT",
+  };
+
   const response = await requestTransitNotificationJson({
     path: TRANSIT_NOTIFICATIONS_ENDPOINT,
     method: "POST",
-    body: {
-      ...payload,
-      scheduleType: payload?.scheduleType ?? "FIRST_TRANSIT",
-    },
+    body: requestBody,
     accessToken,
     signal,
     errorMessage: "첫막차 경로 등록에 실패했습니다.",

@@ -67,89 +67,11 @@ function createFirstLastRouteSummaryFromNotification(notification) {
   };
 }
 
-function toLocalTimeObject(value) {
-  if (value && typeof value === "object") {
-    return {
-      hour: Number(value.hour ?? 0),
-      minute: Number(value.minute ?? 0),
-      second: Number(value.second ?? 0),
-      nano: Number(value.nano ?? 0),
-    };
-  }
-
-  if (typeof value === "string") {
-    const [hour, minute, second] = value.split(":");
-
-    return {
-      hour: Number(hour ?? 0),
-      minute: Number(minute ?? 0),
-      second: Number(second ?? 0),
-      nano: 0,
-    };
-  }
-
-  const date = value instanceof Date && !Number.isNaN(value.getTime())
-    ? value
-    : new Date();
+function createTransitNotificationPayload(route, summary) {
+  const routeDetails = route?.raw ?? route;
 
   return {
-    hour: date.getHours(),
-    minute: date.getMinutes(),
-    second: date.getSeconds(),
-    nano: 0,
-  };
-}
-
-function getRouteValue(source, key) {
-  return source?.[key] ?? source?.raw?.[key];
-}
-
-function getPrimaryTransitSegment(route) {
-  return route?.segments?.find((segment) => segment.transitType !== "WALK");
-}
-
-function getRouteTargetArrivalTime(route, summary) {
-  const routeArrivalTime =
-    getRouteValue(route, "arrivalTime") ??
-    getRouteValue(getPrimaryTransitSegment(route), "arrivalTime") ??
-    summary?.arrivalTime;
-
-  if (routeArrivalTime) {
-    return toLocalTimeObject(routeArrivalTime);
-  }
-
-  const durationMinutes =
-    route?.realTimeDurationMinutes ??
-    route?.totalDurationMinutes ??
-    0;
-  const arrivalDate = new Date(Date.now() + durationMinutes * 60000);
-
-  return toLocalTimeObject(arrivalDate);
-}
-
-function createTransitNotificationPayload(route, places = {}, summary) {
-  const routeDetails = {
-    route: route?.raw ?? route,
-    origin: places.origin,
-    destination: places.destination,
-    originAddress:
-      places.originPlace?.address ??
-      route?.originAddress ??
-      places.origin,
-    destinationAddress:
-      places.destinationPlace?.address ??
-      route?.destinationAddress ??
-      places.destination,
-  };
-
-  return {
-    routeName:
-      summary?.routeName ||
-      [places.origin, places.destination].filter(Boolean).join(" - ") ||
-      "첫막차 경로",
-    targetArrivalTime: getRouteTargetArrivalTime(route, summary),
     reminderOffsetMinutes: [summary?.preDepartureAlarmMinutes ?? 10],
-    repeatDays: [],
     routeDetails: JSON.stringify(routeDetails),
     scheduleType: summary?.scheduleType ?? route?.scheduleType ?? "FIRST_TRANSIT",
   };
@@ -325,7 +247,7 @@ export function HomeScreen({
     setFirstLastRouteSummary(writeCachedFirstLastRouteSummary(summary));
     try {
       const notificationResponse = await createTransitNotification({
-        payload: createTransitNotificationPayload(route, places, summary),
+        payload: createTransitNotificationPayload(route, summary),
       });
       const notificationId = getCreatedNotificationId(notificationResponse);
 
