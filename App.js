@@ -31,8 +31,9 @@ import {
   setAuthTokens,
 } from "./src/api/auth/tokens";
 import { blurActiveElement } from "./src/utils/accessibility";
-import { clearHomeCache } from "./src/api/homeCache";
+import { clearHomeCacheAsync } from "./src/api/homeCache";
 import { preloadHomeCache } from "./src/api/homePreload";
+import { subscribeAuthRequired } from "./src/api/auth/authEvents";
 import { PushNotifications } from "./src/notifications/PushNotifications";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
 
@@ -114,27 +115,57 @@ function useAuthenticatedRoute(navigation, route) {
   const didPreloadRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (accessToken) {
-      clearHomeCache();
-      setAuthTokens({ accessToken, refreshToken }, { persist: true });
-      if (!didPreloadRef.current) {
-        didPreloadRef.current = true;
-        preloadHomeCache().catch(() => null);
+    let isActive = true;
+
+    async function prepareAuthenticatedRoute() {
+      try {
+        if (accessToken) {
+          await clearHomeCacheAsync();
+          setAuthTokens({ accessToken, refreshToken }, { persist: true });
+
+          if (!didPreloadRef.current) {
+            didPreloadRef.current = true;
+            await preloadHomeCache({ reset: true });
+          }
+
+          if (isActive) {
+            setIsReady(true);
+          }
+          return;
+        }
+
+        if (getAccessToken()) {
+          if (!didPreloadRef.current) {
+            didPreloadRef.current = true;
+            await preloadHomeCache();
+          }
+
+          if (isActive) {
+            setIsReady(true);
+          }
+          return;
+        }
+
+        resetTo(navigation, routes.login);
+      } catch (error) {
+        if (!isActive || error?.name === "AbortError") {
+          return;
+        }
+
+        resetTo(navigation, routes.login);
       }
-      setIsReady(true);
-      return;
     }
 
-    if (getAccessToken()) {
-      if (!didPreloadRef.current) {
-        didPreloadRef.current = true;
-        preloadHomeCache().catch(() => null);
-      }
-      setIsReady(true);
-      return;
-    }
+    const unsubscribeAuthRequired = subscribeAuthRequired(() => {
+      resetTo(navigation, routes.login);
+    });
 
-    resetTo(navigation, routes.login);
+    prepareAuthenticatedRoute();
+
+    return () => {
+      isActive = false;
+      unsubscribeAuthRequired();
+    };
   }, [accessToken, refreshToken, navigation]);
 
   return isReady;

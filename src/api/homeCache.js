@@ -9,6 +9,7 @@ export const homeCacheKeys = {
   arrivalNotifications: "arrivalNotifications",
   scheduleNotifications: "scheduleNotifications",
   depotNotifications: "depotNotifications",
+  hiddenArrivalNotifications: "hiddenArrivalNotifications",
   transitNotifications: "transitNotifications",
   myPage: "myPage",
 };
@@ -114,6 +115,36 @@ export function removeHomeCache(key) {
 
 export function clearHomeCache() {
   Object.values(homeCacheKeys).forEach(removeHomeCache);
+}
+
+export async function clearHomeCacheAsync() {
+  Object.values(homeCacheKeys).forEach((key) => {
+    memoryCache.delete(getCacheKey(key));
+  });
+
+  if (Platform.OS === "web") {
+    const storage = getWebStorage();
+
+    if (!storage) {
+      return;
+    }
+
+    Object.values(homeCacheKeys).forEach((key) => {
+      try {
+        storage.removeItem(getCacheKey(key));
+      } catch {
+        // Ignore cache cleanup failures.
+      }
+    });
+
+    return;
+  }
+
+  await Promise.all(
+    Object.values(homeCacheKeys).map((key) =>
+      AsyncStorage.removeItem(getCacheKey(key)).catch(() => null),
+    ),
+  );
 }
 
 export async function readHomeCacheAsync(key, fallbackValue = null) {

@@ -27,6 +27,20 @@ import { colors, typography } from "../theme";
 
 const MAX_ADDRESS_COUNT = 5;
 
+function getAddressId(address) {
+  const addressId = address?.addressId ?? address?.id;
+
+  if (addressId === undefined || addressId === null || addressId === "") {
+    return null;
+  }
+
+  return String(addressId);
+}
+
+function getAddressKey(address, index) {
+  return getAddressId(address) ?? `${address?.name ?? "address"}-${address?.detail ?? address?.address ?? index}-${index}`;
+}
+
 function isAuthError(error) {
   return (
     error?.status === 401 ||
@@ -135,7 +149,7 @@ export function AddressManagementScreen({
     setIsRegisteringAddress(true);
 
     try {
-      const response = await createAddress({
+      await createAddress({
         payload: {
           name: alias || selectedResult.name,
           address: selectedResult.address ?? selectedResult.roadAddress,
@@ -143,26 +157,11 @@ export function AddressManagementScreen({
           y: selectedResult.y,
         },
       });
-      const responseAddress = response?.data ?? response;
-      const createdAddress = normalizeAddress(responseAddress);
-      const createdAddressId = createdAddress.addressId ?? createdAddress.id;
 
-      if (createdAddressId === undefined || createdAddressId === null) {
-        const nextAddresses = await getAddresses();
+      const nextAddresses = await getAddresses({ forceRefresh: true });
 
-        setAddresses(nextAddresses);
-        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
-        setScreenMode("list");
-        return;
-      }
-
-      setAddresses((current) => {
-        const nextAddresses = [...current, createdAddress];
-
-        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
-
-        return nextAddresses;
-      });
+      setAddresses(nextAddresses);
+      onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
       setScreenMode("list");
     } catch (error) {
       Alert.alert("주소 등록 실패", error?.message ?? "주소 등록에 실패했습니다.");
@@ -177,8 +176,18 @@ export function AddressManagementScreen({
       return;
     }
 
-    const addressId = editingAddress.addressId ?? editingAddress.id;
+    const addressId = getAddressId(editingAddress);
     const nextAddressText = editingAddress.address ?? editingAddress.detail;
+
+    if (!addressId) {
+      const nextAddresses = await getAddresses({ forceRefresh: true });
+
+      setAddresses(nextAddresses);
+      onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+      setEditingAddress(null);
+      setScreenMode("list");
+      return;
+    }
 
     try {
       const response = await updateAddressRequest({
@@ -196,7 +205,7 @@ export function AddressManagementScreen({
 
       setAddresses((current) => {
         const nextAddresses = current.map((address) =>
-          (address.addressId ?? address.id) === addressId
+          getAddressId(address) === addressId
             ? updatedAddress ?? {
                 ...address,
                 ...editingAddress,
@@ -223,9 +232,20 @@ export function AddressManagementScreen({
       return;
     }
 
-    const addressId = editingAddress.addressId ?? editingAddress.id;
+    const addressId = getAddressId(editingAddress);
+
+    if (!addressId) {
+      const nextAddresses = await getAddresses({ forceRefresh: true });
+
+      setAddresses(nextAddresses);
+      onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
+      setEditingAddress(null);
+      setScreenMode("list");
+      return;
+    }
+
     const nextAddresses = addresses.filter(
-      (item) => (item.addressId ?? item.id) !== addressId,
+      (item) => getAddressId(item) !== addressId,
     );
     const deletedCurrentAddress = editingAddress.isCurrent;
     const nextCurrentAddress = deletedCurrentAddress ? nextAddresses[0] : null;
@@ -241,8 +261,7 @@ export function AddressManagementScreen({
       await deleteAddressRequest({ addressId });
 
       if (nextCurrentAddress) {
-        const nextCurrentAddressId =
-          nextCurrentAddress.addressId ?? nextCurrentAddress.id;
+        const nextCurrentAddressId = getAddressId(nextCurrentAddress);
         const response = await setCurrentAddress({
           addressId: nextCurrentAddressId,
         });
@@ -251,7 +270,7 @@ export function AddressManagementScreen({
           : null;
 
         resolvedAddresses = nextAddresses.map((item) => {
-          const itemAddressId = item.addressId ?? item.id;
+          const itemAddressId = getAddressId(item);
           const isSelectedAddress = itemAddressId === nextCurrentAddressId;
 
           return {
@@ -273,7 +292,7 @@ export function AddressManagementScreen({
   };
 
   const handleCurrentAddressPress = async (address) => {
-    const addressId = address.addressId ?? address.id;
+    const addressId = getAddressId(address);
 
     if (!addressId || address.isCurrent || settingCurrentAddressId !== null) {
       return;
@@ -289,7 +308,7 @@ export function AddressManagementScreen({
 
       setAddresses((current) => {
         const nextAddresses = current.map((item) => {
-          const itemAddressId = item.addressId ?? item.id;
+          const itemAddressId = getAddressId(item);
           const isSelectedAddress = itemAddressId === addressId;
 
           if (!isSelectedAddress) {
@@ -408,11 +427,11 @@ export function AddressManagementScreen({
             <Text style={styles.statusText}>{addressLoadError}</Text>
           </View>
         ) : null}
-        {addresses.map((address) => (
+        {addresses.map((address, index) => (
           <AddressCard
             address={address}
             isSettingCurrent={settingCurrentAddressId !== null}
-            key={address.id ?? address.addressId}
+            key={getAddressKey(address, index)}
             selectionOnly={Boolean(onAddressSelect)}
             onCurrentPress={() => onAddressSelect ? onAddressSelect(address) : handleCurrentAddressPress(address)}
             onEditPress={() => {
@@ -525,10 +544,10 @@ function AddressSearchScreen({ onBackPress, onResultPress }) {
           ) : hasKeyword && results.length === 0 ? (
             <Text style={styles.searchStatusText}>검색 결과가 없습니다.</Text>
           ) : null}
-          {results.map((result) => (
+          {results.map((result, index) => (
             <Pressable
               accessibilityRole="button"
-              key={result.id}
+              key={`${result.id}-${index}`}
               onPress={() => onResultPress(result)}
               style={styles.resultRow}
             >

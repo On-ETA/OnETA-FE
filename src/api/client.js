@@ -1,3 +1,5 @@
+import { notifyAuthRequired } from "./auth/authEvents";
+
 const DEFAULT_API_BASE_URL = "https://api.on-eta.com";
 const DEFAULT_TIMEOUT_MS = 10000;
 const configuredApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
@@ -80,17 +82,29 @@ function createRequestSignal({ signal, timeoutMs }) {
   };
 }
 
-export async function requestJson({
-  path,
-  method = "GET",
-  body,
-  accessToken,
-  signal,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+export async function requestJson(options) {
+  const {
+    path,
+    method = "GET",
+    body,
+    accessToken,
+    signal,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
   timeoutMessage = "요청 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
-  errorMessage = "API request failed",
-}) {
+    errorMessage = "API request failed",
+  } = options;
   const requestUrl = buildApiUrl(path);
+  const requiresAuth = Object.prototype.hasOwnProperty.call(options, "accessToken");
+
+  if (requiresAuth && !accessToken) {
+    const error = new Error("로그인이 필요합니다.");
+
+    error.status = 401;
+    error.code = "AUTH_REQUIRED";
+    notifyAuthRequired({ path, method, reason: "missing_access_token" });
+
+    throw error;
+  }
   const headers = {
     Accept: "application/json",
   };

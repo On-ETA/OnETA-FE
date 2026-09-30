@@ -10,7 +10,6 @@ import {
 
 const SCHEDULE_NOTIFICATIONS_ENDPOINT = "/api/notifications/schedules";
 const ARRIVAL_NOTIFICATIONS_ENDPOINT = "/api/notifications/arrival";
-const HIDDEN_ARRIVAL_NOTIFICATIONS_CACHE_KEY = "hiddenArrivalNotifications";
 
 function buildArrivalNotificationEndpoint(id) {
   return `${ARRIVAL_NOTIFICATIONS_ENDPOINT}/${encodeURIComponent(id)}`;
@@ -108,7 +107,7 @@ function normalizeHiddenArrivalNotificationId(id) {
 }
 
 function readHiddenArrivalNotificationIds() {
-  const hiddenIds = readHomeCache(HIDDEN_ARRIVAL_NOTIFICATIONS_CACHE_KEY, []);
+  const hiddenIds = readHomeCache(homeCacheKeys.hiddenArrivalNotifications, []);
 
   return Array.isArray(hiddenIds) ? hiddenIds.map(String) : [];
 }
@@ -137,7 +136,7 @@ export function hideArrivalNotificationsLocally(ids = []) {
   removeHomeCache(homeCacheKeys.scheduleNotifications);
 
   return writeHomeCache(
-    HIDDEN_ARRIVAL_NOTIFICATIONS_CACHE_KEY,
+    homeCacheKeys.hiddenArrivalNotifications,
     Array.from(hiddenIds),
   );
 }
@@ -290,20 +289,8 @@ export async function createArrivalNotification({
     errorMessage: "도착 알림 등록에 실패했습니다.",
   });
 
-  const createdNotification = response?.data ?? response;
-  const createdSchedule = normalizeArrivalNotification({
-    ...payload,
-    ...createdNotification,
-    scheduleType: createdNotification?.scheduleType ?? payload?.scheduleType ?? "NORMAL",
-  });
-  const cachedNotifications = readHomeCache(homeCacheKeys.scheduleNotifications);
-
-  writeHomeCache(
-    homeCacheKeys.scheduleNotifications,
-    Array.isArray(cachedNotifications)
-      ? [...cachedNotifications, createdSchedule]
-      : [createdSchedule],
-  );
+  removeHomeCache(homeCacheKeys.scheduleNotifications);
+  await getArrivalNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
 
   return response;
 }

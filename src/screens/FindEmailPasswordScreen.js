@@ -17,7 +17,7 @@ import {
 } from "../api/auth/email/send";
 import { login } from "../api/auth/login";
 import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
-import { clearHomeCache } from "../api/homeCache";
+import { clearHomeCacheAsync } from "../api/homeCache";
 import { preloadHomeCache } from "../api/homePreload";
 import { verifyEmailCode } from "../api/auth/email/verify";
 import { resetPassword } from "../api/reset";
@@ -253,9 +253,9 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
       });
       const authTokens = extractAuthTokens(loginResponse);
 
-      clearHomeCache();
+      await clearHomeCacheAsync();
       setAuthTokens(authTokens, { persist: true });
-      preloadHomeCache().catch(() => null);
+      await preloadHomeCache({ reset: true });
 
       onConfirmPress?.({
         email: trimmedEmail,

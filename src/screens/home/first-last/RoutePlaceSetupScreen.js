@@ -118,8 +118,8 @@ export function RoutePlaceSetupScreen({
             </Pressable>
           </View>
           {status ? <Text style={styles.status}>{status}</Text> : null}
-          {results.map((place) => (
-            <Pressable key={place.id} accessibilityRole="button" style={styles.result} onPress={() => {
+          {results.map((place, index) => (
+            <Pressable key={`${place.id}-${index}`} accessibilityRole="button" style={styles.result} onPress={() => {
               setPlaces((current) => ({ ...current, [activeField]: { ...place, label: place.name || place.address } }));
               setValidation("");
               closeSearch();

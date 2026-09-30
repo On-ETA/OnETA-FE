@@ -3,7 +3,12 @@ import { getMyPage } from "./mypage";
 import { getArrivalNotifications } from "./notifications/arrival";
 import { getMyDepotNotifications } from "./notifications/depot";
 import { getTransitNotifications } from "./notifications/transit";
-import { homeCacheKeys, readHomeCache, readHomeCacheAsync } from "./homeCache";
+import {
+  clearHomeCacheAsync,
+  homeCacheKeys,
+  readHomeCache,
+  readHomeCacheAsync,
+} from "./homeCache";
 
 let preloadPromise = null;
 
@@ -29,24 +34,30 @@ export function getCachedFirstLastRouteAsync() {
   return readHomeCacheAsync(homeCacheKeys.firstLastRoute, null);
 }
 
-export async function preloadHomeCache({ signal } = {}) {
-  if (preloadPromise) {
+export async function preloadHomeCache({ reset = false, signal } = {}) {
+  if (preloadPromise && !reset) {
     return preloadPromise;
   }
 
-  if (hasRequiredPreloadCache()) {
+  if (preloadPromise && reset) {
+    await preloadPromise.catch(() => null);
+  }
+
+  if (!reset && hasRequiredPreloadCache()) {
     return Promise.resolve();
   }
 
   preloadPromise = (async () => {
+    if (reset) {
+      await clearHomeCacheAsync();
+    }
+
     await getCachedFirstLastRouteAsync();
-    await Promise.allSettled([
-      getAddresses({ forceRefresh: true, signal }),
-      getArrivalNotifications({ forceRefresh: true, signal }),
-      getTransitNotifications({ forceRefresh: true, signal }),
-      getMyDepotNotifications({ forceRefresh: true, signal }),
-      getMyPage({ forceRefresh: true, signal }),
-    ]);
+    await getAddresses({ forceRefresh: true, signal });
+    await getTransitNotifications({ forceRefresh: true, signal });
+    await getArrivalNotifications({ forceRefresh: true, signal });
+    await getMyDepotNotifications({ forceRefresh: true, signal });
+    await getMyPage({ forceRefresh: true, signal });
   })().finally(() => {
     preloadPromise = null;
   });
