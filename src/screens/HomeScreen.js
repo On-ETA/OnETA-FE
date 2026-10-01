@@ -37,6 +37,7 @@ import { blurActiveElement } from "../utils/accessibility";
 import { createFirstLastRouteSummary } from "../utils/firstLastRouteSummary";
 
 const homeBackground = colors.gray01;
+const CUSTOM_ALARM_REFRESH_KEY = 0;
 
 
 function createFirstLastRouteSummaryFromNotification(notification) {
@@ -171,7 +172,7 @@ export function HomeScreen({
   const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(
     () => readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.first),
   );
-  const customAlarmRefreshKey = 0;
+  const customAlarmRefreshKey = CUSTOM_ALARM_REFRESH_KEY;
 
   useEffect(() => {
     let isActive = true;
@@ -310,7 +311,7 @@ export function HomeScreen({
     setActiveHomeTab("customAlarm");
   }, []);
 
-  const handleTabPress = (tabKey) => {
+  const handleTabPress = useCallback((tabKey) => {
     blurActiveElement();
     setIsAddressManagerVisible(false);
     setIsRouteDetailVisible(false);
@@ -326,7 +327,52 @@ export function HomeScreen({
     }
 
     setActiveTab(tabKey);
-  };
+  }, [onTabPress]);
+
+  const dashboardAddressLabel = currentAddressLabel || "주소 등록하기";
+
+  const handleAddressPress = useCallback(() => {
+    blurActiveElement();
+    setIsAddressManagerVisible(true);
+  }, []);
+
+  const handleGarageDepartureAddPress = useCallback(() => {
+    blurActiveElement();
+    setIsGarageDepartureAddVisible(true);
+  }, []);
+
+  const handleMyPagePress = useCallback(() => {
+    handleTabPress("myPage");
+  }, [handleTabPress]);
+
+  const handleRouteDetailPress = useCallback(() => {
+    blurActiveElement();
+    setIsRouteDetailVisible(true);
+  }, []);
+
+  const handleRouteSetupPress = useCallback(() => {
+    blurActiveElement();
+    setIsScheduleAlarmAddVisible(true);
+    setScheduleAlarmInitialStep("routeSetup");
+    setScheduleAlarmInitialValues(null);
+  }, []);
+
+  const handleScheduleAlarmAddPress = useCallback(() => {
+    blurActiveElement();
+    setIsScheduleAlarmAddVisible(true);
+    setScheduleAlarmInitialStep("form");
+    setScheduleAlarmInitialValues(null);
+  }, []);
+
+  const handleGarageAlarmEditPress = useCallback((alarm) => {
+    blurActiveElement();
+    setEditingCustomAlarm({ type: "garage", alarm });
+  }, []);
+
+  const handleScheduleAlarmEditPress = useCallback((alarm) => {
+    blurActiveElement();
+    setEditingCustomAlarm({ type: "schedule", alarm });
+  }, []);
 
   return (
     <View style={styles.screen}>
@@ -464,50 +510,22 @@ export function HomeScreen({
             ) : (
               <HomeDashboard
                 activeHomeTab={activeHomeTab}
-                addressLabel={
-                  currentAddressLabel ||
-                  (activeHomeTab === "firstLast" ? "주소 등록하기" : "주소 등록하기")
-                }
+                addressLabel={dashboardAddressLabel}
                 notificationCount={notificationCount}
                 customAlarmRefreshKey={customAlarmRefreshKey}
-                onAddressPress={() => {
-                  blurActiveElement();
-                  setIsAddressManagerVisible(true);
-                }}
+                onAddressPress={handleAddressPress}
                 onBellPress={onOpenNotifications}
-                onGarageDepartureAddPress={() => {
-                  blurActiveElement();
-                  setIsGarageDepartureAddVisible(true);
-                }}
+                onGarageDepartureAddPress={handleGarageDepartureAddPress}
                 onHomeTabPress={setActiveHomeTab}
                 activeFirstLastScheduleType={activeFirstLastScheduleType}
                 onFirstLastScheduleTypeChange={setActiveFirstLastScheduleType}
-                onMyPagePress={() => handleTabPress("myPage")}
-                onRouteDetailPress={() => {
-                  blurActiveElement();
-                  setIsRouteDetailVisible(true);
-                }}
-                onRouteSetupPress={() => {
-                  blurActiveElement();
-                  setIsScheduleAlarmAddVisible(true);
-                  setScheduleAlarmInitialStep("routeSetup");
-                  setScheduleAlarmInitialValues(null);
-                }}
+                onMyPagePress={handleMyPagePress}
+                onRouteDetailPress={handleRouteDetailPress}
+                onRouteSetupPress={handleRouteSetupPress}
                 firstLastRouteSummary={firstLastRouteSummary}
-                onScheduleAlarmAddPress={() => {
-                  blurActiveElement();
-                  setIsScheduleAlarmAddVisible(true);
-                  setScheduleAlarmInitialStep("form");
-                  setScheduleAlarmInitialValues(null);
-                }}
-                onGarageAlarmEditPress={(alarm) => {
-                  blurActiveElement();
-                  setEditingCustomAlarm({ type: "garage", alarm });
-                }}
-                onScheduleAlarmEditPress={(alarm) => {
-                  blurActiveElement();
-                  setEditingCustomAlarm({ type: "schedule", alarm });
-                }}
+                onScheduleAlarmAddPress={handleScheduleAlarmAddPress}
+                onGarageAlarmEditPress={handleGarageAlarmEditPress}
+                onScheduleAlarmEditPress={handleScheduleAlarmEditPress}
               />
             )
           ) : null}
@@ -517,7 +535,7 @@ export function HomeScreen({
   );
 }
 
-function HomeDashboard({
+const HomeDashboard = React.memo(function HomeDashboard({
   activeHomeTab,
   activeFirstLastScheduleType,
   addressLabel,
@@ -568,7 +586,7 @@ function HomeDashboard({
       )}
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   screen: {

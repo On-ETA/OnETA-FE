@@ -239,7 +239,9 @@ test("a reissue response arriving after logout cannot restore auth", async () =>
   const auth = load("src/api/auth/tokens.js");
   auth.setAuthTokens({ accessToken: "a", refreshToken: "refresh-a" });
   const { reissueAuthTokens } = load("src/api/auth/reissue.js", {
-    "./tokens": auth, "../client": { requestJson: () => response.promise },
+    "./authEvents": { notifyAuthRequired() {} },
+    "./tokens": auth,
+    "../client": { requestJson: () => response.promise },
   });
   const reissuing = reissueAuthTokens();
   auth.clearAuthTokens();
@@ -249,7 +251,9 @@ test("a reissue response arriving after logout cannot restore auth", async () =>
 });
 
 test("requests respect an already-aborted signal and preserve AbortError", async () => {
-  const { requestJson } = load("src/api/client.js", {}, {
+  const { requestJson } = load("src/api/client.js", {
+    "./auth/authEvents": { notifyAuthRequired() {} },
+  }, {
     fetch: async (_, options) => {
       assert.equal(options.signal.aborted, true);
       const error = new Error("aborted");

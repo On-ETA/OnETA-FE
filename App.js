@@ -108,6 +108,34 @@ function navigateTo(navigation, name, params) {
   navigation.navigate(name, params);
 }
 
+function createHomeScreenNavigationProps(navigation) {
+  return {
+    onOpenAccountInfo: () => navigateTo(navigation, routes.accountInfo),
+    onOpenContact: () => navigateTo(navigation, routes.inquiry),
+    onOpenFaqs: () => navigateTo(navigation, routes.faqs),
+    onOpenNotices: () => navigateTo(navigation, routes.notices),
+    onOpenNotifications: () => navigateTo(navigation, routes.notifications),
+    onOpenPassword: () => navigateTo(navigation, routes.changePassword),
+    onOpenPrivacy: () => navigateTo(navigation, routes.privacyPolicy),
+    onOpenTerms: () => navigateTo(navigation, routes.termsOfService),
+    onLogoutComplete: () => resetTo(navigation, routes.login),
+    onWithdrawComplete: () => resetTo(navigation, routes.login),
+    onTabPress: (tabKey) => {
+      if (tabKey === "home") {
+        navigateTo(navigation, routes.home);
+        return true;
+      }
+
+      if (tabKey === "myPage") {
+        navigateTo(navigation, routes.myPage);
+        return true;
+      }
+
+      return false;
+    },
+  };
+}
+
 function useAuthenticatedRoute(navigation, route) {
   const accessToken = route?.params?.accessToken;
   const refreshToken = route?.params?.refreshToken;
@@ -284,6 +312,10 @@ function SignupCompleteRoute({ navigation, route }) {
 
 function HomeRoute({ navigation, route }) {
   const isReady = useAuthenticatedRoute(navigation, route);
+  const homeScreenNavigationProps = React.useMemo(
+    () => createHomeScreenNavigationProps(navigation),
+    [navigation],
+  );
 
   if (!isReady) {
     return null;
@@ -292,29 +324,7 @@ function HomeRoute({ navigation, route }) {
   return (
     <HomeScreen
       initialTab={route.params?.initialTab ?? "home"}
-      onOpenAccountInfo={() => navigateTo(navigation, routes.accountInfo)}
-      onOpenContact={() => navigateTo(navigation, routes.inquiry)}
-      onOpenFaqs={() => navigateTo(navigation, routes.faqs)}
-      onOpenNotices={() => navigateTo(navigation, routes.notices)}
-      onOpenNotifications={() => navigateTo(navigation, routes.notifications)}
-      onOpenPassword={() => navigateTo(navigation, routes.changePassword)}
-      onOpenPrivacy={() => navigateTo(navigation, routes.privacyPolicy)}
-      onOpenTerms={() => navigateTo(navigation, routes.termsOfService)}
-      onLogoutComplete={() => resetTo(navigation, routes.login)}
-      onWithdrawComplete={() => resetTo(navigation, routes.login)}
-      onTabPress={(tabKey) => {
-        if (tabKey === "home") {
-          navigateTo(navigation, routes.home);
-          return true;
-        }
-
-        if (tabKey === "myPage") {
-          navigateTo(navigation, routes.myPage);
-          return true;
-        }
-
-        return false;
-      }}
+      {...homeScreenNavigationProps}
     />
   );
 }
@@ -333,6 +343,10 @@ function CustomAlarmRoute({ navigation, route }) {
 
 function MyPageRoute({ navigation, route }) {
   const isReady = useAuthenticatedRoute(navigation, route);
+  const homeScreenNavigationProps = React.useMemo(
+    () => createHomeScreenNavigationProps(navigation),
+    [navigation],
+  );
 
   if (!isReady) {
     return null;
@@ -341,29 +355,7 @@ function MyPageRoute({ navigation, route }) {
   return (
     <HomeScreen
       initialTab="myPage"
-      onOpenAccountInfo={() => navigateTo(navigation, routes.accountInfo)}
-      onOpenContact={() => navigateTo(navigation, routes.inquiry)}
-      onOpenFaqs={() => navigateTo(navigation, routes.faqs)}
-      onOpenNotices={() => navigateTo(navigation, routes.notices)}
-      onOpenNotifications={() => navigateTo(navigation, routes.notifications)}
-      onOpenPassword={() => navigateTo(navigation, routes.changePassword)}
-      onOpenPrivacy={() => navigateTo(navigation, routes.privacyPolicy)}
-      onOpenTerms={() => navigateTo(navigation, routes.termsOfService)}
-      onLogoutComplete={() => resetTo(navigation, routes.login)}
-      onWithdrawComplete={() => resetTo(navigation, routes.login)}
-      onTabPress={(tabKey) => {
-        if (tabKey === "home") {
-          navigateTo(navigation, routes.home);
-          return true;
-        }
-
-        if (tabKey === "myPage") {
-          navigateTo(navigation, routes.myPage);
-          return true;
-        }
-
-        return false;
-      }}
+      {...homeScreenNavigationProps}
     />
   );
 }
