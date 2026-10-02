@@ -601,6 +601,11 @@ export function HomeScreen({
               <ScheduleAlarmAddScreen
                 initialStep={scheduleAlarmInitialStep}
                 initialValues={scheduleAlarmInitialValues}
+                routeSearchScheduleType={
+                  scheduleAlarmInitialStep === "routeSetup"
+                    ? activeFirstLastScheduleType
+                    : undefined
+                }
                 mapTitle={
                   scheduleAlarmInitialStep === "routeSetup"
                     ? "경로 재설정"
@@ -637,6 +642,7 @@ export function HomeScreen({
                 actionLabel="이 경로로 설정"
                 initialDestination={firstLastRoutePlaces.destination}
                 initialOrigin={firstLastRoutePlaces.origin}
+                scheduleType={activeFirstLastScheduleType}
                 onBackPress={() => {
                   blurActiveElement();
                   setFirstLastRouteSetupStep("map");
