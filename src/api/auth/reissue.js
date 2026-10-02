@@ -59,14 +59,20 @@ export async function reissueAuthTokens({
       throw error;
     }
 
-    setAuthTokens(nextTokens, { isRefresh: true });
+    await setAuthTokens(nextTokens, { isRefresh: true });
 
     return {
       response,
       ...nextTokens,
     };
   } catch (error) {
-    if (error?.status === 403 && sessionId === getAuthSessionId()) {
+    const isAuthFailure =
+      error?.status === 401 ||
+      error?.status === 403 ||
+      error?.code === "C005" ||
+      error?.code === "C007";
+
+    if (isAuthFailure && sessionId === getAuthSessionId()) {
       clearAuthTokens();
       notifyAuthRequired({ reason: "refresh_failed" });
     }

@@ -23,9 +23,6 @@ import RouteBackIcon from "../../../../assets/images/L.svg";
 import RouteArrowIcon from "../../../../assets/images/R_g.svg";
 import RouteClearIcon from "../../../../assets/images/x.svg";
 import BigBusAsset from "../../../../assets/images/bigbus.svg";
-import BusVectorIcon from "../../../../assets/images/bus_vector.svg";
-import StopLineAsset from "../../../../assets/images/line.svg";
-import DirectionCircleAsset from "../../../../assets/images/circle.svg";
 
 import { searchAddresses } from "../../../api/address/search";
 import { createArrivalNotification } from "../../../api/notifications/arrival";
@@ -40,10 +37,7 @@ import {
 import { AddressManagementScreen } from "../../AddressManagementScreen";
 import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
-import {
-  getSegmentDurationMinutes,
-  normalizeTimelineSegments,
-} from "../../../utils/routeSegments";
+import { normalizeTimelineSegments } from "../../../utils/routeSegments";
 
 const DEFAULT_TIME = {
   period: "오전",
@@ -89,43 +83,6 @@ function normalizePickerTime(time) {
     hour: HOUR_OPTIONS.includes(time?.hour) ? time.hour : DEFAULT_TIME.hour,
     minute: normalizePickerMinute(time?.minute),
   };
-}
-
-function getPrimaryTransitSegment(route) {
-  return getRouteSegments(route).find((segment) => !isWalkSegment(segment));
-}
-
-function getRouteSegments(route) {
-  return route?.segments ?? route?.route?.segments ?? route?.raw?.segments ?? [];
-}
-
-function isWalkSegment(segment) {
-  const type = segment?.transitType ?? segment?.type ?? segment?.mode ?? segment?.raw?.transitType ?? segment?.raw?.type ?? segment?.raw?.mode;
-  return ["WALK", "WALKING", "FOOT", "PEDESTRIAN"].includes(
-    String(type ?? "").toUpperCase(),
-  );
-}
-
-function getLastTransitSegment(route) {
-  const segments = getRouteSegments(route);
-
-  for (let index = segments.length - 1; index >= 0; index -= 1) {
-    if (!isWalkSegment(segments[index])) {
-      return segments[index];
-    }
-  }
-
-  return null;
-}
-
-function getTrailingWalkSegment(route) {
-  const segments = getRouteSegments(route);
-  const lastSegment = segments[segments.length - 1];
-  const durationMinutes = getSegmentDurationMinutes(lastSegment);
-
-  return isWalkSegment(lastSegment) && Number(durationMinutes ?? 0) > 0
-    ? { ...lastSegment, durationMinutes }
-    : null;
 }
 
 function createRoutePlace(place) {
@@ -411,31 +368,6 @@ function sortPlacesByDistance(places, referenceCenter) {
   );
 }
 
-function getSegmentStopName(
-  segment,
-  edge,
-) {
-  if (!segment) {
-    return "";
-  }
-
-  if (edge === "start") {
-    return (
-      segment.startStation ||
-      segment.stations?.[0]?.name ||
-      ""
-    );
-  }
-
-  return (
-    segment.endStation ||
-    segment.stations?.[
-      segment.stations.length - 1
-    ]?.name ||
-    ""
-  );
-}
-
 function toTargetArrivalTime(time) {
   const hourNumber =
     Number(time.hour);
@@ -473,16 +405,6 @@ function mapDayToApiValue(day) {
   return dayMap[day];
 }
 
-function formatBusNumberLabel(busNumber) {
-  const text = String(busNumber ?? "").trim();
-
-  if (!text) {
-    return "";
-  }
-
-  return text.endsWith("번") ? text : `${text}번`;
-}
-
 function pickReminderOffsets(
   reminders,
 ) {
@@ -490,6 +412,34 @@ function pickReminderOffsets(
     .filter(([, selected]) => selected)
     .map(([minute]) => Number(minute))
     .sort((a, b) => a - b);
+}
+
+function createScheduleRouteDetails(route, routePlaces) {
+  const routePayload = route?.raw ?? route;
+
+  return {
+    route: routePayload,
+    origin:
+      getRoutePlaceText(
+        routePlaces?.origin,
+      ),
+    destination:
+      getRoutePlaceText(
+        routePlaces?.destination,
+      ),
+    originAddress:
+      getRoutePlaceAddress(
+        routePlaces?.origin,
+      ),
+    destinationAddress:
+      getRoutePlaceAddress(
+        routePlaces?.destination,
+      ),
+    originPlace:
+      routePlaces?.origin,
+    destinationPlace:
+      routePlaces?.destination,
+  };
 }
 
 function getArrivalRegistrationErrorContent(error) {
@@ -1206,6 +1156,9 @@ export function ScheduleRouteMapStep({
     setCurrentMapCenter,
   ] = useState(null);
 
+  const hasAppliedInitialUserLocation =
+    useRef(false);
+
   const [
     mapSelectedResults,
     setMapSelectedResults,
@@ -1261,6 +1214,15 @@ export function ScheduleRouteMapStep({
           setUserLocation(
             coordinate,
           );
+
+          if (!hasAppliedInitialUserLocation.current) {
+            hasAppliedInitialUserLocation.current =
+              true;
+
+            setCurrentMapCenter(
+              coordinate,
+            );
+          }
         }
       } catch {
         // Current location is optional for this screen.
@@ -2377,17 +2339,6 @@ export function ScheduleRouteResultStep({
   onBackPress,
   onRouteSelect,
 }) {
-  const [currentTime, setCurrentTime] = useState(() => Date.now());
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const formatClockTime = (timestamp) => {
-    const date = new Date(timestamp);
-    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  };
   const [
     origin,
     setOrigin,
@@ -2409,7 +2360,7 @@ export function ScheduleRouteResultStep({
   const [routes, setRoutes] =
     useState([]);
   const minimumDuration = Math.min(...routes.map((route) =>
-    route.realTimeDurationMinutes ?? route.totalDurationMinutes ?? Infinity,
+    route.totalDurationMinutes ?? Infinity,
   ));
 
   const [
@@ -2622,10 +2573,7 @@ export function ScheduleRouteResultStep({
           </View>
         ) : (
           routes.map((selectedRoute, routeIndex) => {
-            const primarySegment = getPrimaryTransitSegment(selectedRoute);
-            const finalTransitSegment = getLastTransitSegment(selectedRoute) ?? primarySegment;
-            const trailingWalkSegment = getTrailingWalkSegment(selectedRoute);
-            const displayDuration = selectedRoute.realTimeDurationMinutes ?? selectedRoute.totalDurationMinutes ?? 0;
+            const displayDuration = selectedRoute.totalDurationMinutes ?? 0;
             return (
           <View key={selectedRoute.id ?? `route-${routeIndex}`} style={styles.routeResultCard}>
             {routeIndex === 0 || displayDuration === minimumDuration ? (
@@ -2648,15 +2596,6 @@ export function ScheduleRouteResultStep({
                 styles.totalTimeRow
               }
             >
-              <View style={styles.routeClockRow}>
-                <Text accessibilityLabel={`현재 시각 ${formatClockTime(currentTime)}`} style={styles.routeDepartureTime}>
-                  {formatClockTime(currentTime)}
-                </Text>
-                <RouteArrowIcon width={20} height={20} />
-                <Text accessibilityLabel={`예상 도착 시각 ${formatClockTime(currentTime + displayDuration * 60000)}`} style={styles.routeArrivalTime}>
-                  {formatClockTime(currentTime + displayDuration * 60000)}
-                </Text>
-              </View>
               <View style={styles.routeDurationRow}>
               <Text
                 style={
@@ -2693,7 +2632,6 @@ export function ScheduleRouteResultStep({
                   selectedRoute,
 
                   {
-                    departureTimestamp: currentTime,
                     origin:
                       getRoutePlaceText(
                         origin,
@@ -2786,15 +2724,6 @@ function ScheduleAlarmFinalStep({
     "일",
   ];
 
-  const primarySegment =
-    getPrimaryTransitSegment(
-      route,
-    );
-  const finalTransitSegment =
-    getLastTransitSegment(route) ??
-    primarySegment;
-  const trailingWalkSegment =
-    getTrailingWalkSegment(route);
   const timelineSegments =
     normalizeTimelineSegments(
       route?.segments ?? [],
@@ -2986,32 +2915,10 @@ function ScheduleAlarmFinalStep({
 
               routeDetails:
                 JSON.stringify(
-                  {
-                    ...(route.raw ?? route),
-                    route:
-                      route.raw ??
-                      route,
-                    origin:
-                      getRoutePlaceText(
-                        routePlaces?.origin,
-                      ),
-                    destination:
-                      getRoutePlaceText(
-                        routePlaces?.destination,
-                      ),
-                    originAddress:
-                      getRoutePlaceAddress(
-                        routePlaces?.origin,
-                      ),
-                    destinationAddress:
-                      getRoutePlaceAddress(
-                        routePlaces?.destination,
-                      ),
-                    originPlace:
-                      routePlaces?.origin,
-                    destinationPlace:
-                      routePlaces?.destination,
-                  },
+                  createScheduleRouteDetails(
+                    route,
+                    routePlaces,
+                  ),
                 ),
             },
           },
@@ -3093,66 +3000,6 @@ function ScheduleAlarmFinalStep({
           />
         ) : null}
 
-        <View style={styles.finalStops}>
-          <StopLineAsset
-            height={trailingWalkSegment ? 68 : 34}
-            style={styles.finalStopLine}
-            width={1}
-          />
-
-          <StopRow
-            active
-            label="승차"
-            name={
-              getSegmentStopName(
-                finalTransitSegment,
-                "start",
-              ) || "승차 정류장"
-            }
-            accessory={
-              finalTransitSegment?.transitName ? (
-                <View style={styles.stopBusBadge}>
-                  <View style={styles.stopBusIcon}>
-                    <BusVectorIcon height={10} width={9} />
-                  </View>
-                  <Text style={styles.stopBusBadgeText}>
-                    {formatBusNumberLabel(finalTransitSegment.transitName)}
-                  </Text>
-                </View>
-              ) : null
-            }
-            style={styles.finalStopRow}
-          />
-
-          <StopRow
-            label="하차"
-            name={
-              getSegmentStopName(
-                finalTransitSegment,
-                "end",
-              ) || "하차 정류장"
-            }
-            style={[
-              styles.finalStopRow,
-              styles.finalDropoffRow,
-            ]}
-          />
-
-          {trailingWalkSegment ? (
-            <StopRow
-              label="도보"
-              name={`${
-                route?.destination ??
-                route?.destinationAddress ??
-                "목적지"
-              }까지 ${trailingWalkSegment.durationMinutes}분`}
-              style={[
-                styles.finalStopRow,
-                styles.finalDropoffRow,
-              ]}
-            />
-          ) : null}
-        </View>
       </View>
 
       <View
@@ -3592,61 +3439,6 @@ function ReminderModal({
   );
 }
 
-function StopRow({
-  accessory,
-  active = false,
-  label,
-  name,
-  style,
-}) {
-  return (
-    <View
-      style={[styles.stopRow, style]}
-    >
-      <View
-        style={[
-          styles.stopOuter,
-
-          active &&
-            styles.stopOuterActive,
-        ]}
-      >
-        <View
-          style={[
-            styles.stopInner,
-
-            active &&
-              styles.stopInnerActive,
-          ]}
-        >
-          <View style={styles.stopCenter} />
-        </View>
-      </View>
-
-      <Text
-        style={
-          styles.stopLabel
-        }
-      >
-        {label}
-      </Text>
-
-      <View style={styles.stopNameRow}>
-        <Text
-          numberOfLines={1}
-          style={
-            styles.stopName
-          }
-        >
-          {name}
-        </Text>
-
-        {accessory}
-      </View>
-    </View>
-  );
-}
-
 function TimePickerSheet({
   onClose,
   onConfirm,
@@ -3809,16 +3601,21 @@ function WheelPickerColumn({
 }) {
   const scrollRef =
     useRef(null);
+  const valueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
   const isMomentumScrollingRef =
     useRef(false);
+  const hasPositionedRef = useRef(false);
+  const lastReportedIndexRef = useRef(-1);
+  const scrollOffsetRef = useRef(0);
+  const settlingIndexRef = useRef(null);
   const dragEndTimerRef =
     useRef(null);
 
-  const selectedIndex =
-    Math.max(
-      options.indexOf(value),
-      0,
-    );
+  valueRef.current = value;
+  onChangeRef.current = onChange;
+
+  const initialCenterIndex = Math.floor((options.length - 1) / 2);
 
   const scrollToIndex = (
     index,
@@ -3837,26 +3634,24 @@ function WheelPickerColumn({
 
   useEffect(() => {
     if (!visible) {
+      hasPositionedRef.current = false;
       return undefined;
     }
 
-    const scrollTimer =
-      setTimeout(() => {
-        scrollToIndex(
-          selectedIndex,
-          false,
-        );
-      }, 0);
+    const scrollTimer = setTimeout(() => {
+      requestAnimationFrame(() => {
+        scrollToIndex(initialCenterIndex, false);
+        scrollOffsetRef.current = initialCenterIndex * TIME_PICKER_ITEM_HEIGHT;
+        lastReportedIndexRef.current = initialCenterIndex;
+        if (options[initialCenterIndex] !== valueRef.current) {
+          onChangeRef.current(options[initialCenterIndex]);
+        }
+        hasPositionedRef.current = true;
+      });
+    }, 50);
 
-    return () => {
-      clearTimeout(
-        scrollTimer,
-      );
-    };
-  }, [
-    selectedIndex,
-    visible,
-  ]);
+    return () => clearTimeout(scrollTimer);
+  }, [visible]);
 
   useEffect(
     () => () => {
@@ -3874,14 +3669,8 @@ function WheelPickerColumn({
     }
   };
 
-  const handleScrollEnd = (
-    event,
-  ) => {
-    const offsetY =
-      event.nativeEvent
-        .contentOffset?.y ??
-      0;
-
+  const handleScrollEnd = () => {
+    const offsetY = scrollOffsetRef.current;
     const nextIndex =
       Math.min(
         Math.max(
@@ -3898,40 +3687,63 @@ function WheelPickerColumn({
     const nextValue =
       options[nextIndex];
 
-    scrollToIndex(
-      nextIndex,
-    );
+    if (nextValue !== valueRef.current) {
+      onChangeRef.current(nextValue);
+    }
+    lastReportedIndexRef.current = nextIndex;
 
-    if (
-      nextValue !== value
-    ) {
-      onChange(nextValue);
+    const targetOffset = nextIndex * TIME_PICKER_ITEM_HEIGHT;
+    if (Math.abs(targetOffset - offsetY) > 1.5) {
+      if (settlingIndexRef.current !== nextIndex) {
+        settlingIndexRef.current = nextIndex;
+        scrollToIndex(nextIndex, true);
+      }
+    } else {
+      settlingIndexRef.current = null;
     }
   };
 
-  const handleScrollEndDrag = (
-    event,
-  ) => {
-    const velocityY =
-      event.nativeEvent.velocity?.y ?? 0;
+  const handleScroll = (event) => {
+    const offsetY = event.nativeEvent.contentOffset?.y ?? 0;
+    scrollOffsetRef.current = offsetY;
+    if (
+      settlingIndexRef.current !== null &&
+      Math.abs(settlingIndexRef.current * TIME_PICKER_ITEM_HEIGHT - offsetY) <= 1.5
+    ) {
+      settlingIndexRef.current = null;
+    }
+    const centerIndex = Math.min(
+      Math.max(Math.round(offsetY / TIME_PICKER_ITEM_HEIGHT), 0),
+      options.length - 1,
+    );
 
+    if (centerIndex === lastReportedIndexRef.current) return;
+
+    lastReportedIndexRef.current = centerIndex;
+    const centerValue = options[centerIndex];
+    if (centerValue !== valueRef.current) {
+      onChangeRef.current(centerValue);
+    }
+  };
+
+  const handleScrollEndDrag = () => {
     clearDragEndTimer();
 
     if (
       Platform.OS === "android" ||
-      Math.abs(velocityY) > 0.05
+      isMomentumScrollingRef.current
     ) {
       dragEndTimerRef.current =
         setTimeout(() => {
           if (!isMomentumScrollingRef.current) {
-            handleScrollEnd(event);
+            handleScrollEnd();
           }
         }, 120);
 
       return;
     }
 
-    handleScrollEnd(event);
+    handleScrollEnd();
   };
 
   return (
@@ -3940,12 +3752,23 @@ function WheelPickerColumn({
         styles.pickerColumn
       }
     >
+      <View
+        pointerEvents="none"
+        style={styles.pickerSelectionIndicator}
+      />
       <ScrollView
         accessibilityLabel={
           accessibilityLabel
         }
         decelerationRate="fast"
         nestedScrollEnabled
+        onScrollBeginDrag={() => {
+          clearDragEndTimer();
+          isMomentumScrollingRef.current = false;
+          settlingIndexRef.current = null;
+        }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         onMomentumScrollBegin={() => {
           clearDragEndTimer();
           isMomentumScrollingRef.current = true;
@@ -3954,7 +3777,8 @@ function WheelPickerColumn({
           (event) => {
             clearDragEndTimer();
             isMomentumScrollingRef.current = false;
-            handleScrollEnd(event);
+            scrollOffsetRef.current = event.nativeEvent.contentOffset?.y ?? scrollOffsetRef.current;
+            handleScrollEnd();
           }
         }
         onScrollEndDrag={
@@ -3963,12 +3787,25 @@ function WheelPickerColumn({
               return;
             }
 
-            handleScrollEndDrag(event);
+            handleScrollEndDrag();
           }
         }
         ref={
           scrollRef
         }
+        onLayout={() => {
+          if (visible && !hasPositionedRef.current) {
+            requestAnimationFrame(() => {
+              scrollToIndex(initialCenterIndex, false);
+              scrollOffsetRef.current = initialCenterIndex * TIME_PICKER_ITEM_HEIGHT;
+              lastReportedIndexRef.current = initialCenterIndex;
+              if (options[initialCenterIndex] !== valueRef.current) {
+                onChangeRef.current(options[initialCenterIndex]);
+              }
+              hasPositionedRef.current = true;
+            });
+          }
+        }}
         showsVerticalScrollIndicator={
           false
         }
@@ -4000,9 +3837,7 @@ function WheelPickerColumn({
                   option
                 }
                 onPress={() => {
-                  onChange(
-                    option,
-                  );
+                  onChangeRef.current(option);
 
                   scrollToIndex(
                     options.indexOf(
@@ -4015,12 +3850,7 @@ function WheelPickerColumn({
                 }
               >
                 <View
-                  style={[
-                    styles.pickerOptionInner,
-
-                    selected &&
-                      styles.pickerOptionInnerSelected,
-                  ]}
+                  style={styles.pickerOptionInner}
                 >
                   <Text
                     style={[
@@ -4504,10 +4334,24 @@ const styles =
 
     pickerColumn: {
       flex: 1,
+      position: "relative",
 
       height:
         TIME_PICKER_ITEM_HEIGHT *
         TIME_PICKER_VISIBLE_ITEMS,
+    },
+
+    pickerSelectionIndicator: {
+      position: "absolute",
+      top:
+        ((TIME_PICKER_VISIBLE_ITEMS - 1) / 2) *
+          TIME_PICKER_ITEM_HEIGHT +
+        (TIME_PICKER_ITEM_HEIGHT - 48) / 2,
+      left: 0,
+      right: 0,
+      height: 48,
+      borderRadius: 4,
+      backgroundColor: colors.gray03,
     },
 
     pickerScroll: {
@@ -4539,12 +4383,6 @@ const styles =
       alignItems: "center",
       justifyContent:
         "center",
-    },
-
-    pickerOptionInnerSelected: {
-      borderRadius: 4,
-      backgroundColor:
-        colors.gray03,
     },
 
     pickerOptionText: {
@@ -5003,9 +4841,6 @@ const styles =
       justifyContent: "space-between",
       gap: 12,
     },
-    routeClockRow: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
-    routeDepartureTime: { fontFamily: "SUIT", fontSize: 24, fontStyle: "normal", fontWeight: "700", lineHeight: 24, letterSpacing: -0.24, textAlign: "center", color: colors.gray09 },
-    routeArrivalTime: { fontFamily: "SUIT", fontSize: 24, fontStyle: "normal", fontWeight: "500", lineHeight: 24, letterSpacing: -0.24, textAlign: "center", color: colors.gray09 },
     routeDurationRow: { flexDirection: "row", alignItems: "flex-end", flexShrink: 0 },
 
     totalTimeNumber: {
@@ -5170,80 +5005,6 @@ const styles =
       position: "relative",
     },
 
-    stopRow: {
-      height: 23,
-      flexDirection: "row",
-      alignItems: "center",
-      position: "relative",
-      zIndex: 1,
-    },
-
-    stopOuter: {
-      width: 23,
-      height: 23,
-      marginRight: 9,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      borderRadius: 12,
-      backgroundColor:
-        colors.gray04,
-    },
-
-    stopOuterActive: {
-      backgroundColor:
-        colors.sub,
-    },
-
-    stopInner: {
-      width: 16,
-      height: 16,
-      borderRadius: 100,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor:
-        colors.gray06,
-    },
-
-    stopInnerActive: {
-      backgroundColor:
-        colors.main,
-    },
-    stopCenter: {
-      display: "flex",
-      width: 6,
-      height: 6,
-      flexDirection: "column",
-      alignItems: "flex-start",
-      flexShrink: 0,
-      borderRadius: 100,
-      backgroundColor: colors.white,
-    },
-
-    stopLabel: {
-      width: 42,
-      fontFamily: "SUIT",
-      fontSize: 14,
-      fontStyle: "normal",
-      fontWeight: "600",
-      lineHeight: 19.6,
-      letterSpacing: -0.14,
-      color: colors.gray07,
-    },
-
-    stopName: {
-      flexShrink: 1,
-      minWidth: 0,
-      overflow: "hidden",
-      fontFamily: "SUIT",
-      fontSize: 14,
-      fontStyle: "normal",
-      fontWeight: "600",
-      lineHeight: 19.6,
-      letterSpacing: -0.14,
-      color: colors.gray08,
-    },
-
     routeAlarmButton: {
       flexDirection: "row",
       gap: 8,
@@ -5321,26 +5082,6 @@ const styles =
       fontWeight: "800",
       lineHeight: 30,
       color: colors.gray09,
-    },
-
-    finalStops: {
-      marginTop: 18,
-      position: "relative",
-    },
-
-    finalStopLine: {
-      position: "absolute",
-      left: 11,
-      top: 7,
-      zIndex: 0,
-    },
-
-    finalStopRow: {
-      height: 18,
-    },
-
-    finalDropoffRow: {
-      marginTop: 8,
     },
 
     finalRouteTimeline: {
@@ -5484,45 +5225,6 @@ const styles =
       fontWeight: "700",
       lineHeight: 22.4,
       color: colors.gray08,
-    },
-
-    stopNameRow: {
-      flex: 1,
-      minWidth: 0,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-
-    stopBusBadge: {
-      flexShrink: 0,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingVertical: 3,
-      paddingHorizontal: 8,
-      borderWidth: 1,
-      borderColor:
-        colors.main,
-      borderRadius: 4,
-      backgroundColor:
-        colors.white,
-    },
-
-    stopBusIcon: {
-      width: 9,
-      height: 10,
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    stopBusBadgeText: {
-      fontFamily: "SUIT",
-      fontSize: 13,
-      fontWeight: "700",
-      lineHeight: 18.2,
-      color: colors.main,
     },
 
     repeatQuestionText: {

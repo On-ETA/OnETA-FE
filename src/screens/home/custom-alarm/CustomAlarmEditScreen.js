@@ -191,13 +191,28 @@ function getRepeatDays(repeatDays) {
 }
 
 function getRouteDetails(alarm) {
-  if (alarm?.routeDetails) {
-    return alarm.routeDetails;
+  const parsedRouteDetails =
+    parseRouteDetails(alarm?.routeDetails) ??
+    parseRouteDetails(alarm?.raw?.routeDetails);
+  const route = alarm?.route ?? alarm?.raw?.route ?? parsedRouteDetails?.route;
+
+  if (parsedRouteDetails?.route) {
+    return JSON.stringify({
+      route: parsedRouteDetails.route,
+      origin: parsedRouteDetails.origin,
+      destination: parsedRouteDetails.destination,
+      originAddress: parsedRouteDetails.originAddress,
+      destinationAddress: parsedRouteDetails.destinationAddress,
+      originPlace: parsedRouteDetails.originPlace,
+      destinationPlace: parsedRouteDetails.destinationPlace,
+    });
   }
 
-  const route = alarm?.route ?? alarm?.raw?.route;
+  if (route) {
+    return JSON.stringify({ route });
+  }
 
-  return route ? JSON.stringify(route) : undefined;
+  return alarm?.routeDetails;
 }
 
 export function ScheduleAlarmEditScreen({

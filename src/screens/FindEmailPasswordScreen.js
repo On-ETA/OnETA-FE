@@ -254,7 +254,7 @@ export function FindEmailPasswordScreen({ onBackPress, onConfirmPress }) {
       const authTokens = extractAuthTokens(loginResponse);
 
       await clearHomeCacheAsync();
-      setAuthTokens(authTokens, { persist: true });
+      await setAuthTokens(authTokens, { persist: true });
       await preloadHomeCache({ reset: true });
 
       onConfirmPress?.({

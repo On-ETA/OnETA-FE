@@ -1,7 +1,7 @@
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, useIsFocused } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Platform } from "react-native";
+import { BackHandler, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -34,6 +34,7 @@ import { blurActiveElement } from "./src/utils/accessibility";
 import { clearHomeCacheAsync } from "./src/api/homeCache";
 import { preloadHomeCache } from "./src/api/homePreload";
 import { subscribeAuthRequired } from "./src/api/auth/authEvents";
+import { reissueAuthTokens } from "./src/api/auth/reissue";
 import { PushNotifications } from "./src/notifications/PushNotifications";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
 
@@ -108,6 +109,52 @@ function navigateTo(navigation, name, params) {
   navigation.navigate(name, params);
 }
 
+function useAndroidBackBehavior() {
+  React.useEffect(() => {
+    if (Platform.OS !== "android") {
+      return undefined;
+    }
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        const navigation = notificationNavigationRef;
+
+        if (!navigation.isReady()) {
+          return false;
+        }
+
+        const currentRouteName = navigation.getCurrentRoute()?.name;
+
+        if (currentRouteName === routes.home) {
+          return false;
+        }
+
+        if (navigation.canGoBack()) {
+          blurActiveElement();
+          navigation.goBack();
+          return true;
+        }
+
+        if (getAccessToken()) {
+          blurActiveElement();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: routes.home }],
+          });
+          return true;
+        }
+
+        return false;
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+}
+
 function createHomeScreenNavigationProps(navigation) {
   return {
     onOpenAccountInfo: () => navigateTo(navigation, routes.accountInfo),
@@ -149,7 +196,7 @@ function useAuthenticatedRoute(navigation, route) {
       try {
         if (accessToken) {
           await clearHomeCacheAsync();
-          setAuthTokens({ accessToken, refreshToken }, { persist: true });
+          await setAuthTokens({ accessToken, refreshToken }, { persist: true });
 
           if (!didPreloadRef.current) {
             didPreloadRef.current = true;
@@ -312,6 +359,7 @@ function SignupCompleteRoute({ navigation, route }) {
 
 function HomeRoute({ navigation, route }) {
   const isReady = useAuthenticatedRoute(navigation, route);
+  const isFocused = useIsFocused();
   const homeScreenNavigationProps = React.useMemo(
     () => createHomeScreenNavigationProps(navigation),
     [navigation],
@@ -323,6 +371,7 @@ function HomeRoute({ navigation, route }) {
 
   return (
     <HomeScreen
+      backHandlingEnabled={isFocused}
       initialTab={route.params?.initialTab ?? "home"}
       {...homeScreenNavigationProps}
     />
@@ -343,6 +392,7 @@ function CustomAlarmRoute({ navigation, route }) {
 
 function MyPageRoute({ navigation, route }) {
   const isReady = useAuthenticatedRoute(navigation, route);
+  const isFocused = useIsFocused();
   const homeScreenNavigationProps = React.useMemo(
     () => createHomeScreenNavigationProps(navigation),
     [navigation],
@@ -354,6 +404,7 @@ function MyPageRoute({ navigation, route }) {
 
   return (
     <HomeScreen
+      backHandlingEnabled={isFocused}
       initialTab="myPage"
       {...homeScreenNavigationProps}
     />
@@ -494,11 +545,29 @@ export default function App() {
   const [isAuthHydrated, setIsAuthHydrated] = React.useState(false);
   const [initialRouteName, setInitialRouteName] = React.useState(routes.login);
 
+  useAndroidBackBehavior();
+
   React.useEffect(() => {
     let isActive = true;
 
     hydrateAuthTokens()
-      .then(({ accessToken }) => {
+      .then(async ({ accessToken, refreshToken }) => {
+        if (!accessToken && !refreshToken) {
+          return null;
+        }
+
+        if (!accessToken && refreshToken) {
+          try {
+            await reissueAuthTokens({ refreshToken });
+            return getAccessToken();
+          } catch {
+            return null;
+          }
+        }
+
+        return accessToken;
+      })
+      .then((accessToken) => {
         if (!isActive) {
           return;
         }

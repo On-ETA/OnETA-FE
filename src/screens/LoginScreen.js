@@ -142,7 +142,7 @@ export function LoginScreen({
       const authTokens = extractAuthTokens(loginResponse);
 
       await clearHomeCacheAsync();
-      setAuthTokens(authTokens, { persist: true });
+      await setAuthTokens(authTokens, { persist: remember });
       await preloadHomeCache({ reset: true });
       onLoginPress?.();
     } catch (error) {

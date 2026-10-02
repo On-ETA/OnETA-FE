@@ -40,7 +40,7 @@ function getNativeAsyncStorage() {
   }
 }
 
-function persistTokens({ accessToken, refreshToken } = {}) {
+async function persistTokens({ accessToken, refreshToken } = {}) {
   const storage = getStorage();
 
   if (storage) {
@@ -72,12 +72,12 @@ function persistTokens({ accessToken, refreshToken } = {}) {
         : asyncStorage.removeItem(REFRESH_TOKEN_KEY),
     );
 
-    Promise.all(tasks).catch(() => null);
+    await Promise.all(tasks);
   }
 }
 
-function clearPersistedTokens() {
-  persistTokens();
+async function clearPersistedTokens() {
+  await persistTokens();
 }
 
 async function readPersistedTokens() {
@@ -131,13 +131,14 @@ export function setAuthTokens(
     refreshToken: refreshToken ?? null,
   };
 
-  if (persistentAuthEnabled) {
-    persistTokens(memoryTokens);
-  } else if (!isRefresh) {
-    clearPersistedTokens();
-  }
+  const persistence = persistentAuthEnabled
+    ? persistTokens(memoryTokens)
+    : !isRefresh
+      ? clearPersistedTokens()
+      : Promise.resolve();
 
   listeners.forEach((listener) => listener(memoryTokens));
+  return persistence;
 }
 
 export function getAuthTokens() {
@@ -149,7 +150,7 @@ export function getAccessToken() {
 }
 
 export function clearAuthTokens() {
-  setAuthTokens();
+  return setAuthTokens();
 }
 
 export async function hydrateAuthTokens() {

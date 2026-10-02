@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { BackHandler, Platform, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -134,6 +134,7 @@ function findTransitNotificationById(notifications, notificationId) {
 }
 
 export function HomeScreen({
+  backHandlingEnabled = true,
   notificationCount = 0,
   initialTab = "home",
   onOpenAccountInfo,
@@ -373,6 +374,86 @@ export function HomeScreen({
     blurActiveElement();
     setEditingCustomAlarm({ type: "schedule", alarm });
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || !backHandlingEnabled) {
+      return undefined;
+    }
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        if (activeTab === "myPage") {
+          handleTabPress("home");
+          return true;
+        }
+
+        if (activeTab !== "home") {
+          return false;
+        }
+
+        if (isAddressManagerVisible) {
+          blurActiveElement();
+          setIsAddressManagerVisible(false);
+          return true;
+        }
+
+        if (isGarageDepartureAddVisible) {
+          blurActiveElement();
+          setIsGarageDepartureAddVisible(false);
+          return true;
+        }
+
+        if (isScheduleAlarmAddVisible) {
+          blurActiveElement();
+          setIsScheduleAlarmAddVisible(false);
+          setScheduleAlarmInitialStep("form");
+          setScheduleAlarmInitialValues(null);
+          return true;
+        }
+
+        if (firstLastRouteSetupStep === "result") {
+          blurActiveElement();
+          setFirstLastRouteSetupStep("map");
+          return true;
+        }
+
+        if (firstLastRouteSetupStep === "map") {
+          blurActiveElement();
+          setFirstLastRouteSetupStep(null);
+          return true;
+        }
+
+        if (editingCustomAlarm) {
+          blurActiveElement();
+          setEditingCustomAlarm(null);
+          return true;
+        }
+
+        if (isRouteDetailVisible) {
+          blurActiveElement();
+          setIsRouteDetailVisible(false);
+          return true;
+        }
+
+        return false;
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [
+    activeTab,
+    backHandlingEnabled,
+    editingCustomAlarm,
+    firstLastRouteSetupStep,
+    handleTabPress,
+    isAddressManagerVisible,
+    isGarageDepartureAddVisible,
+    isRouteDetailVisible,
+    isScheduleAlarmAddVisible,
+  ]);
 
   return (
     <View style={styles.screen}>
