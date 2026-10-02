@@ -8,6 +8,7 @@ export const homeCacheKeys = {
   firstLastRoute: "firstLastRoute",
   firstTransitRoute: "firstTransitRoute",
   lastTransitRoute: "lastTransitRoute",
+  transitRouteSearch: "transitRouteSearch",
   arrivalNotifications: "arrivalNotifications",
   scheduleNotifications: "scheduleNotifications",
   depotNotifications: "depotNotifications",

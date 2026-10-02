@@ -35,6 +35,13 @@ export function FirstLastRouteScreen({
   routeSummary,
 }) {
   const [isAlarmModalVisible, setIsAlarmModalVisible] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
   const isLastRouteActive = activeScheduleType === LAST_TRANSIT;
   const [alarmSettings, setAlarmSettings] = useState({
     1: false,
@@ -46,6 +53,12 @@ export function FirstLastRouteScreen({
     60: false,
   });
   const hasConfiguredRoute = Boolean(routeSummary);
+  const remainingMinutes = Number.isFinite(routeSummary?.estimatedDepartureTimestamp)
+    ? Math.max(
+        0,
+        Math.ceil((routeSummary.estimatedDepartureTimestamp - currentTime) / 60000),
+      )
+    : routeSummary?.remainingMinutes;
   const enabledAlarmLabels = PRE_DEPARTURE_ALARMS
     .filter((alarm) => alarmSettings[alarm.key])
     .map((alarm) => alarm.label.replace(" 전", ""));
@@ -121,11 +134,11 @@ export function FirstLastRouteScreen({
                   <Text style={styles.summaryLabel}>남은 시간</Text>
                   <View style={styles.remainingGroup}>
                     <Text style={styles.remainingNumber}>
-                      {Number.isFinite(routeSummary.remainingMinutes)
-                        ? routeSummary.remainingMinutes
+                      {Number.isFinite(remainingMinutes)
+                        ? remainingMinutes
                         : "--"}
                     </Text>
-                    {Number.isFinite(routeSummary.remainingMinutes) ? (
+                    {Number.isFinite(remainingMinutes) ? (
                       <Text style={styles.remainingUnit}>분</Text>
                     ) : null}
                   </View>

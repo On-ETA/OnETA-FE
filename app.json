@@ -2,6 +2,7 @@
   "expo": {
     "name": "oneta",
     "slug": "oneta",
+    "scheme": "oneta",
     "icon": "./assets/images/pabicon.png",
     "version": "1.0.0",
     "orientation": "portrait",

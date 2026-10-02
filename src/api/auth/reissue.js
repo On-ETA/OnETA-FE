@@ -53,17 +53,25 @@ export async function reissueAuthTokens({
     });
     const nextTokens = extractAuthTokens(response);
 
+    if (!nextTokens.accessToken) {
+      throw new Error("토큰 재발급 응답에 Access Token이 없습니다.");
+    }
+
     if (sessionId !== getAuthSessionId() || signal?.aborted) {
       const error = new Error("Authentication session changed");
       error.name = "AbortError";
       throw error;
     }
 
-    await setAuthTokens(nextTokens, { isRefresh: true });
+    const updatedTokens = {
+      accessToken: nextTokens.accessToken,
+      refreshToken: nextTokens.refreshToken ?? refreshToken,
+    };
+    await setAuthTokens(updatedTokens, { isRefresh: true });
 
     return {
       response,
-      ...nextTokens,
+      ...updatedTokens,
     };
   } catch (error) {
     const isAuthFailure =

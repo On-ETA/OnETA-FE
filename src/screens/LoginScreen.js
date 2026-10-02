@@ -33,7 +33,7 @@ export function LoginScreen({
   initialEmail = "",
   initialError = "",
   initialPassword = "",
-  initialRemember = false,
+  initialRemember = true,
   onLoginPress,
   onSignupPress,
   onFindPasswordPress,
@@ -140,6 +140,10 @@ export function LoginScreen({
         password,
       });
       const authTokens = extractAuthTokens(loginResponse);
+
+      if (!authTokens.accessToken || !authTokens.refreshToken) {
+        throw new Error("로그인 응답에 인증 토큰이 없습니다.");
+      }
 
       await clearHomeCacheAsync();
       await setAuthTokens(authTokens, { persist: remember });

@@ -13,6 +13,42 @@ function clock(timestamp) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+export function parseEstimatedDepartureAt(value) {
+  if (typeof value !== "string" || !value) return undefined;
+
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) ? timestamp : undefined;
+  }
+
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?$/,
+  );
+  if (!match) return undefined;
+
+  const [, year, month, day, hour, minute, second = "0", fraction = "0"] = match;
+  const milliseconds = Number(`0.${fraction}`) * 1000;
+
+  return Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour) - 9,
+    Number(minute),
+    Number(second),
+    milliseconds,
+  );
+}
+
+export function formatSeoulTime(timestamp) {
+  if (!Number.isFinite(timestamp)) return undefined;
+
+  const date = new Date(timestamp + 9 * 60 * 60 * 1000);
+  return `${String(date.getUTCHours()).padStart(2, "0")}:${String(
+    date.getUTCMinutes(),
+  ).padStart(2, "0")}`;
+}
+
 function timeValue(source, key) {
   const value = source?.[key] ?? source?.raw?.[key];
   if (typeof value === "string" && /^\d{1,2}:\d{2}/.test(value)) {

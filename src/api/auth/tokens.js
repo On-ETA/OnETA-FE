@@ -3,6 +3,7 @@ const REFRESH_TOKEN_KEY = "oneta.refreshToken";
 const listeners = new Set();
 let sessionId = 0;
 let persistentAuthEnabled = false;
+let tokenPersistenceQueue = Promise.resolve();
 
 export function getAuthSessionId() {
   return sessionId;
@@ -80,6 +81,12 @@ async function clearPersistedTokens() {
   await persistTokens();
 }
 
+function enqueueTokenPersistence(task) {
+  const operation = tokenPersistenceQueue.then(task, task);
+  tokenPersistenceQueue = operation.catch(() => null);
+  return operation;
+}
+
 async function readPersistedTokens() {
   const storage = getStorage();
 
@@ -123,7 +130,9 @@ export function setAuthTokens(
 ) {
   if (!isRefresh) {
     sessionId += 1;
-    persistentAuthEnabled = Boolean(persist);
+    if (typeof persist === "boolean") {
+      persistentAuthEnabled = persist;
+    }
   }
 
   memoryTokens = {
@@ -131,11 +140,13 @@ export function setAuthTokens(
     refreshToken: refreshToken ?? null,
   };
 
-  const persistence = persistentAuthEnabled
-    ? persistTokens(memoryTokens)
+  const tokensToPersist = { ...memoryTokens };
+  const shouldPersist = persistentAuthEnabled;
+  const persistence = enqueueTokenPersistence(() => shouldPersist
+    ? persistTokens(tokensToPersist)
     : !isRefresh
       ? clearPersistedTokens()
-      : Promise.resolve();
+      : Promise.resolve());
 
   listeners.forEach((listener) => listener(memoryTokens));
   return persistence;
@@ -150,10 +161,11 @@ export function getAccessToken() {
 }
 
 export function clearAuthTokens() {
-  return setAuthTokens();
+  return setAuthTokens({}, { persist: false });
 }
 
 export async function hydrateAuthTokens() {
+  await tokenPersistenceQueue;
   const persistedTokens = await readPersistedTokens();
 
   if (!persistedTokens.accessToken && !persistedTokens.refreshToken) {

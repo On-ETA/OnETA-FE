@@ -35,6 +35,7 @@ import { clearHomeCacheAsync } from "./src/api/homeCache";
 import { preloadHomeCache } from "./src/api/homePreload";
 import { subscribeAuthRequired } from "./src/api/auth/authEvents";
 import { reissueAuthTokens } from "./src/api/auth/reissue";
+import { exchangeGoogleAuthCode } from "./src/api/google";
 import { PushNotifications } from "./src/notifications/PushNotifications";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
 
@@ -378,6 +379,68 @@ function HomeRoute({ navigation, route }) {
   );
 }
 
+function OAuthCallbackRoute({ navigation, route }) {
+  const handledRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (handledRef.current) return;
+    handledRef.current = true;
+
+    const params = route.params ?? {};
+
+    async function finishGoogleAuth() {
+      const callbackError =
+        params.error_description ??
+        params.errorMessage ??
+        params.oauth2_auth_error ??
+        (params.error ? "Google 인증이 취소되었거나 실패했습니다." : null) ??
+        getGoogleSignupConflictMessage(params);
+
+      if (callbackError) {
+        resetTo(navigation, routes.login, { loginError: callbackError });
+        return;
+      }
+
+      if (!params.code) {
+        resetTo(navigation, routes.login, {
+          loginError: "Google 로그인 응답을 확인할 수 없습니다. 다시 시도해 주세요.",
+        });
+        return;
+      }
+
+      try {
+        const response = await exchangeGoogleAuthCode({ code: params.code });
+
+        const data = response?.data ?? {};
+        if (data.tempId !== undefined && data.tempId !== null) {
+          resetTo(navigation, routes.termsAgreement, {
+            tempId: data.tempId,
+            signupTokens: data.signupTokens,
+          });
+          return;
+        }
+
+        const authTokens = extractAuthTokens(response);
+        if (!authTokens.accessToken || !authTokens.refreshToken) {
+          throw new Error("Google 로그인 응답에 인증 정보가 없습니다.");
+        }
+
+        await setAuthTokens(authTokens, { persist: true });
+        resetTo(navigation, routes.home);
+      } catch (error) {
+        resetTo(navigation, routes.login, {
+          loginError: error?.message || "Google 로그인에 실패했습니다. 다시 시도해 주세요.",
+        });
+      }
+    }
+
+    finishGoogleAuth();
+
+  }, [navigation, route.params]);
+
+  return null;
+}
+
 function CustomAlarmRoute({ navigation, route }) {
   const isReady = useAuthenticatedRoute(navigation, route);
 
@@ -610,6 +673,7 @@ export default function App() {
           }}
         >
           <Stack.Screen component={LoginRoute} name={routes.login} />
+          <Stack.Screen component={OAuthCallbackRoute} name={routes.oauthCallback} />
           <Stack.Screen component={SignupRoute} name={routes.signup} />
           <Stack.Screen
             component={TermsAgreementRoute}

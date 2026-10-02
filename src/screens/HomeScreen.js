@@ -34,7 +34,11 @@ import { FirstLastRouteScreen } from "./home/first-last/FirstLastRouteScreen";
 import { MyPageScreen } from "./MyPageScreen";
 import { colors, layout } from "../theme";
 import { blurActiveElement } from "../utils/accessibility";
-import { createFirstLastRouteSummary } from "../utils/firstLastRouteSummary";
+import {
+  createFirstLastRouteSummary,
+  formatSeoulTime,
+  parseEstimatedDepartureAt,
+} from "../utils/firstLastRouteSummary";
 
 const homeBackground = colors.gray01;
 const CUSTOM_ALARM_REFRESH_KEY = 0;
@@ -53,7 +57,17 @@ function createFirstLastRouteSummaryFromNotification(notification) {
       details?.destinationAddress ??
       route?.destinationAddress,
   };
-  const summary = createFirstLastRouteSummary(route, places);
+  const estimatedDepartureAt =
+    notification?.estimatedDepartureAt ??
+    notification?.payload?.estimatedDepartureAt;
+  const estimatedDepartureTimestamp =
+    parseEstimatedDepartureAt(estimatedDepartureAt);
+  const summary = createFirstLastRouteSummary(route, {
+    ...places,
+    ...(estimatedDepartureTimestamp !== undefined
+      ? { departureTimestamp: estimatedDepartureTimestamp }
+      : {}),
+  });
   const reminderOffsetMinutes = Array.isArray(notification?.reminderOffsetMinutes)
     ? notification.reminderOffsetMinutes
     : [];
@@ -63,6 +77,17 @@ function createFirstLastRouteSummaryFromNotification(notification) {
     notificationId: notification?.notificationId,
     routeName: notification?.routeName,
     arrivalTime: notification?.arrivalTime || summary.arrivalTime,
+    estimatedDepartureAt,
+    estimatedDepartureTimestamp,
+    departureTime:
+      formatSeoulTime(estimatedDepartureTimestamp) ?? summary.departureTime,
+    remainingMinutes:
+      estimatedDepartureTimestamp !== undefined
+        ? Math.max(
+            0,
+            Math.ceil((estimatedDepartureTimestamp - Date.now()) / 60000),
+          )
+        : summary.remainingMinutes,
     preDepartureAlarmMinutes:
       reminderOffsetMinutes[0] ?? summary.preDepartureAlarmMinutes,
     route,
@@ -75,8 +100,77 @@ function createTransitNotificationPayload(route, summary, scheduleType = TRANSIT
 
   return {
     reminderOffsetMinutes: [summary?.preDepartureAlarmMinutes ?? 10],
-    routeDetails: JSON.stringify(routeDetails),
+    routeDetails: JSON.stringify({
+      ...routeDetails,
+      origin: summary?.originPlace ?? summary?.origin ?? routeDetails?.origin,
+      destination:
+        summary?.destinationPlace ?? summary?.destination ?? routeDetails?.destination,
+      originAddress:
+        summary?.originAddress ?? routeDetails?.originAddress,
+      destinationAddress:
+        summary?.destinationAddress ?? routeDetails?.destinationAddress,
+      originX: summary?.originPlace?.x ?? routeDetails?.originX,
+      originY: summary?.originPlace?.y ?? routeDetails?.originY,
+      destX: summary?.destinationPlace?.x ?? routeDetails?.destX,
+      destY: summary?.destinationPlace?.y ?? routeDetails?.destY,
+    }),
     scheduleType: summary?.scheduleType ?? route?.scheduleType ?? scheduleType,
+  };
+}
+
+function getPlaceAddress(place) {
+  if (typeof place === "string") return place;
+  return place?.address ?? place?.roadAddress ?? place?.detail ?? place?.label ?? place?.name ?? "";
+}
+
+function getRouteSetupPlace(place, address, x, y, fallbackName) {
+  const source = place && typeof place === "object" ? place : {};
+  const routePlace = source.raw ?? source;
+  const latitude = Number(source.y ?? routePlace.y ?? y);
+  const longitude = Number(source.x ?? routePlace.x ?? x);
+  const label =
+    source.label ??
+    source.name ??
+    source.placeName ??
+    source.address ??
+    address ??
+    (typeof place === "string" ? place : fallbackName);
+  const placeAddress =
+    source.address ??
+    source.roadAddress ??
+    address ??
+    (typeof place === "string" ? place : label);
+
+  return {
+    ...source,
+    label,
+    name: source.name ?? label,
+    address: placeAddress,
+    x: Number.isFinite(longitude) ? longitude : undefined,
+    y: Number.isFinite(latitude) ? latitude : undefined,
+  };
+}
+
+function getFirstLastRouteSetupPlaces(summary) {
+  const details = summary?.route ?? {};
+  const route = details?.route ?? details;
+  const raw = route?.raw ?? route;
+
+  return {
+    origin: getRouteSetupPlace(
+      details?.originPlace ?? details?.origin ?? route?.originPlace ?? route?.origin,
+      details?.originAddress ?? route?.originAddress ?? raw?.originAddress,
+      details?.originX ?? route?.originX ?? raw?.originX,
+      details?.originY ?? route?.originY ?? raw?.originY,
+      "출발지",
+    ),
+    destination: getRouteSetupPlace(
+      details?.destinationPlace ?? details?.destination ?? route?.destinationPlace ?? route?.destination,
+      details?.destinationAddress ?? route?.destinationAddress ?? raw?.destinationAddress,
+      details?.destX ?? route?.destX ?? raw?.destX,
+      details?.destY ?? route?.destY ?? raw?.destY,
+      "도착지",
+    ),
   };
 }
 
@@ -203,7 +297,11 @@ export function HomeScreen({
       const preferredNotification =
         findTransitNotificationById(notifications, currentForScheduleType?.notificationId) ??
         findTransitNotificationById(notifications, cached?.notificationId);
-      const selectedNotification = preferredNotification;
+      const selectedNotification =
+        preferredNotification ??
+        notifications.find((notification) => notification.isActive) ??
+        notifications[0] ??
+        null;
 
       if (selectedNotification) {
         return writeCachedFirstLastRouteSummary(
@@ -270,6 +368,10 @@ export function HomeScreen({
     const scheduleType = activeFirstLastScheduleType;
     const summary = {
       ...createFirstLastRouteSummary(route, places),
+      originPlace: places?.origin,
+      destinationPlace: places?.destination,
+      originAddress: getPlaceAddress(places?.origin),
+      destinationAddress: getPlaceAddress(places?.destination),
       scheduleType,
     };
 
@@ -355,8 +457,10 @@ export function HomeScreen({
     blurActiveElement();
     setIsScheduleAlarmAddVisible(true);
     setScheduleAlarmInitialStep("routeSetup");
-    setScheduleAlarmInitialValues(null);
-  }, []);
+    setScheduleAlarmInitialValues({
+      routePlaces: getFirstLastRouteSetupPlaces(firstLastRouteSummary),
+    });
+  }, [firstLastRouteSummary]);
 
   const handleScheduleAlarmAddPress = useCallback(() => {
     blurActiveElement();
