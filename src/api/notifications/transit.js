@@ -1,7 +1,11 @@
 import { getAccessToken } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
-import { homeCacheKeys, readHomeCache, writeHomeCacheAsync } from "../homeCache";
+import {
+  homeCacheKeys,
+  readHomeCacheAsync,
+  writeHomeCacheAsync,
+} from "../homeCache";
 
 const TRANSIT_NOTIFICATIONS_ENDPOINT = "/api/notifications/transit";
 export const TRANSIT_SCHEDULE_TYPES = {
@@ -35,9 +39,12 @@ async function writeTransitNotificationsCache(scheduleType, notifications) {
   const normalizedScheduleType = normalizeTransitScheduleType(scheduleType);
   const cacheKey = getTransitNotificationsCacheKey(normalizedScheduleType);
 
-  await writeHomeCacheAsync(cacheKey, notifications);
+  await writeHomeCacheAsync(cacheKey, {
+    version: 2,
+    notifications,
+  });
 
-  const cachedNotificationsByType = readHomeCache(
+  const cachedNotificationsByType = await readHomeCacheAsync(
     homeCacheKeys.transitNotifications,
     {},
   );
@@ -125,7 +132,35 @@ async function requestTransitNotificationJson(options) {
 function pickTransitNotificationList(response) {
   const data = response?.data ?? response;
 
-  return Array.isArray(data) ? data : [];
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (!data || typeof data !== "object") {
+    return [];
+  }
+
+  const list =
+    data.notifications ??
+    data.notificationList ??
+    data.items ??
+    data.content ??
+    data.results;
+
+  if (Array.isArray(list)) {
+    return list;
+  }
+
+  const notification = data.notification ?? data;
+  if (
+    notification &&
+    typeof notification === "object" &&
+    (notification.notificationId !== undefined || notification.id !== undefined)
+  ) {
+    return [notification];
+  }
+
+  return [];
 }
 
 function formatTwoDigits(value) {
@@ -179,6 +214,7 @@ export function normalizeTransitNotification(notification) {
     routeName,
     title: routeName,
     targetArrivalTime: notification?.targetArrivalTime,
+    estimatedDepartureAt: notification?.estimatedDepartureAt,
     arrivalTime: formatTransitTargetTime(notification?.targetArrivalTime),
     reminderOffsetMinutes: Array.isArray(notification?.reminderOffsetMinutes)
       ? notification.reminderOffsetMinutes
@@ -206,13 +242,24 @@ export async function getTransitNotifications({
   const cacheKey = getTransitNotificationsCacheKey(normalizedScheduleType);
 
   if (!forceRefresh) {
-    const cachedNotifications = readHomeCache(cacheKey);
+    const cachedNotifications = await readHomeCacheAsync(cacheKey);
 
-    if (cachedNotifications) {
+    if (
+      cachedNotifications?.version === 2 &&
+      Array.isArray(cachedNotifications.notifications)
+    ) {
+      return cachedNotifications.notifications;
+    }
+
+    if (Array.isArray(cachedNotifications) && cachedNotifications.length > 0) {
+      writeHomeCacheAsync(cacheKey, {
+        version: 2,
+        notifications: cachedNotifications,
+      }).catch(() => null);
       return cachedNotifications;
     }
 
-    const cachedNotificationsByType = readHomeCache(
+    const cachedNotificationsByType = await readHomeCacheAsync(
       homeCacheKeys.transitNotifications,
       null,
     );
@@ -223,8 +270,11 @@ export async function getTransitNotifications({
         ? cachedNotificationsByType[normalizedScheduleType]
         : null;
 
-    if (legacyCachedNotifications) {
-      writeHomeCacheAsync(cacheKey, legacyCachedNotifications).catch(() => null);
+    if (Array.isArray(legacyCachedNotifications) && legacyCachedNotifications.length > 0) {
+      writeHomeCacheAsync(cacheKey, {
+        version: 2,
+        notifications: legacyCachedNotifications,
+      }).catch(() => null);
 
       return legacyCachedNotifications;
     }

@@ -7,6 +7,16 @@ import WalkAsset from "../../assets/images/man.svg";
 import { colors } from "../theme";
 import { normalizeTimelineSegments } from "../utils/routeSegments";
 
+function formatBusNumberLabel(busNumber) {
+  const text = String(busNumber ?? "").trim();
+
+  if (!text) {
+    return "버스";
+  }
+
+  return text.endsWith("번") ? text : `${text}번`;
+}
+
 export function RouteTimeline({ segments: routeSegments = [], style }) {
   const segments = normalizeTimelineSegments(routeSegments);
 
@@ -68,7 +78,12 @@ export function RouteTimeline({ segments: routeSegments = [], style }) {
             const stations = Array.isArray(segment.stations) ? segment.stations : [];
             const boardingStop = segment.startStation || segment.boardingStopName || stations[0]?.name || "승차 정류장";
             const arrivalStop = segment.endStation || segment.arrivalStopName || stations[stations.length - 1]?.name || "하차 정류장";
-            const busNumber = segment.transitName || segment.routeNumber || segment.busNumber || segment.raw?.transitName || "버스";
+            const busNumber = formatBusNumberLabel(
+              segment.transitName ||
+                segment.routeNumber ||
+                segment.busNumber ||
+                segment.raw?.transitName,
+            );
             const isFirst = transitIndex === 0;
             const isLast = transitIndex === transitSegments.length - 1;
             const rows = [

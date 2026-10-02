@@ -3,6 +3,7 @@ const REFRESH_TOKEN_KEY = "oneta.refreshToken";
 const listeners = new Set();
 let sessionId = 0;
 let persistentAuthEnabled = false;
+let tokenPersistenceQueue = Promise.resolve();
 
 export function getAuthSessionId() {
   return sessionId;
@@ -40,7 +41,7 @@ function getNativeAsyncStorage() {
   }
 }
 
-function persistTokens({ accessToken, refreshToken } = {}) {
+async function persistTokens({ accessToken, refreshToken } = {}) {
   const storage = getStorage();
 
   if (storage) {
@@ -72,12 +73,18 @@ function persistTokens({ accessToken, refreshToken } = {}) {
         : asyncStorage.removeItem(REFRESH_TOKEN_KEY),
     );
 
-    Promise.all(tasks).catch(() => null);
+    await Promise.all(tasks);
   }
 }
 
-function clearPersistedTokens() {
-  persistTokens();
+async function clearPersistedTokens() {
+  await persistTokens();
+}
+
+function enqueueTokenPersistence(task) {
+  const operation = tokenPersistenceQueue.then(task, task);
+  tokenPersistenceQueue = operation.catch(() => null);
+  return operation;
 }
 
 async function readPersistedTokens() {
@@ -123,7 +130,9 @@ export function setAuthTokens(
 ) {
   if (!isRefresh) {
     sessionId += 1;
-    persistentAuthEnabled = Boolean(persist);
+    if (typeof persist === "boolean") {
+      persistentAuthEnabled = persist;
+    }
   }
 
   memoryTokens = {
@@ -131,13 +140,16 @@ export function setAuthTokens(
     refreshToken: refreshToken ?? null,
   };
 
-  if (persistentAuthEnabled) {
-    persistTokens(memoryTokens);
-  } else if (!isRefresh) {
-    clearPersistedTokens();
-  }
+  const tokensToPersist = { ...memoryTokens };
+  const shouldPersist = persistentAuthEnabled;
+  const persistence = enqueueTokenPersistence(() => shouldPersist
+    ? persistTokens(tokensToPersist)
+    : !isRefresh
+      ? clearPersistedTokens()
+      : Promise.resolve());
 
   listeners.forEach((listener) => listener(memoryTokens));
+  return persistence;
 }
 
 export function getAuthTokens() {
@@ -149,10 +161,11 @@ export function getAccessToken() {
 }
 
 export function clearAuthTokens() {
-  setAuthTokens();
+  return setAuthTokens({}, { persist: false });
 }
 
 export async function hydrateAuthTokens() {
+  await tokenPersistenceQueue;
   const persistedTokens = await readPersistedTokens();
 
   if (!persistedTokens.accessToken && !persistedTokens.refreshToken) {

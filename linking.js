@@ -1,10 +1,11 @@
 import { routes } from "./src/navigation/routes";
 
 export const linking = {
-  prefixes: [],
+  prefixes: ["oneta://", "exp+oneta://"],
   config: {
     screens: {
       [routes.login]: "",
+      [routes.oauthCallback]: "oauth/callback",
       [routes.signup]: "signup",
       [routes.termsAgreement]: "signup/consent",
       [routes.signupComplete]: "signup/complete",

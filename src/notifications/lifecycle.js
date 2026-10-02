@@ -87,7 +87,7 @@ export function startFcm({ onForegroundMessage, onNotificationOpen, onSessionEnd
       prompted = true;
       const granted = await requestNotificationPermission(prompt);
       fcmDiag("permission result", { granted, prompt });
-      if (!granted || disposed || signal.aborted) return;
+      if (disposed || signal.aborted) return;
 
       const tokenRequest = tokenOperation.then(async () => {
         await deletePendingToken();
@@ -96,6 +96,9 @@ export function startFcm({ onForegroundMessage, onNotificationOpen, onSessionEnd
       tokenOperation = tokenRequest.then(() => {}, () => {});
       const token = await tokenRequest;
       fcmDiag("token acquired", { token: maskToken(token) });
+      if (!token) {
+        throw new Error("FCM token unavailable");
+      }
       if (disposed || signal.aborted || startedSession !== getAuthSessionId()) {
         fcmDiag("registration skipped after token", {
           disposed,

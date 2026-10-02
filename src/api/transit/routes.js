@@ -1,8 +1,14 @@
 import { getAccessToken } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
+import {
+  homeCacheKeys,
+  readHomeCacheAsync,
+  writeHomeCacheAsync,
+} from "../homeCache";
 
 const TRANSIT_ROUTES_SEARCH_ENDPOINT = "/api/transit/routes/search";
+const TRANSIT_ROUTE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function toQueryString(params = {}) {
   const query = new URLSearchParams();
@@ -160,18 +166,39 @@ export async function searchTransitRoutes({
   destAddress,
   params,
   accessToken = getAccessToken(),
+  forceRefresh = false,
   signal,
 } = {}) {
+  const queryParams = {
+    originX,
+    originY,
+    originAddress,
+    destX,
+    destY,
+    destAddress,
+    ...params,
+  };
+  const queryString = toQueryString(queryParams);
+  const requestPath = `${TRANSIT_ROUTES_SEARCH_ENDPOINT}${queryString}`;
+
+  if (!forceRefresh) {
+    const cachedSearches = await readHomeCacheAsync(
+      homeCacheKeys.transitRouteSearch,
+      null,
+    );
+    const cached = cachedSearches?.searches?.[requestPath];
+
+    if (
+      cached &&
+      Date.now() - cached.savedAt < TRANSIT_ROUTE_CACHE_TTL_MS &&
+      Array.isArray(cached.routes)
+    ) {
+      return cached.routes;
+    }
+  }
+
   const response = await requestTransitRouteJson({
-    path: `${TRANSIT_ROUTES_SEARCH_ENDPOINT}${toQueryString({
-      originX,
-      originY,
-      originAddress,
-      destX,
-      destY,
-      destAddress,
-      ...params,
-    })}`,
+    path: requestPath,
     method: "GET",
     accessToken,
     signal,
@@ -179,5 +206,31 @@ export async function searchTransitRoutes({
   });
   const routes = Array.isArray(response?.data) ? response.data : response;
 
-  return Array.isArray(routes) ? routes.map(normalizeTransitRoute) : [];
+  const normalizedRoutes = Array.isArray(routes)
+    ? routes.map(normalizeTransitRoute)
+    : [];
+
+  const cachedSearches = await readHomeCacheAsync(
+    homeCacheKeys.transitRouteSearch,
+    null,
+  );
+  const searches =
+    cachedSearches?.searches && typeof cachedSearches.searches === "object"
+      ? { ...cachedSearches.searches }
+      : {};
+  searches[requestPath] = {
+    savedAt: Date.now(),
+    routes: normalizedRoutes,
+  };
+
+  const recentSearches = Object.entries(searches)
+    .filter(([, entry]) => Date.now() - entry.savedAt < TRANSIT_ROUTE_CACHE_TTL_MS)
+    .sort(([, first], [, second]) => second.savedAt - first.savedAt)
+    .slice(0, 8);
+
+  await writeHomeCacheAsync(homeCacheKeys.transitRouteSearch, {
+    searches: Object.fromEntries(recentSearches),
+  });
+
+  return normalizedRoutes;
 }

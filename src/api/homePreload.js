@@ -14,6 +14,7 @@ import {
 } from "./homeCache";
 
 let preloadPromise = null;
+const CACHE_MISS = Symbol("cache-miss");
 
 const requiredPreloadCacheKeys = [
   homeCacheKeys.addresses,
@@ -24,10 +25,14 @@ const requiredPreloadCacheKeys = [
   homeCacheKeys.myPage,
 ];
 
-function hasRequiredPreloadCache() {
-  return requiredPreloadCacheKeys.every(
-    (key) => readHomeCache(key, undefined) !== undefined,
+async function hasRequiredPreloadCache() {
+  const cachedValues = await Promise.all(
+    requiredPreloadCacheKeys.map((key) =>
+      readHomeCacheAsync(key, CACHE_MISS),
+    ),
   );
+
+  return cachedValues.every((value) => value !== CACHE_MISS);
 }
 
 export function getCachedFirstLastRoute() {
@@ -47,13 +52,11 @@ export async function preloadHomeCache({ reset = false, signal } = {}) {
     await preloadPromise.catch(() => null);
   }
 
-  if (!reset && hasRequiredPreloadCache()) {
-    return Promise.resolve();
-  }
-
   preloadPromise = (async () => {
     if (reset) {
       await clearHomeCacheAsync();
+    } else if (await hasRequiredPreloadCache()) {
+      return;
     }
 
     await getCachedFirstLastRouteAsync();

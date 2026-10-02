@@ -1,7 +1,7 @@
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, useIsFocused } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Platform } from "react-native";
+import { BackHandler, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import {
@@ -34,6 +34,8 @@ import { blurActiveElement } from "./src/utils/accessibility";
 import { clearHomeCacheAsync } from "./src/api/homeCache";
 import { preloadHomeCache } from "./src/api/homePreload";
 import { subscribeAuthRequired } from "./src/api/auth/authEvents";
+import { reissueAuthTokens } from "./src/api/auth/reissue";
+import { exchangeGoogleAuthCode } from "./src/api/google";
 import { PushNotifications } from "./src/notifications/PushNotifications";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
 
@@ -108,6 +110,52 @@ function navigateTo(navigation, name, params) {
   navigation.navigate(name, params);
 }
 
+function useAndroidBackBehavior() {
+  React.useEffect(() => {
+    if (Platform.OS !== "android") {
+      return undefined;
+    }
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        const navigation = notificationNavigationRef;
+
+        if (!navigation.isReady()) {
+          return false;
+        }
+
+        const currentRouteName = navigation.getCurrentRoute()?.name;
+
+        if (currentRouteName === routes.home) {
+          return false;
+        }
+
+        if (navigation.canGoBack()) {
+          blurActiveElement();
+          navigation.goBack();
+          return true;
+        }
+
+        if (getAccessToken()) {
+          blurActiveElement();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: routes.home }],
+          });
+          return true;
+        }
+
+        return false;
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+}
+
 function createHomeScreenNavigationProps(navigation) {
   return {
     onOpenAccountInfo: () => navigateTo(navigation, routes.accountInfo),
@@ -149,7 +197,7 @@ function useAuthenticatedRoute(navigation, route) {
       try {
         if (accessToken) {
           await clearHomeCacheAsync();
-          setAuthTokens({ accessToken, refreshToken }, { persist: true });
+          await setAuthTokens({ accessToken, refreshToken }, { persist: true });
 
           if (!didPreloadRef.current) {
             didPreloadRef.current = true;
@@ -312,6 +360,7 @@ function SignupCompleteRoute({ navigation, route }) {
 
 function HomeRoute({ navigation, route }) {
   const isReady = useAuthenticatedRoute(navigation, route);
+  const isFocused = useIsFocused();
   const homeScreenNavigationProps = React.useMemo(
     () => createHomeScreenNavigationProps(navigation),
     [navigation],
@@ -323,10 +372,73 @@ function HomeRoute({ navigation, route }) {
 
   return (
     <HomeScreen
+      backHandlingEnabled={isFocused}
       initialTab={route.params?.initialTab ?? "home"}
       {...homeScreenNavigationProps}
     />
   );
+}
+
+function OAuthCallbackRoute({ navigation, route }) {
+  const handledRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (handledRef.current) return;
+    handledRef.current = true;
+
+    const params = route.params ?? {};
+
+    async function finishGoogleAuth() {
+      const callbackError =
+        params.error_description ??
+        params.errorMessage ??
+        params.oauth2_auth_error ??
+        (params.error ? "Google 인증이 취소되었거나 실패했습니다." : null) ??
+        getGoogleSignupConflictMessage(params);
+
+      if (callbackError) {
+        resetTo(navigation, routes.login, { loginError: callbackError });
+        return;
+      }
+
+      if (!params.code) {
+        resetTo(navigation, routes.login, {
+          loginError: "Google 로그인 응답을 확인할 수 없습니다. 다시 시도해 주세요.",
+        });
+        return;
+      }
+
+      try {
+        const response = await exchangeGoogleAuthCode({ code: params.code });
+
+        const data = response?.data ?? {};
+        if (data.tempId !== undefined && data.tempId !== null) {
+          resetTo(navigation, routes.termsAgreement, {
+            tempId: data.tempId,
+            signupTokens: data.signupTokens,
+          });
+          return;
+        }
+
+        const authTokens = extractAuthTokens(response);
+        if (!authTokens.accessToken || !authTokens.refreshToken) {
+          throw new Error("Google 로그인 응답에 인증 정보가 없습니다.");
+        }
+
+        await setAuthTokens(authTokens, { persist: true });
+        resetTo(navigation, routes.home);
+      } catch (error) {
+        resetTo(navigation, routes.login, {
+          loginError: error?.message || "Google 로그인에 실패했습니다. 다시 시도해 주세요.",
+        });
+      }
+    }
+
+    finishGoogleAuth();
+
+  }, [navigation, route.params]);
+
+  return null;
 }
 
 function CustomAlarmRoute({ navigation, route }) {
@@ -343,6 +455,7 @@ function CustomAlarmRoute({ navigation, route }) {
 
 function MyPageRoute({ navigation, route }) {
   const isReady = useAuthenticatedRoute(navigation, route);
+  const isFocused = useIsFocused();
   const homeScreenNavigationProps = React.useMemo(
     () => createHomeScreenNavigationProps(navigation),
     [navigation],
@@ -354,6 +467,7 @@ function MyPageRoute({ navigation, route }) {
 
   return (
     <HomeScreen
+      backHandlingEnabled={isFocused}
       initialTab="myPage"
       {...homeScreenNavigationProps}
     />
@@ -494,11 +608,29 @@ export default function App() {
   const [isAuthHydrated, setIsAuthHydrated] = React.useState(false);
   const [initialRouteName, setInitialRouteName] = React.useState(routes.login);
 
+  useAndroidBackBehavior();
+
   React.useEffect(() => {
     let isActive = true;
 
     hydrateAuthTokens()
-      .then(({ accessToken }) => {
+      .then(async ({ accessToken, refreshToken }) => {
+        if (!accessToken && !refreshToken) {
+          return null;
+        }
+
+        if (!accessToken && refreshToken) {
+          try {
+            await reissueAuthTokens({ refreshToken });
+            return getAccessToken();
+          } catch {
+            return null;
+          }
+        }
+
+        return accessToken;
+      })
+      .then((accessToken) => {
         if (!isActive) {
           return;
         }
@@ -541,6 +673,7 @@ export default function App() {
           }}
         >
           <Stack.Screen component={LoginRoute} name={routes.login} />
+          <Stack.Screen component={OAuthCallbackRoute} name={routes.oauthCallback} />
           <Stack.Screen component={SignupRoute} name={routes.signup} />
           <Stack.Screen
             component={TermsAgreementRoute}

@@ -1,5 +1,6 @@
 export const routes = {
   login: "Login",
+  oauthCallback: "OAuthCallback",
   signup: "Signup",
   termsAgreement: "TermsAgreement",
   signupComplete: "SignupComplete",
