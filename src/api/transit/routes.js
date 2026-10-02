@@ -8,6 +8,7 @@ import {
 } from "../homeCache";
 
 const TRANSIT_ROUTES_SEARCH_ENDPOINT = "/api/transit/routes/search";
+const FIRST_LAST_TRANSIT_ROUTES_SEARCH_ENDPOINT = "/api/transit/routes/first-last/search";
 const TRANSIT_ROUTE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function toQueryString(params = {}) {
@@ -146,6 +147,7 @@ export function normalizeTransitRoute(route) {
 
   return {
     routeId: route?.routeId,
+    provider: route?.provider,
     originAddress: route?.originAddress ?? "",
     destinationAddress: route?.destinationAddress ?? "",
     totalDurationMinutes: route?.totalDurationMinutes ?? 0,
@@ -233,4 +235,51 @@ export async function searchTransitRoutes({
   });
 
   return normalizedRoutes;
+}
+
+
+export async function searchFirstLastTransitRoutes({
+  originX,
+  originY,
+  originAddress,
+  destX,
+  destY,
+  destAddress,
+  scheduleType,
+  accessToken = getAccessToken(),
+  signal,
+} = {}) {
+  const requestPath =
+    `${FIRST_LAST_TRANSIT_ROUTES_SEARCH_ENDPOINT}${toQueryString({
+      originX,
+      originY,
+      originAddress,
+      destX,
+      destY,
+      destAddress,
+      scheduleType,
+    })}`;
+
+  const response = await requestTransitRouteJson({
+    path: requestPath,
+    method: "GET",
+    accessToken,
+    signal,
+    errorMessage: "첫차·막차 최적 경로 검색에 실패했습니다.",
+  });
+  const options = Array.isArray(response?.data) ? response.data : response;
+
+  if (!Array.isArray(options)) {
+    return [];
+  }
+
+  return options.map((option) => {
+    const rawRoute = option?.route ?? option;
+    return {
+      ...normalizeTransitRoute(rawRoute),
+      raw: rawRoute,
+      estimatedDepartureAt: option?.estimatedDepartureAt,
+      scheduleType: option?.scheduleType ?? scheduleType,
+    };
+  });
 }
