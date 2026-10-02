@@ -26,7 +26,10 @@ import BigBusAsset from "../../../../assets/images/bigbus.svg";
 
 import { searchAddresses } from "../../../api/address/search";
 import { createArrivalNotification } from "../../../api/notifications/arrival";
-import { searchTransitRoutes } from "../../../api/transit/routes";
+import {
+  searchFirstLastTransitRoutes,
+  searchTransitRoutes,
+} from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { NaverMapView } from "../../../components/NaverMapView";
 import { RouteTimeline } from "../../../components/RouteTimeline";
@@ -483,6 +486,7 @@ export function ScheduleAlarmAddScreen({
   onBackPress,
   onRouteConfigured,
   onSaveComplete,
+  routeSearchScheduleType,
 }) {
   const [routeName, setRouteName] =
     useState(() => initialValues?.routeName ?? "");
@@ -645,6 +649,9 @@ export function ScheduleAlarmAddScreen({
         }
         initialOrigin={
           routePlaces.origin
+        }
+        scheduleType={
+          routeSearchScheduleType
         }
         onBackPress={
           handleBackPress
@@ -2338,6 +2345,7 @@ export function ScheduleRouteResultStep({
   initialOrigin,
   onBackPress,
   onRouteSelect,
+  scheduleType,
 }) {
   const [
     origin,
@@ -2384,8 +2392,10 @@ export function ScheduleRouteResultStep({
       setRouteError("");
 
       try {
-        const nextRoutes =
-        await searchTransitRoutes({
+        const search = scheduleType
+          ? searchFirstLastTransitRoutes
+          : searchTransitRoutes;
+        const nextRoutes = await search({
           originX: origin.x,
           originY: origin.y,
 
@@ -2398,6 +2408,9 @@ export function ScheduleRouteResultStep({
           destAddress:
             getRoutePlaceAddress(destination),
 
+          ...(scheduleType
+            ? { scheduleType }
+            : {}),
           signal: controller.signal,
         });
 
@@ -2441,6 +2454,7 @@ export function ScheduleRouteResultStep({
   }, [
     destination,
     origin,
+    scheduleType,
   ]);
 
   const updateOriginText = (
