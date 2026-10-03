@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { BackHandler, Platform, StyleSheet, View } from "react-native";
+import { AppState, BackHandler, Platform, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -74,6 +74,12 @@ function createFirstLastRouteSummaryFromNotification(notification) {
 
   return {
     ...summary,
+    originPlace: details?.originPlace ?? (typeof details?.origin === "object" ? details.origin : undefined),
+    destinationPlace:
+      details?.destinationPlace ??
+      (typeof details?.destination === "object" ? details.destination : undefined),
+    originAddress: details?.originAddress ?? route?.originAddress,
+    destinationAddress: details?.destinationAddress ?? route?.destinationAddress,
     notificationId: notification?.notificationId,
     routeName: notification?.routeName,
     arrivalTime: notification?.arrivalTime || summary.arrivalTime,
@@ -123,18 +129,21 @@ function getPlaceAddress(place) {
   return place?.address ?? place?.roadAddress ?? place?.detail ?? place?.label ?? place?.name ?? "";
 }
 
-function getRouteSetupPlace(place, address, x, y, fallbackName) {
+function getRouteSetupPlace(place, address, x, y) {
   const source = place && typeof place === "object" ? place : {};
   const routePlace = source.raw ?? source;
-  const latitude = Number(source.y ?? routePlace.y ?? y);
-  const longitude = Number(source.x ?? routePlace.x ?? x);
+  const rawLatitude = source.y ?? routePlace.y ?? y;
+  const rawLongitude = source.x ?? routePlace.x ?? x;
+  const latitude = rawLatitude == null || rawLatitude === "" ? NaN : Number(rawLatitude);
+  const longitude = rawLongitude == null || rawLongitude === "" ? NaN : Number(rawLongitude);
   const label =
-    source.label ??
-    source.name ??
-    source.placeName ??
-    source.address ??
-    address ??
-    (typeof place === "string" ? place : fallbackName);
+    source.label ||
+    source.name ||
+    source.placeName ||
+    (typeof place === "string" ? place : "") ||
+    source.address ||
+    address ||
+    "";
   const placeAddress =
     source.address ??
     source.roadAddress ??
@@ -158,18 +167,16 @@ function getFirstLastRouteSetupPlaces(summary) {
 
   return {
     origin: getRouteSetupPlace(
-      details?.originPlace ?? details?.origin ?? route?.originPlace ?? route?.origin,
-      details?.originAddress ?? route?.originAddress ?? raw?.originAddress,
-      details?.originX ?? route?.originX ?? raw?.originX,
-      details?.originY ?? route?.originY ?? raw?.originY,
-      "출발지",
+      summary?.originPlace ?? details?.originPlace ?? details?.origin ?? route?.originPlace ?? route?.origin,
+      summary?.originAddress ?? details?.originAddress ?? route?.originAddress ?? raw?.originAddress,
+      summary?.originPlace?.x ?? details?.originX ?? route?.originX ?? raw?.originX,
+      summary?.originPlace?.y ?? details?.originY ?? route?.originY ?? raw?.originY,
     ),
     destination: getRouteSetupPlace(
-      details?.destinationPlace ?? details?.destination ?? route?.destinationPlace ?? route?.destination,
-      details?.destinationAddress ?? route?.destinationAddress ?? raw?.destinationAddress,
-      details?.destX ?? route?.destX ?? raw?.destX,
-      details?.destY ?? route?.destY ?? raw?.destY,
-      "도착지",
+      summary?.destinationPlace ?? details?.destinationPlace ?? details?.destination ?? route?.destinationPlace ?? route?.destination,
+      summary?.destinationAddress ?? details?.destinationAddress ?? route?.destinationAddress ?? raw?.destinationAddress,
+      summary?.destinationPlace?.x ?? details?.destX ?? route?.destX ?? raw?.destX,
+      summary?.destinationPlace?.y ?? details?.destY ?? route?.destY ?? raw?.destY,
     ),
   };
 }
@@ -274,7 +281,9 @@ export function HomeScreen({
 
     readHomeCacheAsync(getFirstLastRouteCacheKey(activeFirstLastScheduleType), null).then((cachedSummary) => {
       if (isActive) {
-        setFirstLastRouteSummary(cachedSummary);
+        setFirstLastRouteSummary(
+          readCachedFirstLastRouteSummary(activeFirstLastScheduleType) ?? cachedSummary,
+        );
       }
     });
 
@@ -285,38 +294,27 @@ export function HomeScreen({
 
   const loadFirstLastTransitNotifications = useCallback(async ({
     scheduleType = activeFirstLastScheduleType,
+    forceRefresh = false,
     signal,
   } = {}) => {
-    const notifications = await getTransitNotifications({ scheduleType, signal });
+    const notifications = await getTransitNotifications({ scheduleType, forceRefresh, signal });
 
-    setFirstLastRouteSummary((current) =>
-    {
-      const cached = readCachedFirstLastRouteSummary(scheduleType);
-      const currentForScheduleType =
-        current?.scheduleType === scheduleType ? current : null;
-      const preferredNotification =
-        findTransitNotificationById(notifications, currentForScheduleType?.notificationId) ??
-        findTransitNotificationById(notifications, cached?.notificationId);
-      const selectedNotification =
-        preferredNotification ??
-        notifications.find((notification) => notification.isActive) ??
-        notifications[0] ??
-        null;
+    if (signal?.aborted) return;
 
-      if (selectedNotification) {
-        return writeCachedFirstLastRouteSummary(
-          createFirstLastRouteSummaryFromNotification(selectedNotification),
-          scheduleType,
-        );
-      }
+    const cached = readCachedFirstLastRouteSummary(scheduleType);
+    const selectedNotification =
+      findTransitNotificationById(notifications, cached?.notificationId) ??
+      notifications.find((notification) => notification.isActive) ??
+      notifications[0] ??
+      null;
 
-      if (notifications.length === 0) {
-        return cached ?? currentForScheduleType ?? null;
-      }
-
-      return currentForScheduleType ?? cached;
-    },
-    );
+    if (selectedNotification) {
+      const summary = createFirstLastRouteSummaryFromNotification(selectedNotification);
+      writeCachedFirstLastRouteSummary(summary, scheduleType);
+      setFirstLastRouteSummary(summary);
+    } else {
+      setFirstLastRouteSummary(cached);
+    }
   }, [activeFirstLastScheduleType]);
 
   useEffect(() => {
@@ -361,6 +359,29 @@ export function HomeScreen({
 
     return () => {
       controller.abort();
+    };
+  }, [activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
+
+  useEffect(() => {
+    let controller;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      controller?.abort();
+      controller = new AbortController();
+      loadFirstLastTransitNotifications({
+        scheduleType: activeFirstLastScheduleType,
+        forceRefresh: true,
+        signal: controller.signal,
+      }).catch((error) => {
+        if (error?.name !== "AbortError") {
+          console.warn("첫차·막차 경로 갱신 실패:", error?.code ?? error?.message);
+        }
+      });
+    });
+
+    return () => {
+      controller?.abort();
+      subscription.remove();
     };
   }, [activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
 
@@ -601,6 +622,11 @@ export function HomeScreen({
               <ScheduleAlarmAddScreen
                 initialStep={scheduleAlarmInitialStep}
                 initialValues={scheduleAlarmInitialValues}
+                scheduleType={
+                  scheduleAlarmInitialStep === "routeSetup"
+                    ? activeFirstLastScheduleType
+                    : "NORMAL"
+                }
                 mapTitle={
                   scheduleAlarmInitialStep === "routeSetup"
                     ? "경로 재설정"
@@ -637,6 +663,7 @@ export function HomeScreen({
                 actionLabel="이 경로로 설정"
                 initialDestination={firstLastRoutePlaces.destination}
                 initialOrigin={firstLastRoutePlaces.origin}
+                scheduleType={activeFirstLastScheduleType}
                 onBackPress={() => {
                   blurActiveElement();
                   setFirstLastRouteSetupStep("map");

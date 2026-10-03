@@ -8,7 +8,9 @@ import {
 } from "../homeCache";
 
 const TRANSIT_ROUTES_SEARCH_ENDPOINT = "/api/transit/routes/search";
+const FIRST_LAST_ROUTES_SEARCH_ENDPOINT = "/api/transit/routes/first-last/search";
 const TRANSIT_ROUTE_CACHE_TTL_MS = 5 * 60 * 1000;
+const FIRST_LAST_ROUTE_CACHE_TTL_MS = 60 * 1000;
 
 function toQueryString(params = {}) {
   const query = new URLSearchParams();
@@ -157,13 +159,14 @@ export function normalizeTransitRoute(route) {
   };
 }
 
-export async function searchTransitRoutes({
+async function searchRoutes(endpoint, cacheTtlMs, {
   originX,
   originY,
   originAddress,
   destX,
   destY,
   destAddress,
+  scheduleType,
   params,
   accessToken = getAccessToken(),
   forceRefresh = false,
@@ -177,9 +180,10 @@ export async function searchTransitRoutes({
     destY,
     destAddress,
     ...params,
+    scheduleType: scheduleType ?? params?.scheduleType,
   };
   const queryString = toQueryString(queryParams);
-  const requestPath = `${TRANSIT_ROUTES_SEARCH_ENDPOINT}${queryString}`;
+  const requestPath = `${endpoint}${queryString}`;
 
   if (!forceRefresh) {
     const cachedSearches = await readHomeCacheAsync(
@@ -190,7 +194,7 @@ export async function searchTransitRoutes({
 
     if (
       cached &&
-      Date.now() - cached.savedAt < TRANSIT_ROUTE_CACHE_TTL_MS &&
+      Date.now() - cached.savedAt < cacheTtlMs &&
       Array.isArray(cached.routes)
     ) {
       return cached.routes;
@@ -204,7 +208,8 @@ export async function searchTransitRoutes({
     signal,
     errorMessage: "대중교통 경로 검색에 실패했습니다.",
   });
-  const routes = Array.isArray(response?.data) ? response.data : response;
+  const data = response?.data ?? response;
+  const routes = Array.isArray(data) ? data : data?.routes;
 
   const normalizedRoutes = Array.isArray(routes)
     ? routes.map(normalizeTransitRoute)
@@ -220,11 +225,14 @@ export async function searchTransitRoutes({
       : {};
   searches[requestPath] = {
     savedAt: Date.now(),
+    ttlMs: cacheTtlMs,
     routes: normalizedRoutes,
   };
 
   const recentSearches = Object.entries(searches)
-    .filter(([, entry]) => Date.now() - entry.savedAt < TRANSIT_ROUTE_CACHE_TTL_MS)
+    .filter(([, entry]) =>
+      Date.now() - entry.savedAt < (entry.ttlMs ?? TRANSIT_ROUTE_CACHE_TTL_MS),
+    )
     .sort(([, first], [, second]) => second.savedAt - first.savedAt)
     .slice(0, 8);
 
@@ -233,4 +241,16 @@ export async function searchTransitRoutes({
   });
 
   return normalizedRoutes;
+}
+
+export function searchTransitRoutes(options = {}) {
+  return searchRoutes(TRANSIT_ROUTES_SEARCH_ENDPOINT, TRANSIT_ROUTE_CACHE_TTL_MS, options);
+}
+
+export function searchFirstLastTransitRoutes(options = {}) {
+  if (!options.scheduleType) {
+    return Promise.reject(new Error("첫차·막차 경로 조회에는 scheduleType이 필요합니다."));
+  }
+
+  return searchRoutes(FIRST_LAST_ROUTES_SEARCH_ENDPOINT, FIRST_LAST_ROUTE_CACHE_TTL_MS, options);
 }

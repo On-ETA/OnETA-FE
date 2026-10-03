@@ -88,6 +88,10 @@ export function startFcm({ onForegroundMessage, onNotificationOpen, onSessionEnd
       const granted = await requestNotificationPermission(prompt);
       fcmDiag("permission result", { granted, prompt });
       if (disposed || signal.aborted) return;
+      if (!granted) {
+        retries = 0;
+        return;
+      }
 
       const tokenRequest = tokenOperation.then(async () => {
         await deletePendingToken();

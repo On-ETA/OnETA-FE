@@ -26,7 +26,10 @@ import BigBusAsset from "../../../../assets/images/bigbus.svg";
 
 import { searchAddresses } from "../../../api/address/search";
 import { createArrivalNotification } from "../../../api/notifications/arrival";
-import { searchTransitRoutes } from "../../../api/transit/routes";
+import {
+  searchFirstLastTransitRoutes,
+  searchTransitRoutes,
+} from "../../../api/transit/routes";
 import { Header } from "../../../components";
 import { NaverMapView } from "../../../components/NaverMapView";
 import { RouteTimeline } from "../../../components/RouteTimeline";
@@ -483,6 +486,7 @@ export function ScheduleAlarmAddScreen({
   onBackPress,
   onRouteConfigured,
   onSaveComplete,
+  scheduleType = "NORMAL",
 }) {
   const [routeName, setRouteName] =
     useState(() => initialValues?.routeName ?? "");
@@ -646,6 +650,7 @@ export function ScheduleAlarmAddScreen({
         initialOrigin={
           routePlaces.origin
         }
+        scheduleType={scheduleType}
         onBackPress={
           handleBackPress
         }
@@ -2338,6 +2343,7 @@ export function ScheduleRouteResultStep({
   initialOrigin,
   onBackPress,
   onRouteSelect,
+  scheduleType = "NORMAL",
 }) {
   const [
     origin,
@@ -2384,8 +2390,12 @@ export function ScheduleRouteResultStep({
       setRouteError("");
 
       try {
+        const searchRoutes =
+          scheduleType === "FIRST_TRANSIT" || scheduleType === "LAST_TRANSIT"
+            ? searchFirstLastTransitRoutes
+            : searchTransitRoutes;
         const nextRoutes =
-        await searchTransitRoutes({
+        await searchRoutes({
           originX: origin.x,
           originY: origin.y,
 
@@ -2398,6 +2408,7 @@ export function ScheduleRouteResultStep({
           destAddress:
             getRoutePlaceAddress(destination),
 
+          scheduleType,
           signal: controller.signal,
         });
 
@@ -2441,6 +2452,7 @@ export function ScheduleRouteResultStep({
   }, [
     destination,
     origin,
+    scheduleType,
   ]);
 
   const updateOriginText = (

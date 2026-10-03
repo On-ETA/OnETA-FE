@@ -9,7 +9,8 @@
   }
 */
 import { requestJson } from "../client";
-import { clearHomeCache } from "../homeCache";
+import { clearHomeCacheAsync } from "../homeCache";
+import { cancelHomePreload } from "../homePreload";
 import { clearAuthTokens, getAccessToken } from "./tokens";
 
 const LOGOUT_ENDPOINT = "/api/auth/logout";
@@ -24,7 +25,8 @@ function isAuthError(error) {
 }
 
 export async function logout({ accessToken = getAccessToken(), signal } = {}) {
-  clearHomeCache();
+  await cancelHomePreload();
+  await clearHomeCacheAsync();
 
   try {
     const response = await requestJson({
@@ -35,12 +37,12 @@ export async function logout({ accessToken = getAccessToken(), signal } = {}) {
       errorMessage: "로그아웃에 실패했습니다.",
     });
 
-    clearAuthTokens();
+    await clearAuthTokens();
 
     return response;
   } catch (error) {
     if (isAuthError(error)) {
-      clearAuthTokens();
+      await clearAuthTokens();
     }
 
     throw error;

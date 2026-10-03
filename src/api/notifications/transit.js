@@ -8,6 +8,7 @@ import {
 } from "../homeCache";
 
 const TRANSIT_NOTIFICATIONS_ENDPOINT = "/api/notifications/transit";
+const TRANSIT_NOTIFICATIONS_CACHE_TTL_MS = 60 * 1000;
 export const TRANSIT_SCHEDULE_TYPES = {
   first: "FIRST_TRANSIT",
   last: "LAST_TRANSIT",
@@ -41,25 +42,9 @@ async function writeTransitNotificationsCache(scheduleType, notifications) {
 
   await writeHomeCacheAsync(cacheKey, {
     version: 2,
+    savedAt: Date.now(),
     notifications,
   });
-
-  const cachedNotificationsByType = await readHomeCacheAsync(
-    homeCacheKeys.transitNotifications,
-    {},
-  );
-  const nextNotificationsByType =
-    cachedNotificationsByType &&
-    typeof cachedNotificationsByType === "object" &&
-    !Array.isArray(cachedNotificationsByType)
-      ? { ...cachedNotificationsByType }
-      : {};
-
-  nextNotificationsByType[normalizedScheduleType] = notifications;
-  await writeHomeCacheAsync(
-    homeCacheKeys.transitNotifications,
-    nextNotificationsByType,
-  );
 
   return notifications;
 }
@@ -246,37 +231,11 @@ export async function getTransitNotifications({
 
     if (
       cachedNotifications?.version === 2 &&
+      Number.isFinite(cachedNotifications.savedAt) &&
+      Date.now() - cachedNotifications.savedAt < TRANSIT_NOTIFICATIONS_CACHE_TTL_MS &&
       Array.isArray(cachedNotifications.notifications)
     ) {
       return cachedNotifications.notifications;
-    }
-
-    if (Array.isArray(cachedNotifications) && cachedNotifications.length > 0) {
-      writeHomeCacheAsync(cacheKey, {
-        version: 2,
-        notifications: cachedNotifications,
-      }).catch(() => null);
-      return cachedNotifications;
-    }
-
-    const cachedNotificationsByType = await readHomeCacheAsync(
-      homeCacheKeys.transitNotifications,
-      null,
-    );
-    const legacyCachedNotifications =
-      cachedNotificationsByType &&
-      typeof cachedNotificationsByType === "object" &&
-      !Array.isArray(cachedNotificationsByType)
-        ? cachedNotificationsByType[normalizedScheduleType]
-        : null;
-
-    if (Array.isArray(legacyCachedNotifications) && legacyCachedNotifications.length > 0) {
-      writeHomeCacheAsync(cacheKey, {
-        version: 2,
-        notifications: legacyCachedNotifications,
-      }).catch(() => null);
-
-      return legacyCachedNotifications;
     }
   }
 
