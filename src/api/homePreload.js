@@ -14,6 +14,7 @@ import {
 } from "./homeCache";
 
 let preloadPromise = null;
+let preloadController = null;
 const CACHE_MISS = Symbol("cache-miss");
 
 const requiredPreloadCacheKeys = [
@@ -43,14 +44,25 @@ export function getCachedFirstLastRouteAsync() {
   return readHomeCacheAsync(homeCacheKeys.firstLastRoute, null);
 }
 
+export async function cancelHomePreload() {
+  preloadController?.abort();
+  await preloadPromise?.catch(() => null);
+}
+
 export async function preloadHomeCache({ reset = false, signal } = {}) {
   if (preloadPromise && !reset) {
     return preloadPromise;
   }
 
   if (preloadPromise && reset) {
-    await preloadPromise.catch(() => null);
+    await cancelHomePreload();
   }
+
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", onAbort, { once: true });
+  preloadController = controller;
 
   preloadPromise = (async () => {
     if (reset) {
@@ -59,22 +71,30 @@ export async function preloadHomeCache({ reset = false, signal } = {}) {
       return;
     }
 
+    if (controller.signal.aborted) return;
     await getCachedFirstLastRouteAsync();
-    await getAddresses({ forceRefresh: true, signal });
-    await getTransitNotifications({
-      forceRefresh: true,
-      scheduleType: TRANSIT_SCHEDULE_TYPES.first,
-      signal,
-    });
-    await getTransitNotifications({
-      forceRefresh: true,
-      scheduleType: TRANSIT_SCHEDULE_TYPES.last,
-      signal,
-    });
-    await getArrivalNotifications({ forceRefresh: true, signal });
-    await getMyDepotNotifications({ forceRefresh: true, signal });
-    await getMyPage({ forceRefresh: true, signal });
+    if (controller.signal.aborted) return;
+    const results = await Promise.allSettled([
+      getAddresses({ forceRefresh: true, signal: controller.signal }),
+      getTransitNotifications({
+        forceRefresh: true,
+        scheduleType: TRANSIT_SCHEDULE_TYPES.first,
+        signal: controller.signal,
+      }),
+      getTransitNotifications({
+        forceRefresh: true,
+        scheduleType: TRANSIT_SCHEDULE_TYPES.last,
+        signal: controller.signal,
+      }),
+      getArrivalNotifications({ forceRefresh: true, signal: controller.signal }),
+      getMyDepotNotifications({ forceRefresh: true, signal: controller.signal }),
+      getMyPage({ forceRefresh: true, signal: controller.signal }),
+    ]);
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
   })().finally(() => {
+    signal?.removeEventListener("abort", onAbort);
+    preloadController = null;
     preloadPromise = null;
   });
 

@@ -28,19 +28,9 @@ import {
 } from "./tokens";
 
 const REISSUE_ENDPOINT = "/api/auth/reissue";
+let pendingReissue = null;
 
-export async function reissueAuthTokens({
-  refreshToken = getAuthTokens().refreshToken,
-  signal,
-} = {}) {
-  const sessionId = getAuthSessionId();
-  if (!refreshToken) {
-    const error = new Error("Refresh Token이 없습니다.");
-    error.code = "C005";
-    notifyAuthRequired({ reason: "missing_refresh_token" });
-    throw error;
-  }
-
+async function performReissue(refreshToken, sessionId) {
   try {
     const response = await requestJson({
       path: REISSUE_ENDPOINT,
@@ -48,7 +38,6 @@ export async function reissueAuthTokens({
       body: {
         refreshToken,
       },
-      signal,
       errorMessage: "토큰 재발급에 실패했습니다.",
     });
     const nextTokens = extractAuthTokens(response);
@@ -57,7 +46,7 @@ export async function reissueAuthTokens({
       throw new Error("토큰 재발급 응답에 Access Token이 없습니다.");
     }
 
-    if (sessionId !== getAuthSessionId() || signal?.aborted) {
+    if (sessionId !== getAuthSessionId()) {
       const error = new Error("Authentication session changed");
       error.name = "AbortError";
       throw error;
@@ -81,12 +70,65 @@ export async function reissueAuthTokens({
       error?.code === "C007";
 
     if (isAuthFailure && sessionId === getAuthSessionId()) {
-      clearAuthTokens();
+      await clearAuthTokens().catch(() => null);
       notifyAuthRequired({ reason: "refresh_failed" });
     }
 
     throw error;
   }
+}
+
+function waitForReissue(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    const error = new Error("Request aborted");
+    error.name = "AbortError";
+    return Promise.reject(error);
+  }
+
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      const error = new Error("Request aborted");
+      error.name = "AbortError";
+      reject(error);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => {
+      signal.removeEventListener("abort", onAbort);
+    });
+  });
+}
+
+function abortedRequest() {
+  const error = new Error("Request aborted");
+  error.name = "AbortError";
+  return Promise.reject(error);
+}
+
+export function reissueAuthTokens({
+  refreshToken = getAuthTokens().refreshToken,
+  signal,
+} = {}) {
+  if (signal?.aborted) return abortedRequest();
+  if (!refreshToken) {
+    const error = new Error("Refresh Token이 없습니다.");
+    error.code = "C005";
+    notifyAuthRequired({ reason: "missing_refresh_token" });
+    return Promise.reject(error);
+  }
+
+  const sessionId = getAuthSessionId();
+  if (pendingReissue?.sessionId === sessionId && pendingReissue.refreshToken === refreshToken) {
+    return waitForReissue(pendingReissue.promise, signal);
+  }
+
+  const promise = performReissue(refreshToken, sessionId);
+  pendingReissue = { sessionId, refreshToken, promise };
+  promise.then(
+    () => { if (pendingReissue?.promise === promise) pendingReissue = null; },
+    () => { if (pendingReissue?.promise === promise) pendingReissue = null; },
+  );
+  return waitForReissue(promise, signal);
 }
 
 export { reissueAuthTokens as reissueTokens };

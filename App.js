@@ -32,7 +32,7 @@ import {
 } from "./src/api/auth/tokens";
 import { blurActiveElement } from "./src/utils/accessibility";
 import { clearHomeCacheAsync } from "./src/api/homeCache";
-import { preloadHomeCache } from "./src/api/homePreload";
+import { cancelHomePreload, preloadHomeCache } from "./src/api/homePreload";
 import { subscribeAuthRequired } from "./src/api/auth/authEvents";
 import { reissueAuthTokens } from "./src/api/auth/reissue";
 import { exchangeGoogleAuthCode } from "./src/api/google";
@@ -196,12 +196,13 @@ function useAuthenticatedRoute(navigation, route) {
     async function prepareAuthenticatedRoute() {
       try {
         if (accessToken) {
+          await cancelHomePreload();
           await clearHomeCacheAsync();
           await setAuthTokens({ accessToken, refreshToken }, { persist: true });
 
           if (!didPreloadRef.current) {
             didPreloadRef.current = true;
-            await preloadHomeCache({ reset: true });
+            preloadHomeCache().catch(() => null);
           }
 
           if (isActive) {
@@ -213,7 +214,7 @@ function useAuthenticatedRoute(navigation, route) {
         if (getAccessToken()) {
           if (!didPreloadRef.current) {
             didPreloadRef.current = true;
-            await preloadHomeCache();
+            preloadHomeCache().catch(() => null);
           }
 
           if (isActive) {

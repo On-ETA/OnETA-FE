@@ -14,7 +14,7 @@ function formatBusNumberLabel(busNumber) {
     return "버스";
   }
 
-  return text.endsWith("번") ? text : `${text}번`;
+  return text.endsWith("번") || text.endsWith("호선") ? text : `${text}번`;
 }
 
 export function RouteTimeline({ segments: routeSegments = [], style }) {
