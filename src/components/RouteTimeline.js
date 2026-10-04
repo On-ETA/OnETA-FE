@@ -3,6 +3,11 @@ import { StyleSheet, Text, View } from "react-native";
 
 import SmallBusAsset from "../../assets/images/smallbus.svg";
 import BusGreenAsset from "../../assets/images/bus_g.svg";
+import BGaIcon from "../../assets/bus/b_ga.svg";
+import BJiIcon from "../../assets/bus/b_ji.svg";
+import BGwIcon from "../../assets/bus/b_gw.svg";
+import BSIcon from "../../assets/bus/b_s.svg";
+import BOIcon from "../../assets/bus/b_o.svg";
 import SubwayIcon from "../../assets/subway/subway_i.svg";
 import S1Icon from "../../assets/subway/s_1.svg";
 import S2Icon from "../../assets/subway/s_2.svg";
@@ -21,7 +26,7 @@ import GGIcon from "../../assets/subway/g_g.svg";
 import WalkAsset from "../../assets/images/man.svg";
 import { colors } from "../theme";
 import { normalizeTimelineSegments } from "../utils/routeSegments";
-import { getSubwayIconKey, getTransitColors } from "../utils/transitColors";
+import { getBusIconKey, getSubwayIconKey, getTransitColors } from "../utils/transitColors";
 
 const SUBWAY_ICONS = {
   s_1: S1Icon, s_2: S2Icon, s_3: S3Icon, s_4: S4Icon, s_5: S5Icon,
@@ -29,11 +34,23 @@ const SUBWAY_ICONS = {
   s_b: SBIcon, n_b: NBIcon, a_c: ACIcon, g_c: GCIcon, g_g: GGIcon,
 };
 
+const BUS_ICONS = {
+  b_ga: BGaIcon,
+  b_ji: BJiIcon,
+  b_gw: BGwIcon,
+  b_s: BSIcon,
+  b_o: BOIcon,
+};
+
 function formatBusNumberLabel(busNumber) {
   const text = String(busNumber ?? "").trim();
 
   if (/\uC218\uC778\uBD84\uB2F9/.test(text)) {
     return "\uC218\uC778\uBD84\uB2F9\uC120";
+  }
+
+  if (text.includes("신분당선")) {
+    return "신분당선";
   }
 
   if (!text) {
@@ -76,7 +93,7 @@ export function RouteTimeline({
                 flexGrow: 1 + Math.sqrt(Math.max(duration, 1) / totalDuration),
                 flexBasis: 0,
                 flexShrink: 1,
-                ...(isTransit && transitColors.isSubway && {
+                ...(isTransit && {
                   backgroundColor: transitColors.light,
                 }),
               },
@@ -151,22 +168,21 @@ export function RouteTimeline({
                     style={[
                       styles.busBadge,
                       {
-                        borderColor: getTransitColors(segment).isSubway
-                          ? getTransitColors(segment).light
-                          : colors.main,
+                        borderColor: getTransitColors(segment).light,
                         backgroundColor: colors.white,
                       },
                     ]}
                   >
                     {SegmentLineIcon ? (
                       <SegmentLineIcon width={13} height={13} />
-                    ) : (
-                      <BusGreenAsset width={13} height={13} />
-                    )}
+                    ) : (() => {
+                      const BusIcon = BUS_ICONS[getBusIconKey(segment)] ?? BusGreenAsset;
+                      return <BusIcon width={13} height={13} />;
+                    })()}
                     <Text
                       style={[
-                        styles.busNumber,
-                        { color: getTransitColors(segment).strong },
+                      styles.busNumber,
+                        { color: getTransitColors(segment).light },
                       ]}
                     >
                       {busNumber}
