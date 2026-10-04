@@ -14,6 +14,7 @@ import TrashIcon from "../../../../assets/images/trash_g.svg";
 import { RouteTimeline } from "../../../components/RouteTimeline";
 import { colors } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
+import { formatDurationMinutes } from "../../../utils/formatDuration";
 
 const PRE_DEPARTURE_ALARMS = [
   { key: "1", label: "1분 전" },
@@ -146,14 +147,14 @@ export function FirstLastRouteScreen({
                 <View style={styles.summaryBlock}>
                   <Text style={[styles.summaryLabel, styles.summaryLabelLeft]}>남은 시간</Text>
                   <View style={styles.remainingGroup}>
-                    <Text style={styles.remainingNumber}>
-                      {Number.isFinite(remainingMinutes)
-                        ? remainingMinutes
-                        : "--"}
+                    <Text
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.5}
+                      numberOfLines={1}
+                      style={[styles.remainingNumber, { flexShrink: 1 }]}
+                    >
+                      {formatDurationMinutes(remainingMinutes)}
                     </Text>
-                    {Number.isFinite(remainingMinutes) ? (
-                      <Text style={styles.remainingUnit}>분</Text>
-                    ) : null}
                   </View>
                 </View>
                 <View style={[styles.summaryBlock, styles.summaryBlockRight]}>
@@ -166,13 +167,16 @@ export function FirstLastRouteScreen({
 
               <View style={styles.routeDurationRow}>
                 <Text style={styles.summaryLabel}>
-                  {Number.isFinite(routeSummary.totalDurationMinutes) ? `총 ${routeSummary.totalDurationMinutes}분` : ""}
+                  {Number.isFinite(routeSummary.totalDurationMinutes) ? `총 ${formatDurationMinutes(routeSummary.totalDurationMinutes)}` : ""}
                 </Text>
                 <Text style={styles.summaryLabel}>
                   {routeSummary.arrivalTime ? `예상 도착 ${routeSummary.arrivalTime}` : ""}
                 </Text>
               </View>
-              <RouteTimeline segments={routeSummary.segments} />
+              <RouteTimeline
+                segments={routeSummary.segments}
+                formatDuration={formatDurationMinutes}
+              />
             </>
           ) : (
             <View style={styles.emptyRouteState}>
@@ -457,10 +461,13 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: 12,
   },
   summaryBlock: {
     gap: 8,
     alignItems: "flex-start",
+    flex: 1,
+    minWidth: 0,
   },
   summaryBlockRight: {
     alignItems: "flex-end",
@@ -481,6 +488,7 @@ const styles = StyleSheet.create({
   remainingGroup: {
     flexDirection: "row",
     alignItems: "flex-end",
+    alignSelf: "stretch",
   },
   remainingNumber: {
     fontFamily: "SUIT",

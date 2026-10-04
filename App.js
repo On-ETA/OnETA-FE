@@ -335,6 +335,7 @@ function TermsAgreementRoute({ navigation, route }) {
           email: route.params?.email,
           password: route.params?.password,
           signupTokens: consentTokens.accessToken ? consentTokens : signupTokens,
+          signupProvider: route.params?.signupProvider,
         });
       }}
       signupTokens={signupTokens}
@@ -346,6 +347,7 @@ function TermsAgreementRoute({ navigation, route }) {
 function SignupCompleteRoute({ navigation, route }) {
   return (
     <SignupCompleteScreen
+      isSocialSignup={Boolean(route.params?.signupProvider)}
       onLoginPress={() => {
         if (route.params?.signupTokens?.accessToken) {
           resetTo(navigation, routes.home, route.params.signupTokens);

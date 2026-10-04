@@ -41,6 +41,7 @@ import { AddressManagementScreen } from "../../AddressManagementScreen";
 import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 import { normalizeTimelineSegments } from "../../../utils/routeSegments";
+import { getRouteSetupPlaces } from "../../../utils/routeSetupPlaces";
 import {
   formatSeoulTime,
   parseEstimatedDepartureAt,
@@ -162,58 +163,7 @@ function parseInitialArrivalTime(value) {
 }
 
 function createInitialRoutePlaces(initialValues) {
-  const initialPlaces = initialValues?.routePlaces;
-
-  if (initialPlaces?.origin || initialPlaces?.destination) {
-    return {
-      origin: createRoutePlace(initialPlaces.origin),
-      destination: createRoutePlace(initialPlaces.destination),
-    };
-  }
-
-  const routeDetails = initialValues?.routeDetails ?? initialValues?.route;
-
-  if (!routeDetails) {
-    return {
-      origin: createRoutePlace(""),
-      destination: createRoutePlace(""),
-    };
-  }
-
-  return {
-    origin: createRoutePlace({
-      label:
-        routeDetails.originPlace?.label ??
-        routeDetails.originPlace?.name ??
-        routeDetails.originPlace?.placeName ??
-        routeDetails.origin ??
-        routeDetails.route?.origin ??
-        routeDetails.originAddress ??
-        routeDetails.route?.originAddress ??
-        "",
-      address:
-        routeDetails.originPlace?.address ??
-        routeDetails.originPlace?.detail ??
-        routeDetails.originAddress ??
-        routeDetails.route?.originAddress,
-    }),
-    destination: createRoutePlace({
-      label:
-        routeDetails.destinationPlace?.label ??
-        routeDetails.destinationPlace?.name ??
-        routeDetails.destinationPlace?.placeName ??
-        routeDetails.destination ??
-        routeDetails.route?.destination ??
-        routeDetails.destinationAddress ??
-        routeDetails.route?.destinationAddress ??
-        "",
-      address:
-        routeDetails.destinationPlace?.address ??
-        routeDetails.destinationPlace?.detail ??
-        routeDetails.destinationAddress ??
-        routeDetails.route?.destinationAddress,
-    }),
-  };
+  return getRouteSetupPlaces(initialValues);
 }
 
 function createRoutePlaceFromSearchResult(

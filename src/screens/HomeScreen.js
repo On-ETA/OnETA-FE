@@ -34,6 +34,7 @@ import { FirstLastRouteScreen } from "./home/first-last/FirstLastRouteScreen";
 import { MyPageScreen } from "./MyPageScreen";
 import { colors, layout } from "../theme";
 import { blurActiveElement } from "../utils/accessibility";
+import { getRouteSetupPlaces } from "../utils/routeSetupPlaces";
 import {
   createFirstLastRouteSummary,
   formatSeoulTime,
@@ -129,56 +130,8 @@ function getPlaceAddress(place) {
   return place?.address ?? place?.roadAddress ?? place?.detail ?? place?.label ?? place?.name ?? "";
 }
 
-function getRouteSetupPlace(place, address, x, y) {
-  const source = place && typeof place === "object" ? place : {};
-  const routePlace = source.raw ?? source;
-  const rawLatitude = source.y ?? routePlace.y ?? y;
-  const rawLongitude = source.x ?? routePlace.x ?? x;
-  const latitude = rawLatitude == null || rawLatitude === "" ? NaN : Number(rawLatitude);
-  const longitude = rawLongitude == null || rawLongitude === "" ? NaN : Number(rawLongitude);
-  const label =
-    source.label ||
-    source.name ||
-    source.placeName ||
-    (typeof place === "string" ? place : "") ||
-    source.address ||
-    address ||
-    "";
-  const placeAddress =
-    source.address ??
-    source.roadAddress ??
-    address ??
-    (typeof place === "string" ? place : label);
-
-  return {
-    ...source,
-    label,
-    name: source.name ?? label,
-    address: placeAddress,
-    x: Number.isFinite(longitude) ? longitude : undefined,
-    y: Number.isFinite(latitude) ? latitude : undefined,
-  };
-}
-
 function getFirstLastRouteSetupPlaces(summary) {
-  const details = summary?.route ?? {};
-  const route = details?.route ?? details;
-  const raw = route?.raw ?? route;
-
-  return {
-    origin: getRouteSetupPlace(
-      summary?.originPlace ?? details?.originPlace ?? details?.origin ?? route?.originPlace ?? route?.origin,
-      summary?.originAddress ?? details?.originAddress ?? route?.originAddress ?? raw?.originAddress,
-      summary?.originPlace?.x ?? details?.originX ?? route?.originX ?? raw?.originX,
-      summary?.originPlace?.y ?? details?.originY ?? route?.originY ?? raw?.originY,
-    ),
-    destination: getRouteSetupPlace(
-      summary?.destinationPlace ?? details?.destinationPlace ?? details?.destination ?? route?.destinationPlace ?? route?.destination,
-      summary?.destinationAddress ?? details?.destinationAddress ?? route?.destinationAddress ?? raw?.destinationAddress,
-      summary?.destinationPlace?.x ?? details?.destX ?? route?.destX ?? raw?.destX,
-      summary?.destinationPlace?.y ?? details?.destY ?? route?.destY ?? raw?.destY,
-    ),
-  };
+  return getRouteSetupPlaces(summary);
 }
 
 function getCurrentAddressLabel(addresses) {
@@ -654,9 +607,9 @@ export function HomeScreen({
                 initialStep={scheduleAlarmInitialStep}
                 initialValues={scheduleAlarmInitialValues}
                 scheduleType={
-                  scheduleAlarmInitialStep === "routeSetup"
+                  scheduleAlarmInitialValues?.scheduleType ?? (scheduleAlarmInitialStep === "routeSetup"
                     ? activeFirstLastScheduleType
-                    : "NORMAL"
+                    : "NORMAL")
                 }
                 mapTitle={
                   scheduleAlarmInitialStep === "routeSetup"
