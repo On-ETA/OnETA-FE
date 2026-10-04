@@ -13,6 +13,7 @@ import {
 } from "../api/homeCache";
 import {
   createTransitNotification,
+  deleteTransitNotification,
   getTransitNotifications,
   TRANSIT_SCHEDULE_TYPES,
 } from "../api/notifications/transit";
@@ -467,6 +468,24 @@ export function HomeScreen({
     });
   }, [firstLastRouteSummary]);
 
+  const handleRouteDeletePress = useCallback(async () => {
+    const scheduleType = activeFirstLastScheduleType;
+    const summary = firstLastRouteSummaries[scheduleType];
+
+    if (!summary?.notificationId) return;
+
+    try {
+      await deleteTransitNotification({ notificationId: summary.notificationId });
+      clearCachedFirstLastRouteSummary(scheduleType);
+      setFirstLastRouteSummaries((current) => ({
+        ...current,
+        [scheduleType]: null,
+      }));
+    } catch (error) {
+      console.warn("첫차·막차 경로 삭제 실패:", error?.code ?? error?.message);
+    }
+  }, [activeFirstLastScheduleType, firstLastRouteSummaries]);
+
   const handleScheduleAlarmAddPress = useCallback(() => {
     blurActiveElement();
     setIsScheduleAlarmAddVisible(true);
@@ -657,6 +676,19 @@ export function HomeScreen({
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
                 }}
+                onNightOnlyRouteSelect={(route, places) => {
+                  blurActiveElement();
+                  setFirstLastRouteSetupStep(null);
+                  setScheduleAlarmInitialStep("form");
+                  setScheduleAlarmInitialValues({
+                    selectedRoute: route,
+                    routePlaces: {
+                      origin: places.originPlace,
+                      destination: places.destinationPlace,
+                    },
+                  });
+                  setIsScheduleAlarmAddVisible(true);
+                }}
               />
             ) : editingCustomAlarm?.type === "schedule" ? (
               <ScheduleAlarmEditScreen
@@ -718,6 +750,7 @@ export function HomeScreen({
                 onMyPagePress={handleMyPagePress}
                 onRouteDetailPress={handleRouteDetailPress}
                 onRouteSetupPress={handleRouteSetupPress}
+                onRouteDeletePress={handleRouteDeletePress}
                 firstLastRouteSummary={firstLastRouteSummary}
                 onScheduleAlarmAddPress={handleScheduleAlarmAddPress}
                 onGarageAlarmEditPress={handleGarageAlarmEditPress}
@@ -746,6 +779,7 @@ const HomeDashboard = React.memo(function HomeDashboard({
   onMyPagePress,
   onFirstLastRouteSetupPress,
   firstLastRouteSummary,
+  onRouteDeletePress,
   onRouteDetailPress,
   onRouteSetupPress,
   onScheduleAlarmAddPress,
@@ -777,6 +811,7 @@ const HomeDashboard = React.memo(function HomeDashboard({
           onScheduleTypeChange={onFirstLastScheduleTypeChange}
           onRouteDetailPress={onRouteDetailPress}
           onRouteSetupPress={onRouteSetupPress}
+          onRouteDeletePress={onRouteDeletePress}
           routeSummary={firstLastRouteSummary}
         />
       )}

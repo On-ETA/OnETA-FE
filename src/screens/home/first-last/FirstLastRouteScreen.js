@@ -33,6 +33,7 @@ export function FirstLastRouteScreen({
   activeScheduleType = FIRST_TRANSIT,
   onScheduleTypeChange,
   onRouteDetailPress,
+  onRouteDeletePress,
   onRouteSetupPress,
   routeSummary,
 }) {
@@ -130,7 +131,7 @@ export function FirstLastRouteScreen({
                 <Pressable
                   accessibilityLabel="경로 삭제"
                   accessibilityRole="button"
-                  onPress={onRouteSetupPress}
+                  onPress={onRouteDeletePress}
                   style={styles.deleteButton}
                 >
                   <TrashIcon height={20} width={20} />

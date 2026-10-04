@@ -4,6 +4,7 @@ import { requestJson } from "../client";
 import {
   homeCacheKeys,
   readHomeCacheAsync,
+  removeHomeCache,
   writeHomeCacheAsync,
 } from "../homeCache";
 
@@ -312,4 +313,27 @@ export async function createTransitNotification({
   }).catch(() => null);
 
   return notification;
+}
+
+export async function deleteTransitNotification({
+  notificationId,
+  accessToken = getAccessToken(),
+  signal,
+} = {}) {
+  if (notificationId === undefined || notificationId === null || notificationId === "") {
+    throw new Error("삭제할 첫차·막차 경로 id가 필요합니다.");
+  }
+
+  const response = await requestTransitNotificationJson({
+    path: buildTransitNotificationEndpoint(notificationId),
+    method: "DELETE",
+    accessToken,
+    signal,
+    errorMessage: "첫차·막차 경로 삭제에 실패했습니다.",
+  });
+
+  removeHomeCache(homeCacheKeys.firstTransitNotifications);
+  removeHomeCache(homeCacheKeys.lastTransitNotifications);
+
+  return response;
 }
