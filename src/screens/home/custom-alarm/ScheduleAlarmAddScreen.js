@@ -463,10 +463,9 @@ export function ScheduleAlarmAddScreen({
   const [step, setStep] =
     useState(initialStep);
 
-  const [
-    selectedRoute,
-    setSelectedRoute,
-  ] = useState(null);
+  const [selectedRoute, setSelectedRoute] = useState(
+    () => initialValues?.selectedRoute ?? null,
+  );
 
   const [
     routePlaces,
@@ -482,7 +481,7 @@ export function ScheduleAlarmAddScreen({
     `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
 
   const handleNextPress = () => {
-    setStep("routeSetup");
+    setStep(selectedRoute ? "alarmFinal" : "routeSetup");
   };
 
   const handleBackPress = () => {
@@ -2322,6 +2321,7 @@ export function ScheduleRouteResultStep({
   initialDestination,
   initialOrigin,
   onBackPress,
+  onNightOnlyRouteSelect,
   onRouteSelect,
   scheduleType = "NORMAL",
 }) {
@@ -2364,6 +2364,26 @@ export function ScheduleRouteResultStep({
 
   const handleRouteSelect = async (selectedRoute) => {
     if (isSelectingRoute) return;
+
+    if (selectedRoute?.status === "NIGHT_ONLY") {
+      Alert.alert(
+        "심야버스 경로 안내",
+        "이 경로는 심야버스로 이동 가능한 경로예요.\n첫차·막차 알림 대신 원하는 도착 시간을 기준으로 알림을 받아보시겠어요?",
+        [
+          { text: "다른 경로 보기", style: "cancel" },
+          {
+            text: "내 일정 알림 설정하기",
+            onPress: () => onNightOnlyRouteSelect?.(selectedRoute, {
+              origin: getRoutePlaceText(origin),
+              destination: getRoutePlaceText(destination),
+              originPlace: origin,
+              destinationPlace: destination,
+            }),
+          },
+        ],
+      );
+      return;
+    }
 
     setIsSelectingRoute(true);
     setSelectionError("");
@@ -3628,7 +3648,7 @@ function WheelPickerColumn({
   valueRef.current = value;
   onChangeRef.current = onChange;
 
-  const initialCenterIndex = Math.floor((options.length - 1) / 2);
+  const selectedIndex = Math.max(options.indexOf(value), 0);
 
   const scrollToIndex = (
     index,
@@ -3653,11 +3673,11 @@ function WheelPickerColumn({
 
     const scrollTimer = setTimeout(() => {
       requestAnimationFrame(() => {
-        scrollToIndex(initialCenterIndex, false);
-        scrollOffsetRef.current = initialCenterIndex * TIME_PICKER_ITEM_HEIGHT;
-        lastReportedIndexRef.current = initialCenterIndex;
-        if (options[initialCenterIndex] !== valueRef.current) {
-          onChangeRef.current(options[initialCenterIndex]);
+        scrollToIndex(selectedIndex, false);
+        scrollOffsetRef.current = selectedIndex * TIME_PICKER_ITEM_HEIGHT;
+        lastReportedIndexRef.current = selectedIndex;
+        if (options[selectedIndex] !== valueRef.current) {
+          onChangeRef.current(options[selectedIndex]);
         }
         hasPositionedRef.current = true;
       });
@@ -3809,11 +3829,11 @@ function WheelPickerColumn({
         onLayout={() => {
           if (visible && !hasPositionedRef.current) {
             requestAnimationFrame(() => {
-              scrollToIndex(initialCenterIndex, false);
-              scrollOffsetRef.current = initialCenterIndex * TIME_PICKER_ITEM_HEIGHT;
-              lastReportedIndexRef.current = initialCenterIndex;
-              if (options[initialCenterIndex] !== valueRef.current) {
-                onChangeRef.current(options[initialCenterIndex]);
+              scrollToIndex(selectedIndex, false);
+              scrollOffsetRef.current = selectedIndex * TIME_PICKER_ITEM_HEIGHT;
+              lastReportedIndexRef.current = selectedIndex;
+              if (options[selectedIndex] !== valueRef.current) {
+                onChangeRef.current(options[selectedIndex]);
               }
               hasPositionedRef.current = true;
             });

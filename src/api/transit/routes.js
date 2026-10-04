@@ -131,6 +131,7 @@ function normalizeSegment(segment, index) {
     endStation: segment?.endStation ?? "",
     durationMinutes: getDurationMinutes(segment),
     transitName: segment?.transitName ?? "",
+    nightBus: Boolean(segment?.nightBus),
     stations: Array.isArray(segment?.stations)
       ? segment.stations.map(normalizeStation)
       : [],
@@ -156,6 +157,7 @@ export function normalizeTransitRoute(result) {
     totalCost: route?.totalCost,
     transferCount: route?.transferCount ?? 0,
     scheduleType: result?.scheduleType ?? route?.scheduleType,
+    status: result?.status ?? route?.status ?? "AVAILABLE",
     estimatedDepartureAt: result?.estimatedDepartureAt ?? route?.estimatedDepartureAt,
     segments,
     raw: route,

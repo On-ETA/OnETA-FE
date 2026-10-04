@@ -14,7 +14,7 @@ import Svg, { Path } from "react-native-svg";
 import MemoIcon from "../../../../public/images/memo.svg";
 import PlusIcon from "../../../../public/images/plus.svg";
 import BellGreenIcon from "../../../../assets/images/bell_green.svg";
-import BellWhiteIcon from "../../../../assets/images/bell_white.svg";
+import BellDarkGrayIcon from "../../../../assets/images/bell_dg.svg";
 import TrashIcon from "../../../../assets/images/trash.svg";
 import {
   deleteDepotNotification,
@@ -607,7 +607,7 @@ function GarageAlarmCard({
             {alarm.enabled ? (
               <BellGreenIcon height={24} width={24} />
             ) : (
-              <BellWhiteIcon height={24} width={24} />
+              <BellDarkGrayIcon height={24} width={24} />
             )}
           </View>
           <Text
@@ -860,7 +860,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sub,
   },
   garageAlarmButtonReady: {
-    backgroundColor: colors.main,
+    backgroundColor: colors.gray04,
   },
   garageAlarmButtonText: {
     maxWidth: 118,
@@ -878,7 +878,7 @@ const styles = StyleSheet.create({
     color: colors.main,
   },
   garageAlarmButtonTextReady: {
-    color: colors.white,
+    color: colors.gray07,
   },
   deleteText: {
     fontFamily: "SUIT",
