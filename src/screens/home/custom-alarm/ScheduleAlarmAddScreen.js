@@ -2354,6 +2354,23 @@ export function ScheduleRouteResultStep({
     setIsLoadingRoutes,
   ] = useState(false);
 
+  const [loadingDots, setLoadingDots] = useState("");
+
+  useEffect(() => {
+    if (!isLoadingRoutes) {
+      setLoadingDots("");
+      return undefined;
+    }
+
+    let dotCount = 0;
+    const timer = setInterval(() => {
+      dotCount = (dotCount + 1) % 4;
+      setLoadingDots(".".repeat(dotCount));
+    }, 400);
+
+    return () => clearInterval(timer);
+  }, [isLoadingRoutes]);
+
   const [
     routeError,
     setRouteError,
@@ -2589,13 +2606,8 @@ export function ScheduleRouteResultStep({
               styles.routeStatusBox
             }
           >
-            <Text
-              style={
-                styles.routeStatusText
-              }
-            >
-              경로를 검색하고
-              있습니다.
+            <Text style={styles.routeStatusText}>
+              경로 검색중입니다{loadingDots}
             </Text>
           </View>
         ) : routeError ||
