@@ -10,19 +10,20 @@ import { Linking, Platform } from "react-native";
 import { buildApiUrl, requestJson } from "./client";
 
 const GOOGLE_AUTH_ENDPOINT = buildApiUrl("/oauth2/authorization/google");
-const SOCIAL_SIGNUP_REDIRECT_PATH = "/signup/consent";
+const GOOGLE_CALLBACK_PATH = "/oauth/callback";
 export const NATIVE_GOOGLE_REDIRECT_URI = "oneta://oauth/callback";
 const GOOGLE_CODE_EXCHANGE_ENDPOINT = "/api/auth/oauth/google/exchange";
 
-function getSocialSignupRedirectUri() {
+function getGoogleRedirectUri() {
+  if (Platform.OS !== "web") return NATIVE_GOOGLE_REDIRECT_URI;
   if (typeof window === "undefined" || !window.location?.origin) {
     return undefined;
   }
 
-  return `${window.location.origin}${SOCIAL_SIGNUP_REDIRECT_PATH}`;
+  return `${window.location.origin}${GOOGLE_CALLBACK_PATH}`;
 }
 
-export function getGoogleAuthUrl({ redirectUri = getSocialSignupRedirectUri() } = {}) {
+export function getGoogleAuthUrl({ redirectUri = getGoogleRedirectUri() } = {}) {
   const resolvedRedirectUri =
     redirectUri ??
     (Platform.OS === "web" ? undefined : NATIVE_GOOGLE_REDIRECT_URI);
@@ -34,12 +35,14 @@ export function getGoogleAuthUrl({ redirectUri = getSocialSignupRedirectUri() } 
   const url = new URL(GOOGLE_AUTH_ENDPOINT);
 
   url.searchParams.set("redirect_uri", resolvedRedirectUri);
-  url.searchParams.set("redirectUri", resolvedRedirectUri);
 
   return url.toString();
 }
 
 export async function exchangeGoogleAuthCode({ code, signal }) {
+  if (typeof code !== "string" || !code.trim()) {
+    throw new Error("Google 로그인 코드가 없습니다. 다시 로그인해 주세요.");
+  }
   const response = await requestJson({
     path: GOOGLE_CODE_EXCHANGE_ENDPOINT,
     method: "POST",
@@ -50,6 +53,16 @@ export async function exchangeGoogleAuthCode({ code, signal }) {
 
   if (response?.code && response.code !== "SUCCESS") {
     throw new Error(response.message ?? "Google 로그인 확인에 실패했습니다.");
+  }
+
+  const data = response?.data;
+  const hasTempId = typeof data?.tempId === "string" && Boolean(data.tempId.trim());
+  const hasTokens =
+    typeof data?.accessToken === "string" && Boolean(data.accessToken.trim()) &&
+    typeof data?.refreshToken === "string" && Boolean(data.refreshToken.trim());
+
+  if (!hasTempId && !hasTokens) {
+    throw new Error("Google 로그인 응답에 인증 정보가 없습니다. 다시 로그인해 주세요.");
   }
 
   return response;

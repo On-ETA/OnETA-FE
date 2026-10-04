@@ -1,7 +1,7 @@
 import { notifyAuthRequired } from "./auth/authEvents";
 
 const DEFAULT_API_BASE_URL = "https://api.on-eta.com";
-const DEFAULT_TIMEOUT_MS = 10000;
+const DEFAULT_TIMEOUT_MS = 30000;
 const configuredApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
 
 export const API_BASE_URL =

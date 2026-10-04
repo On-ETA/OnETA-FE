@@ -290,13 +290,13 @@ test("notification navigation waits for navigation readiness and authenticated h
   let ready = false, accessToken = null, current = "Login";
   const navigated = [];
   const ref = { isReady: () => ready, getCurrentRoute: () => ({ name: current }),
-    navigate: (route) => navigated.push(route) };
+    reset: (state) => navigated.push(state.routes[state.index].name) };
   const nav = load("src/notifications/navigation.js", {
     "@react-navigation/native": { createNavigationContainerRef: () => ref },
     "../api/auth/tokens": { getAccessToken: () => accessToken },
-    "../navigation/routes": { routes: { login: "Login", notifications: "Notifications" } },
+    "../navigation/routes": { routes: { login: "Login", home: "Home" } },
   });
-  nav.openNotificationInbox();
+  nav.openNotificationHome();
   ready = true;
   nav.flushNotificationNavigation();
   accessToken = "a";
@@ -305,7 +305,7 @@ test("notification navigation waits for navigation readiness and authenticated h
   current = "Home";
   nav.flushNotificationNavigation();
   nav.flushNotificationNavigation();
-  assert.deepEqual(navigated, ["Notifications"]);
+  assert.deepEqual(navigated, ["Home"]);
 });
 
 test("web FCM adapter never imports a native Firebase module", async () => {

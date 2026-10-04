@@ -176,6 +176,39 @@ export async function updateDepotNotification({
   return response;
 }
 
+export async function updateDepotNotificationStatus({
+  userBusId,
+  active,
+  accessToken = getAccessToken(),
+  signal,
+} = {}) {
+  if (userBusId === undefined || userBusId === null || userBusId === "") {
+    throw new Error("사용자 버스 id가 필요합니다.");
+  }
+  if (typeof active !== "boolean") {
+    throw new Error("활성화 여부(active)를 지정해주세요.");
+  }
+
+  const response = await requestDepotNotificationJson({
+    path: `${buildDepotNotificationEndpoint(userBusId)}/status`,
+    method: "PATCH",
+    body: { active },
+    accessToken,
+    signal,
+    errorMessage: "차고지 출발 알림 상태 변경에 실패했습니다.",
+  });
+
+  const cached = readHomeCache(homeCacheKeys.depotNotifications);
+  if (cached) {
+    writeHomeCache(homeCacheKeys.depotNotifications, cached.map((alarm) =>
+      String(alarm.userBusId) === String(userBusId)
+        ? { ...alarm, enabled: active, raw: { ...alarm.raw, active } }
+        : alarm,
+    ));
+  }
+  return response;
+}
+
 export async function deleteDepotNotification({
   userBusId,
   accessToken = getAccessToken(),
