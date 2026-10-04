@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import DirectionCircleAsset from "../../../../assets/images/circle.svg";
 import StopLineAsset from "../../../../assets/images/line.svg";
 
 import {
+  getArrivalNotifications,
   getArrivalNotificationById,
   updateArrivalNotification,
 } from "../../../api/notifications/arrival";
@@ -78,15 +80,20 @@ function formatTargetArrivalTimeForApi(time) {
   if (typeof time === "string") {
     const [hour = "00", minute = "00", second = "00"] = time.split(":");
 
-    return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}:${second.padStart(
-      2,
-      "0",
-    )}`;
+    return {
+      hour: Number(hour),
+      minute: Number(minute),
+      second: Number(second),
+      nano: 0,
+    };
   }
 
-  return `${String(time.hour ?? 0).padStart(2, "0")}:${String(
-    time.minute ?? 0,
-  ).padStart(2, "0")}:${String(time.second ?? 0).padStart(2, "0")}`;
+  return {
+    hour: Number(time.hour ?? 0),
+    minute: Number(time.minute ?? 0),
+    second: Number(time.second ?? 0),
+    nano: Number(time.nano ?? 0),
+  };
 }
 
 function getPrimaryTransitSegment(route) {
@@ -229,6 +236,7 @@ export function ScheduleAlarmEditScreen({
   const [isLoadingAlarm, setIsLoadingAlarm] = useState(false);
   const [isSavingAlarm, setIsSavingAlarm] = useState(false);
   const [alarmError, setAlarmError] = useState("");
+  const [isReminderModalVisible, setIsReminderModalVisible] = useState(false);
   const notificationId = getNotificationId(alarm);
   const route = getAlarmRoute(arrivalAlarm);
   const primarySegment = useMemo(() => getPrimaryTransitSegment(route), [route]);
@@ -245,12 +253,35 @@ export function ScheduleAlarmEditScreen({
   const reminderText = Array.isArray(arrivalAlarm?.reminderOffsetMinutes)
     ? `${arrivalAlarm.reminderOffsetMinutes.join(", ")}분 전 알림`
     : "10분 전 알림";
+  const reminderOffsets = Array.isArray(arrivalAlarm?.reminderOffsetMinutes)
+    ? arrivalAlarm.reminderOffsetMinutes
+    : [];
+  const reminderOffsetsText = reminderOffsets
+    .map((offset) => `${offset}분 전`)
+    .join(", ");
+  const toggleReminderOffset = (offset) => {
+    const current = reminderOffsets.map(Number);
+    const next = current.includes(Number(offset))
+      ? current.filter((value) => value !== Number(offset))
+      : [...current, Number(offset)].sort((a, b) => a - b);
+
+    setArrivalAlarm((currentAlarm) => ({
+      ...currentAlarm,
+      reminderOffsetMinutes: next,
+    }));
+  };
   const totalDuration =
     route?.realTimeDurationMinutes ?? route?.totalDurationMinutes ?? 0;
   const formattedStartTime = getFormattedStartTime(
     arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
     totalDuration,
   );
+  const firstReminderStartTime = reminderOffsets.length
+    ? getFormattedStartTime(
+        arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
+        totalDuration + Number(reminderOffsets[0]),
+      )
+    : formattedStartTime;
 
   useEffect(() => {
     if (!notificationId) {
@@ -277,6 +308,30 @@ export function ScheduleAlarmEditScreen({
         }
       } catch (error) {
         if (isActive) {
+          try {
+            const notifications = await getArrivalNotifications({
+              forceRefresh: true,
+              signal: controller.signal,
+            });
+            const fallbackAlarm = notifications.find(
+              (notification) =>
+                String(notification?.notificationId ?? notification?.id).replace(
+                  /^arrival-/,
+                  "",
+                ) === String(notificationId),
+            );
+
+            if (fallbackAlarm) {
+              setArrivalAlarm(fallbackAlarm);
+              setRouteName(fallbackAlarm.routeName ?? "");
+              setSelectedDays(getRepeatDays(fallbackAlarm.repeatDays));
+              setAlarmError("");
+              return;
+            }
+          } catch {
+            // Keep the original detail request error when the list fallback also fails.
+          }
+
           setAlarmError(error?.message ?? "도착 알림을 불러오지 못했습니다.");
         }
       } finally {
@@ -446,12 +501,17 @@ export function ScheduleAlarmEditScreen({
             value={routeName}
           />
 
-          <Text style={styles.sectionLabel}>출발 알림</Text>
-          <Pressable accessibilityRole="button" style={styles.reminderSelect}>
+          <Text style={styles.questionText}>출발 시간 몇 분 전에 알려드릴까요?</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setIsReminderModalVisible(true)}
+            style={styles.reminderSelect}
+          >
             <Text style={styles.reminderText}>{reminderText}</Text>
             <ChevronDownIcon />
           </Pressable>
 
+          <Text style={styles.repeatQuestionText}>요일마다 반복할까요?</Text>
           <View style={styles.dayRow}>
             {days.map((day) => {
               const selected = selectedDays.includes(day);
@@ -480,9 +540,11 @@ export function ScheduleAlarmEditScreen({
 
         <View style={styles.footer}>
           <View style={styles.infoBox}>
-            <Text style={styles.infoText}>{arrivalTime}까지 도착하실 수 있도록,</Text>
+            <Text style={styles.infoText}>{`${formattedArrivalTime}까지 도착할 수 있도록`}</Text>
             <Text style={styles.infoText}>
-              설정된 출발 전 알림 시간에 맞춰 알려드릴게요.
+              {reminderOffsetsText
+                ? `실시간 교통정보를 반영해 출발 적정 시간을 확인하고, ${reminderOffsetsText}에 알려드릴게요.`
+                : "알림 시간을 선택하면 출발 전 알림을 알려드릴게요."}
             </Text>
           </View>
           <View style={styles.footerButtons}>
@@ -505,6 +567,12 @@ export function ScheduleAlarmEditScreen({
           </View>
         </View>
       </ScrollView>
+      <ReminderModal
+        onClose={() => setIsReminderModalVisible(false)}
+        onToggle={toggleReminderOffset}
+        reminders={reminderOffsets}
+        visible={isReminderModalVisible}
+      />
     </View>
   );
 }
@@ -697,6 +765,50 @@ export function GarageDepartureAlarmEditScreen({
         </Pressable>
       </View>
     </View>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <Svg height={20} viewBox="0 0 20 20" width={20}>
+      <Path
+        d="m5.5 5.5 9 9M14.5 5.5l-9 9"
+        fill="none"
+        stroke={colors.gray05}
+        strokeLinecap="round"
+        strokeWidth={1.8}
+      />
+    </Svg>
+  );
+}
+
+function ReminderModal({ onClose, onToggle, reminders, visible }) {
+  const options = [[1, "1분 전"], [3, "3분 전"], [5, "5분 전"], [10, "10분 전"], [15, "15분 전"], [30, "30분 전"], [60, "1시간 전"]];
+
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
+      <View style={styles.reminderOverlay}>
+        <View style={styles.reminderCard}>
+          <View style={styles.reminderHeader}>
+            <Text style={styles.reminderTitle}>미리 알림 설정</Text>
+            <Pressable accessibilityRole="button" onPress={onClose} style={styles.reminderCloseButton}>
+              <CloseIcon />
+            </Pressable>
+          </View>
+          {options.map(([value, label]) => {
+            const selected = reminders.map(Number).includes(value);
+            return (
+              <Pressable key={value} onPress={() => onToggle(value)} style={styles.reminderRow}>
+                <Text style={styles.reminderOptionText}>{label}</Text>
+                <View style={[styles.reminderSwitch, selected && styles.reminderSwitchOn]}>
+                  <View style={styles.reminderSwitchThumb} />
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -1028,6 +1140,23 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: colors.gray09,
   },
+  questionText: {
+    marginBottom: 12,
+    fontFamily: "SUIT",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 21,
+    color: colors.gray09,
+  },
+  repeatQuestionText: {
+    marginTop: 28,
+    marginBottom: 12,
+    fontFamily: "SUIT",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 21,
+    color: colors.gray09,
+  },
   nameInput: {
     height: 54,
     marginBottom: 28,
@@ -1089,7 +1218,7 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   footer: {
-    marginTop: "auto",
+    marginTop: 40,
     paddingHorizontal: 20,
     paddingBottom: 28,
     backgroundColor: colors.white,
@@ -1242,4 +1371,59 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.main,
   },
+  reminderOverlay: {
+    flex: 1,
+    paddingHorizontal: 20,
+    justifyContent: "center",
+    backgroundColor: "rgba(52, 56, 59, 0.32)",
+  },
+  reminderCard: {
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 26,
+    borderRadius: 16,
+    backgroundColor: colors.white,
+  },
+  reminderHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  reminderTitle: {
+    fontFamily: "SUIT",
+    fontSize: 16,
+    fontWeight: "800",
+    lineHeight: 22.4,
+    color: colors.gray07,
+  },
+  reminderCloseButton: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reminderRow: {
+    minHeight: 35,
+    marginTop: 21,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  reminderOptionText: {
+    fontFamily: "SUIT",
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 28,
+    color: colors.gray08,
+  },
+  reminderSwitch: {
+    width: 44,
+    height: 26,
+    padding: 3,
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: colors.gray05,
+  },
+  reminderSwitchOn: { alignItems: "flex-end", backgroundColor: colors.main },
+  reminderSwitchThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.white },
 });

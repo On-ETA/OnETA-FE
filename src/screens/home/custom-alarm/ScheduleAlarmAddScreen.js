@@ -2354,6 +2354,23 @@ export function ScheduleRouteResultStep({
     setIsLoadingRoutes,
   ] = useState(false);
 
+  const [loadingDots, setLoadingDots] = useState("");
+
+  useEffect(() => {
+    if (!isLoadingRoutes) {
+      setLoadingDots("");
+      return undefined;
+    }
+
+    let dotCount = 0;
+    const timer = setInterval(() => {
+      dotCount = (dotCount + 1) % 4;
+      setLoadingDots(".".repeat(dotCount));
+    }, 400);
+
+    return () => clearInterval(timer);
+  }, [isLoadingRoutes]);
+
   const [
     routeError,
     setRouteError,
@@ -2589,13 +2606,8 @@ export function ScheduleRouteResultStep({
               styles.routeStatusBox
             }
           >
-            <Text
-              style={
-                styles.routeStatusText
-              }
-            >
-              경로를 검색하고
-              있습니다.
+            <Text style={styles.routeStatusText}>
+              경로 검색중입니다{loadingDots}
             </Text>
           </View>
         ) : routeError ||
@@ -2864,6 +2876,12 @@ function ScheduleAlarmFinalStep({
           displayDuration + Number(selectedReminderOffsets[0]),
         )}에 알려드릴게요.`
       : "알림 시간을 선택하면 출발 전 알림을 알려드릴게요.";
+  const finalInfoRealTimeText =
+    selectedReminderOffsets.length > 0
+      ? `실시간 교통정보를 반영해 출발 적정 시간을 확인하고, ${selectedReminderOffsets
+          .map((offset) => `${offset}분 전`)
+          .join(", ")}에 알려드릴게요.`
+      : "";
   const toggleDay = (day) => {
     setSelectedDays(
       (current) =>
@@ -3226,8 +3244,14 @@ function ScheduleAlarmFinalStep({
         </View>
 
         <View style={styles.finalInfoBox}>
-          <Text style={styles.finalInfoText}>{finalInfoText}</Text>
-          <Text style={styles.finalInfoText}>{finalInfoSubText}</Text>
+          {finalInfoRealTimeText ? (
+            <>
+              <Text style={styles.finalInfoText}>
+                {formattedArrivalTime}까지 도착할 수 있도록
+              </Text>
+              <Text style={styles.finalInfoText}>{finalInfoRealTimeText}</Text>
+            </>
+          ) : null}
         </View>
       </View>
 
