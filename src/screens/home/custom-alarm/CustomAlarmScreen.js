@@ -19,6 +19,7 @@ import TrashIcon from "../../../../assets/images/trash.svg";
 import {
   deleteDepotNotification,
   getMyDepotNotifications,
+  updateDepotNotificationStatus,
 } from "../../../api/notifications/depot";
 import {
   deleteArrivalNotifications,
@@ -28,6 +29,7 @@ import {
 } from "../../../api/notifications/arrival";
 import { colors, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
+import { subscribeNotifications } from "../../../notifications/events";
 
 // TODO: API 연동 시 아래 더미 데이터를 교체하세요.
 // GET /home/custom-alarms
@@ -119,6 +121,12 @@ export function CustomAlarmScreen({
   const [scheduleAlarmError, setScheduleAlarmError] = useState("");
   const [isDeletingAlarms, setIsDeletingAlarms] = useState(false);
   const [updatingScheduleAlarmIds, setUpdatingScheduleAlarmIds] = useState([]);
+  const [updatingGarageAlarmIds, setUpdatingGarageAlarmIds] = useState([]);
+  const [notificationRefreshKey, setNotificationRefreshKey] = useState(0);
+
+  useEffect(() => subscribeNotifications(() => {
+    setNotificationRefreshKey((value) => value + 1);
+  }), []);
   const [editingSections, setEditingSections] = useState({
     garage: false,
     schedule: false,
@@ -140,7 +148,7 @@ export function CustomAlarmScreen({
 
       try {
         const alarms = await getMyDepotNotifications({
-          forceRefresh: refreshKey > 0,
+          forceRefresh: true,
           signal: controller.signal,
         });
 
@@ -167,7 +175,7 @@ export function CustomAlarmScreen({
 
       try {
         const alarms = await getArrivalNotifications({
-          forceRefresh: refreshKey > 0,
+          forceRefresh: refreshKey > 0 || notificationRefreshKey > 0,
           signal: controller.signal,
         });
 
@@ -195,7 +203,7 @@ export function CustomAlarmScreen({
       isActive = false;
       controller.abort();
     };
-  }, [refreshKey]);
+  }, [refreshKey, notificationRefreshKey]);
 
   const toggleEditSection = (sectionKey) => {
     setEditingSections((current) => {
@@ -229,18 +237,24 @@ export function CustomAlarmScreen({
     setDeleteTargetIds([alarmId]);
   };
 
-  const toggleGarageAlarm = (alarmId) => {
-    if (!alarmId) {
+  const toggleGarageAlarm = async (alarmId) => {
+    const target = garageAlarms.find((alarm) => getGarageAlarmUiId(alarm) === alarmId);
+    const userBusId = getDepotNotificationId(target);
+    if (!target || !userBusId || updatingGarageAlarmIds.includes(alarmId)) {
       return;
     }
-
-    setGarageAlarms((current) =>
-      current.map((alarm) =>
-        getGarageAlarmUiId(alarm) === alarmId
-          ? { ...alarm, enabled: !alarm.enabled }
-          : alarm,
-      ),
-    );
+    const active = !target.enabled;
+    setUpdatingGarageAlarmIds((ids) => [...ids, alarmId]);
+    try {
+      await updateDepotNotificationStatus({ userBusId, active });
+      setGarageAlarms((current) => current.map((alarm) =>
+        getGarageAlarmUiId(alarm) === alarmId ? { ...alarm, enabled: active } : alarm,
+      ));
+    } catch (error) {
+      Alert.alert("알림 상태 변경 실패", error?.message ?? "차고지 출발 알림 상태 변경에 실패했습니다.");
+    } finally {
+      setUpdatingGarageAlarmIds((ids) => ids.filter((id) => id !== alarmId));
+    }
   };
 
   const toggleScheduleAlarm = async (alarmId) => {
@@ -414,6 +428,7 @@ export function CustomAlarmScreen({
                     onGarageAlarmEditPress?.(alarm);
                   }}
                   onToggleAlarm={() => toggleGarageAlarm(alarmId)}
+                  updating={updatingGarageAlarmIds.includes(alarmId)}
                   selected={selected}
                 />
               );
@@ -541,6 +556,7 @@ function GarageAlarmCard({
   onPress,
   onToggleAlarm,
   selected,
+  updating,
 }) {
   return (
     <View style={[styles.garageCard, selected && styles.selectedItem]}>
@@ -578,6 +594,8 @@ function GarageAlarmCard({
         <Pressable
           accessibilityRole="button"
           onPress={onToggleAlarm}
+          disabled={updating}
+          accessibilityState={{ disabled: updating }}
           style={[
             styles.garageAlarmButton,
             alarm.enabled
@@ -602,7 +620,7 @@ function GarageAlarmCard({
                 : styles.garageAlarmButtonTextReady,
             ]}
           >
-            {alarm.enabled ? "알림 설정됨" : "출발 알림"}
+            {alarm.enabled ? "알림 설정됨" : "알림 해제됨"}
           </Text>
         </Pressable>
       )}

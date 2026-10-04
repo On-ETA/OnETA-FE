@@ -32,7 +32,12 @@ import {
 } from "../../../api/notifications/transit";
 import { colors, layout } from "../../../theme";
 import { normalizeTimelineSegments } from "../../../utils/routeSegments";
-import { getBusIconKey, getSubwayIconKey, getTransitColors } from "../../../utils/transitColors";
+import {
+  getBusIconKey,
+  getSubwayIconKey,
+  getTransitColors,
+} from "../../../utils/transitColors";
+import { formatDurationMinutes } from "../../../utils/formatDuration";
 
 const DETAIL_TRANSIT_ICONS = {
   b_ga: BGaIcon,
@@ -323,7 +328,7 @@ function TimelineSummary({ items }) {
                     styles.timelineTextOn,
                 ]}
               >
-                {item.minutes}분
+                {formatDurationMinutes(item.minutes)}
               </Text>
             </View>
           </View>
@@ -426,7 +431,7 @@ function WalkStep({ step }) {
         <View style={styles.dottedLine} />
 
         <Text style={styles.walkMinutes}>
-          {step.minutes ?? 0}분
+          {formatDurationMinutes(step.minutes ?? 0)}
         </Text>
       </View>
     </View>
@@ -533,7 +538,7 @@ function BusStep({ step }) {
             <Text
               style={styles.busMinutes}
             >
-              {step.minutes}분
+              {formatDurationMinutes(step.minutes)}
             </Text>
           )}
         </View>

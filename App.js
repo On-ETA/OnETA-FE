@@ -324,7 +324,10 @@ function TermsAgreementRoute({ navigation, route }) {
 
   return (
     <TermsAgreementScreen
-      onBackPress={() => goBackOrReset(navigation, routes.signup)}
+      onBackPress={() => goBackOrReset(
+        navigation,
+        route.params?.signupProvider === "google" ? routes.login : routes.signup,
+      )}
       onConfirmPress={(response) => {
         const consentTokens = extractAuthTokens(response);
 
@@ -332,6 +335,7 @@ function TermsAgreementRoute({ navigation, route }) {
           email: route.params?.email,
           password: route.params?.password,
           signupTokens: consentTokens.accessToken ? consentTokens : signupTokens,
+          signupProvider: route.params?.signupProvider,
         });
       }}
       signupTokens={signupTokens}
@@ -343,6 +347,7 @@ function TermsAgreementRoute({ navigation, route }) {
 function SignupCompleteRoute({ navigation, route }) {
   return (
     <SignupCompleteScreen
+      isSocialSignup={Boolean(route.params?.signupProvider)}
       onLoginPress={() => {
         if (route.params?.signupTokens?.accessToken) {
           resetTo(navigation, routes.home, route.params.signupTokens);
@@ -416,7 +421,7 @@ function OAuthCallbackRoute({ navigation, route }) {
         if (data.tempId !== undefined && data.tempId !== null) {
           resetTo(navigation, routes.termsAgreement, {
             tempId: data.tempId,
-            signupTokens: data.signupTokens,
+            signupProvider: "google",
           });
           return;
         }
@@ -426,6 +431,8 @@ function OAuthCallbackRoute({ navigation, route }) {
           throw new Error("Google 로그인 응답에 인증 정보가 없습니다.");
         }
 
+        await cancelHomePreload();
+        await clearHomeCacheAsync();
         await setAuthTokens(authTokens, { persist: true });
         resetTo(navigation, routes.home);
       } catch (error) {

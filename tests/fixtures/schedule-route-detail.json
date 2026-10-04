@@ -1,0 +1,187 @@
+{
+    "code": "SUCCESS",
+    "message": "요청이 성공적으로 처리되었습니다.",
+    "data": {
+        "category": "SCHEDULE",
+        "isActive": true,
+        "notificationId": 89,
+        "reminderOffsetMinutes": [
+            10
+        ],
+        "repeatDays": [],
+        "route": {
+            "routeId": "KAKAO_d1afc7a49462051f",
+            "provider": "KAKAO",
+            "originAddress": "서울 마포구 와우산로 94",
+            "destinationAddress": "서울 마포구 성미산로 55",
+            "totalDurationMinutes": 21,
+            "realTimeDurationMinutes": 21,
+            "totalCost": 1200,
+            "transferCount": 0,
+            "segments": [
+                {
+                    "transitType": "WALK",
+                    "startStation": "",
+                    "endStation": "홍대정문",
+                    "durationMinutes": 6,
+                    "transitName": "",
+                    "busType": null,
+                    "stations": [
+                        {
+                            "name": "홍대정문",
+                            "sequence": 1,
+                            "stationId": null,
+                            "x": null,
+                            "y": null,
+                            "arsId": null
+                        }
+                    ],
+                    "odsayStartStationId": null,
+                    "odsayRouteId": null,
+                    "startX": 126.925554591431,
+                    "startY": 37.550874837441,
+                    "localCityCode": null,
+                    "localStationId": null,
+                    "localRouteId": null,
+                    "arsId": null,
+                    "odsayEndStationId": null,
+                    "busProviderCode": null,
+                    "subwayCode": null,
+                    "subwayCityCode": null,
+                    "way": null,
+                    "wayCode": null,
+                    "endX": 126.92461409,
+                    "endY": 37.55310477,
+                    "scheduledWaitMinutes": null,
+                    "realTimeArrivalSeconds": null,
+                    "realTimeSource": null
+                },
+                {
+                    "transitType": "BUS",
+                    "startStation": "홍대정문",
+                    "endStation": "성서초등학교",
+                    "durationMinutes": 12,
+                    "transitName": "마포08",
+                    "busType": null,
+                    "stations": [
+                        {
+                            "name": "홍대정문",
+                            "sequence": 1,
+                            "stationId": null,
+                            "x": null,
+                            "y": null,
+                            "arsId": null
+                        },
+                        {
+                            "name": "레드로드입구",
+                            "sequence": 2,
+                            "stationId": null,
+                            "x": null,
+                            "y": null,
+                            "arsId": null
+                        },
+                        {
+                            "name": "서교동교회",
+                            "sequence": 3,
+                            "stationId": null,
+                            "x": null,
+                            "y": null,
+                            "arsId": null
+                        },
+                        {
+                            "name": "우리은행서교동지점",
+                            "sequence": 4,
+                            "stationId": null,
+                            "x": null,
+                            "y": null,
+                            "arsId": null
+                        },
+                        {
+                            "name": "서교동주민센터",
+                            "sequence": 5,
+                            "stationId": null,
+                            "x": null,
+                            "y": null,
+                            "arsId": null
+                        },
+                        {
+                            "name": "희성교회",
+                            "sequence": 6,
+                            "stationId": null,
+                            "x": null,
+                            "y": null,
+                            "arsId": null
+                        },
+                        {
+                            "name": "성서초등학교",
+                            "sequence": 7,
+                            "stationId": null,
+                            "x": null,
+                            "y": null,
+                            "arsId": null
+                        }
+                    ],
+                    "odsayStartStationId": null,
+                    "odsayRouteId": null,
+                    "startX": 126.92461409,
+                    "startY": 37.55310477,
+                    "localCityCode": null,
+                    "localStationId": null,
+                    "localRouteId": null,
+                    "arsId": null,
+                    "odsayEndStationId": null,
+                    "busProviderCode": null,
+                    "subwayCode": null,
+                    "subwayCityCode": null,
+                    "way": null,
+                    "wayCode": null,
+                    "endX": 126.91288635,
+                    "endY": 37.55872941,
+                    "scheduledWaitMinutes": null,
+                    "realTimeArrivalSeconds": null,
+                    "realTimeSource": null
+                },
+                {
+                    "transitType": "WALK",
+                    "startStation": "성서초등학교",
+                    "endStation": "",
+                    "durationMinutes": 4,
+                    "transitName": "",
+                    "busType": null,
+                    "stations": [
+                        {
+                            "name": "성서초등학교",
+                            "sequence": 1,
+                            "stationId": null,
+                            "x": 126.91288635,
+                            "y": 37.55872941,
+                            "arsId": null
+                        }
+                    ],
+                    "odsayStartStationId": null,
+                    "odsayRouteId": null,
+                    "startX": 126.91288635,
+                    "startY": 37.55872941,
+                    "localCityCode": null,
+                    "localStationId": null,
+                    "localRouteId": null,
+                    "arsId": null,
+                    "odsayEndStationId": null,
+                    "busProviderCode": null,
+                    "subwayCode": null,
+                    "subwayCityCode": null,
+                    "way": null,
+                    "wayCode": null,
+                    "endX": 126.914234922156,
+                    "endY": 37.5594419505475,
+                    "scheduledWaitMinutes": null,
+                    "realTimeArrivalSeconds": null,
+                    "realTimeSource": null
+                }
+            ]
+        },
+        "routeName": "서울 마포구 와우산로 94-서울 마포구 성미산로 55",
+        "scheduleType": "NORMAL",
+        "targetArrivalTime": "13:25:00"
+    }
+}

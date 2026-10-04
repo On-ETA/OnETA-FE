@@ -60,7 +60,11 @@ function formatBusNumberLabel(busNumber) {
   return text.endsWith("번") || text.endsWith("호선") ? text : `${text}번`;
 }
 
-export function RouteTimeline({ segments: routeSegments = [], style }) {
+export function RouteTimeline({
+  segments: routeSegments = [],
+  style,
+  formatDuration = (minutes) => `${minutes}분`,
+}) {
   const segments = normalizeTimelineSegments(routeSegments);
 
   if (segments.length === 0) {
@@ -119,7 +123,7 @@ export function RouteTimeline({ segments: routeSegments = [], style }) {
                 numberOfLines={1}
                 style={isTransit ? styles.textOn : styles.text}
               >
-                {duration}분
+                {formatDuration(duration)}
               </Text>
             </View>
           </View>

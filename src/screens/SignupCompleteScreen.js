@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { AppScreen, PrimaryButton } from "../components";
 import { colors, layout, typography } from "../theme";
 
-export function SignupCompleteScreen({ onLoginPress }) {
+export function SignupCompleteScreen({ onLoginPress, isSocialSignup = false }) {
   return (
     <AppScreen>
       <View style={styles.completeBox}>
@@ -26,7 +26,7 @@ export function SignupCompleteScreen({ onLoginPress }) {
               style={styles.loginButton}
               textStyle={styles.loginButtonText}
             >
-              로그인하기
+              {isSocialSignup ? "홈 화면으로" : "로그인하기"}
             </PrimaryButton>
           </View>
         </View>

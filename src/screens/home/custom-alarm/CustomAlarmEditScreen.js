@@ -418,6 +418,7 @@ export function ScheduleAlarmEditScreen({
             onPress={() =>
               onResetRoutePress?.({
                 routeName,
+                scheduleType: arrivalAlarm?.scheduleType ?? "NORMAL",
                 arrivalTime:
                   arrivalAlarm?.targetArrivalTime ??
                   arrivalAlarm?.arrivalTime,

@@ -9,7 +9,7 @@ const authRoutes = new Set([
   routes.signupComplete, routes.findPassword,
 ]);
 
-export function openNotificationInbox() {
+export function openNotificationHome() {
   pendingOpen = true;
   flushNotificationNavigation();
 }
@@ -22,5 +22,8 @@ export function flushNotificationNavigation() {
   if (!pendingOpen || !notificationNavigationRef.isReady() || !getAccessToken()) return;
   if (authRoutes.has(notificationNavigationRef.getCurrentRoute()?.name)) return;
   pendingOpen = false;
-  notificationNavigationRef.navigate(routes.notifications);
+  notificationNavigationRef.reset({
+    index: 0,
+    routes: [{ name: routes.home }],
+  });
 }

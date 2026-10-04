@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BellIcon from "../../assets/images/icon_bell.svg";
 import { startFcm } from "./lifecycle";
-import { clearPendingNotification, openNotificationInbox } from "./navigation";
+import { clearPendingNotification, openNotificationHome } from "./navigation";
 
 export function PushNotifications() {
   const [message, setMessage] = useState(null);
@@ -20,7 +20,7 @@ export function PushNotifications() {
           setMessage(nextMessage);
         }
       },
-      onNotificationOpen: openNotificationInbox,
+      onNotificationOpen: openNotificationHome,
       onSessionEnd: () => {
         setMessage(null);
         clearPendingNotification();
@@ -44,7 +44,7 @@ export function PushNotifications() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${title}. 알림 열기`}
-          onPress={() => { setMessage(null); openNotificationInbox(); }}
+          onPress={() => { setMessage(null); openNotificationHome(); }}
           style={styles.content}
         >
           <BellIcon width={24} height={24} />
