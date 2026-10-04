@@ -10,6 +10,7 @@ import ChangeIcon from "../../../../public/images/change.svg";
 import CloseIcon from "../../../../public/images/close.svg";
 import LoadIcon from "../../../../public/images/load.svg";
 import SettingIcon from "../../../../public/images/setting.svg";
+import TrashIcon from "../../../../assets/images/trash_g.svg";
 import { RouteTimeline } from "../../../components/RouteTimeline";
 import { colors } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
@@ -115,14 +116,26 @@ export function FirstLastRouteScreen({
                 막차
               </Text>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onRouteSetupPress}
-              style={styles.resetButton}
-            >
-              <LoadIcon height={17} width={17} />
-              <Text style={styles.resetText}>경로 재설정</Text>
-            </Pressable>
+            {hasConfiguredRoute ? (
+              <View style={styles.routeHeaderActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onRouteSetupPress}
+                  style={styles.resetButton}
+                >
+                  <LoadIcon height={17} width={17} />
+                  <Text style={styles.resetText}>경로 재설정</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="경로 삭제"
+                  accessibilityRole="button"
+                  onPress={onRouteSetupPress}
+                  style={styles.deleteButton}
+                >
+                  <TrashIcon height={20} width={20} />
+                </Pressable>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.routeSectionDivider} />
@@ -348,6 +361,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  routeHeaderActions: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 8,
+  },
   routeTitleGroup: {
     flexDirection: "row",
     alignItems: "center",
@@ -378,13 +396,29 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   resetButton: {
-    height: 32,
-    paddingHorizontal: 13,
+    display: "flex",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
+    alignSelf: "stretch",
     borderWidth: 1,
     borderColor: colors.gray04,
+    borderRadius: 8,
+    backgroundColor: colors.white,
+  },
+  deleteButton: {
+    display: "flex",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "stretch",
+    borderWidth: 1,
+    borderColor: colors.gray03,
     borderRadius: 8,
     backgroundColor: colors.white,
   },
