@@ -174,10 +174,16 @@ export function ChangePasswordScreen({ onBackPress }) {
 }
 
 function getPasswordErrorMessage(error) {
-  const fieldErrors = error?.data?.data ?? error?.data ?? error?.details?.data;
+  const fieldErrors = error?.data?.data ?? error?.details?.data ?? error?.data;
 
   if (fieldErrors && typeof fieldErrors === "object") {
-    return Object.values(fieldErrors).find(Boolean) ?? "비밀번호 변경에 실패했습니다.";
+    const fieldMessage = [
+      fieldErrors.currentPassword,
+      fieldErrors.newPassword,
+      fieldErrors.newPasswordConfirm,
+    ].find((value) => typeof value === "string" && value.trim());
+
+    if (fieldMessage) return fieldMessage;
   }
 
   return (

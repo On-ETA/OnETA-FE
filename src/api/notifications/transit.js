@@ -8,6 +8,7 @@ import {
 } from "../homeCache";
 
 const TRANSIT_NOTIFICATIONS_ENDPOINT = "/api/notifications/transit";
+const TRANSIT_NOTIFICATIONS_CACHE_TTL_MS = 60 * 1000;
 export const TRANSIT_SCHEDULE_TYPES = {
   first: "FIRST_TRANSIT",
   last: "LAST_TRANSIT",
@@ -40,26 +41,10 @@ async function writeTransitNotificationsCache(scheduleType, notifications) {
   const cacheKey = getTransitNotificationsCacheKey(normalizedScheduleType);
 
   await writeHomeCacheAsync(cacheKey, {
-    version: 2,
+    version: 3,
+    savedAt: Date.now(),
     notifications,
   });
-
-  const cachedNotificationsByType = await readHomeCacheAsync(
-    homeCacheKeys.transitNotifications,
-    {},
-  );
-  const nextNotificationsByType =
-    cachedNotificationsByType &&
-    typeof cachedNotificationsByType === "object" &&
-    !Array.isArray(cachedNotificationsByType)
-      ? { ...cachedNotificationsByType }
-      : {};
-
-  nextNotificationsByType[normalizedScheduleType] = notifications;
-  await writeHomeCacheAsync(
-    homeCacheKeys.transitNotifications,
-    nextNotificationsByType,
-  );
 
   return notifications;
 }
@@ -224,7 +209,7 @@ export function normalizeTransitNotification(notification) {
       : [],
     routeDetails: notification?.routeDetails,
     route,
-    scheduleType: notification?.scheduleType ?? "NORMAL",
+    scheduleType: notification?.scheduleType ?? route?.scheduleType ?? "NORMAL",
     enabled: Boolean(notification?.isActive),
     isActive: Boolean(notification?.isActive),
     payload: notification,
@@ -245,38 +230,12 @@ export async function getTransitNotifications({
     const cachedNotifications = await readHomeCacheAsync(cacheKey);
 
     if (
-      cachedNotifications?.version === 2 &&
+      cachedNotifications?.version === 3 &&
+      Number.isFinite(cachedNotifications.savedAt) &&
+      Date.now() - cachedNotifications.savedAt < TRANSIT_NOTIFICATIONS_CACHE_TTL_MS &&
       Array.isArray(cachedNotifications.notifications)
     ) {
       return cachedNotifications.notifications;
-    }
-
-    if (Array.isArray(cachedNotifications) && cachedNotifications.length > 0) {
-      writeHomeCacheAsync(cacheKey, {
-        version: 2,
-        notifications: cachedNotifications,
-      }).catch(() => null);
-      return cachedNotifications;
-    }
-
-    const cachedNotificationsByType = await readHomeCacheAsync(
-      homeCacheKeys.transitNotifications,
-      null,
-    );
-    const legacyCachedNotifications =
-      cachedNotificationsByType &&
-      typeof cachedNotificationsByType === "object" &&
-      !Array.isArray(cachedNotificationsByType)
-        ? cachedNotificationsByType[normalizedScheduleType]
-        : null;
-
-    if (Array.isArray(legacyCachedNotifications) && legacyCachedNotifications.length > 0) {
-      writeHomeCacheAsync(cacheKey, {
-        version: 2,
-        notifications: legacyCachedNotifications,
-      }).catch(() => null);
-
-      return legacyCachedNotifications;
     }
   }
 
@@ -290,7 +249,9 @@ export async function getTransitNotifications({
 
   return writeTransitNotificationsCache(
     normalizedScheduleType,
-    pickTransitNotificationList(response).map(normalizeTransitNotification),
+    pickTransitNotificationList(response)
+      .map(normalizeTransitNotification)
+      .filter((notification) => notification.scheduleType === normalizedScheduleType),
   );
 }
 

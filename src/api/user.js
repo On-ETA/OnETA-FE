@@ -18,7 +18,8 @@
 import { reissueAuthTokens } from "./auth/reissue";
 import { clearAuthTokens, getAccessToken } from "./auth/tokens";
 import { requestJson } from "./client";
-import { clearHomeCache } from "./homeCache";
+import { clearHomeCacheAsync } from "./homeCache";
+import { cancelHomePreload } from "./homePreload";
 
 const USER_ENDPOINT = "/api/user";
 
@@ -105,7 +106,8 @@ export async function getUser({ accessToken = getAccessToken(), signal } = {}) {
 }
 
 export async function deleteUser({ accessToken = getAccessToken(), signal } = {}) {
-  clearHomeCache();
+  await cancelHomePreload();
+  await clearHomeCacheAsync();
 
   const data = await requestUserJson({
     path: USER_ENDPOINT,
@@ -115,7 +117,7 @@ export async function deleteUser({ accessToken = getAccessToken(), signal } = {}
     errorMessage: "회원 탈퇴에 실패했습니다.",
   });
 
-  clearAuthTokens();
+  await clearAuthTokens();
 
   return data;
 }

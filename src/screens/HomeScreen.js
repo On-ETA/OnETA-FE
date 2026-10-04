@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { BackHandler, Platform, StyleSheet, View } from "react-native";
+import { AppState, BackHandler, Platform, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -74,6 +74,12 @@ function createFirstLastRouteSummaryFromNotification(notification) {
 
   return {
     ...summary,
+    originPlace: details?.originPlace ?? (typeof details?.origin === "object" ? details.origin : undefined),
+    destinationPlace:
+      details?.destinationPlace ??
+      (typeof details?.destination === "object" ? details.destination : undefined),
+    originAddress: details?.originAddress ?? route?.originAddress,
+    destinationAddress: details?.destinationAddress ?? route?.destinationAddress,
     notificationId: notification?.notificationId,
     routeName: notification?.routeName,
     arrivalTime: notification?.arrivalTime || summary.arrivalTime,
@@ -123,18 +129,21 @@ function getPlaceAddress(place) {
   return place?.address ?? place?.roadAddress ?? place?.detail ?? place?.label ?? place?.name ?? "";
 }
 
-function getRouteSetupPlace(place, address, x, y, fallbackName) {
+function getRouteSetupPlace(place, address, x, y) {
   const source = place && typeof place === "object" ? place : {};
   const routePlace = source.raw ?? source;
-  const latitude = Number(source.y ?? routePlace.y ?? y);
-  const longitude = Number(source.x ?? routePlace.x ?? x);
+  const rawLatitude = source.y ?? routePlace.y ?? y;
+  const rawLongitude = source.x ?? routePlace.x ?? x;
+  const latitude = rawLatitude == null || rawLatitude === "" ? NaN : Number(rawLatitude);
+  const longitude = rawLongitude == null || rawLongitude === "" ? NaN : Number(rawLongitude);
   const label =
-    source.label ??
-    source.name ??
-    source.placeName ??
-    source.address ??
-    address ??
-    (typeof place === "string" ? place : fallbackName);
+    source.label ||
+    source.name ||
+    source.placeName ||
+    (typeof place === "string" ? place : "") ||
+    source.address ||
+    address ||
+    "";
   const placeAddress =
     source.address ??
     source.roadAddress ??
@@ -158,18 +167,16 @@ function getFirstLastRouteSetupPlaces(summary) {
 
   return {
     origin: getRouteSetupPlace(
-      details?.originPlace ?? details?.origin ?? route?.originPlace ?? route?.origin,
-      details?.originAddress ?? route?.originAddress ?? raw?.originAddress,
-      details?.originX ?? route?.originX ?? raw?.originX,
-      details?.originY ?? route?.originY ?? raw?.originY,
-      "출발지",
+      summary?.originPlace ?? details?.originPlace ?? details?.origin ?? route?.originPlace ?? route?.origin,
+      summary?.originAddress ?? details?.originAddress ?? route?.originAddress ?? raw?.originAddress,
+      summary?.originPlace?.x ?? details?.originX ?? route?.originX ?? raw?.originX,
+      summary?.originPlace?.y ?? details?.originY ?? route?.originY ?? raw?.originY,
     ),
     destination: getRouteSetupPlace(
-      details?.destinationPlace ?? details?.destination ?? route?.destinationPlace ?? route?.destination,
-      details?.destinationAddress ?? route?.destinationAddress ?? raw?.destinationAddress,
-      details?.destX ?? route?.destX ?? raw?.destX,
-      details?.destY ?? route?.destY ?? raw?.destY,
-      "도착지",
+      summary?.destinationPlace ?? details?.destinationPlace ?? details?.destination ?? route?.destinationPlace ?? route?.destination,
+      summary?.destinationAddress ?? details?.destinationAddress ?? route?.destinationAddress ?? raw?.destinationAddress,
+      summary?.destinationPlace?.x ?? details?.destX ?? route?.destX ?? raw?.destX,
+      summary?.destinationPlace?.y ?? details?.destY ?? route?.destY ?? raw?.destY,
     ),
   };
 }
@@ -192,13 +199,17 @@ function getFirstLastRouteCacheKey(scheduleType) {
 }
 
 function readCachedFirstLastRouteSummary(scheduleType = TRANSIT_SCHEDULE_TYPES.first) {
-  return readHomeCache(getFirstLastRouteCacheKey(scheduleType), null);
+  const summary = readHomeCache(getFirstLastRouteCacheKey(scheduleType), null);
+  return summary?.cacheVersion === 2 && summary.scheduleType === scheduleType
+    ? summary
+    : null;
 }
 
 function writeCachedFirstLastRouteSummary(summary, scheduleType = TRANSIT_SCHEDULE_TYPES.first) {
   if (summary) {
     writeHomeCache(getFirstLastRouteCacheKey(scheduleType), {
       ...summary,
+      cacheVersion: 2,
       scheduleType,
     });
   }
@@ -206,6 +217,7 @@ function writeCachedFirstLastRouteSummary(summary, scheduleType = TRANSIT_SCHEDU
   return summary
     ? {
         ...summary,
+        cacheVersion: 2,
         scheduleType,
       }
     : summary;
@@ -264,9 +276,11 @@ export function HomeScreen({
     useState(false);
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
   const [currentAddressLabel, setCurrentAddressLabel] = useState("");
-  const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(
-    () => readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.first),
-  );
+  const [firstLastRouteSummaries, setFirstLastRouteSummaries] = useState(() => ({
+    [TRANSIT_SCHEDULE_TYPES.first]: readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.first),
+    [TRANSIT_SCHEDULE_TYPES.last]: readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.last),
+  }));
+  const firstLastRouteSummary = firstLastRouteSummaries[activeFirstLastScheduleType] ?? null;
   const customAlarmRefreshKey = CUSTOM_ALARM_REFRESH_KEY;
 
   useEffect(() => {
@@ -274,7 +288,15 @@ export function HomeScreen({
 
     readHomeCacheAsync(getFirstLastRouteCacheKey(activeFirstLastScheduleType), null).then((cachedSummary) => {
       if (isActive) {
-        setFirstLastRouteSummary(cachedSummary);
+        const summary = readCachedFirstLastRouteSummary(activeFirstLastScheduleType) ??
+          (cachedSummary?.cacheVersion === 2 &&
+          cachedSummary.scheduleType === activeFirstLastScheduleType
+            ? cachedSummary
+            : null);
+        setFirstLastRouteSummaries((current) => ({
+          ...current,
+          [activeFirstLastScheduleType]: summary,
+        }));
       }
     });
 
@@ -285,38 +307,27 @@ export function HomeScreen({
 
   const loadFirstLastTransitNotifications = useCallback(async ({
     scheduleType = activeFirstLastScheduleType,
+    forceRefresh = false,
     signal,
   } = {}) => {
-    const notifications = await getTransitNotifications({ scheduleType, signal });
+    const notifications = await getTransitNotifications({ scheduleType, forceRefresh, signal });
 
-    setFirstLastRouteSummary((current) =>
-    {
-      const cached = readCachedFirstLastRouteSummary(scheduleType);
-      const currentForScheduleType =
-        current?.scheduleType === scheduleType ? current : null;
-      const preferredNotification =
-        findTransitNotificationById(notifications, currentForScheduleType?.notificationId) ??
-        findTransitNotificationById(notifications, cached?.notificationId);
-      const selectedNotification =
-        preferredNotification ??
-        notifications.find((notification) => notification.isActive) ??
-        notifications[0] ??
-        null;
+    if (signal?.aborted) return;
 
-      if (selectedNotification) {
-        return writeCachedFirstLastRouteSummary(
-          createFirstLastRouteSummaryFromNotification(selectedNotification),
-          scheduleType,
-        );
-      }
+    const cached = readCachedFirstLastRouteSummary(scheduleType);
+    const selectedNotification =
+      findTransitNotificationById(notifications, cached?.notificationId) ??
+      notifications.find((notification) => notification.isActive) ??
+      notifications[0] ??
+      null;
 
-      if (notifications.length === 0) {
-        return cached ?? currentForScheduleType ?? null;
-      }
-
-      return currentForScheduleType ?? cached;
-    },
-    );
+    if (selectedNotification) {
+      const summary = createFirstLastRouteSummaryFromNotification(selectedNotification);
+      writeCachedFirstLastRouteSummary(summary, scheduleType);
+      setFirstLastRouteSummaries((current) => ({ ...current, [scheduleType]: summary }));
+    } else {
+      setFirstLastRouteSummaries((current) => ({ ...current, [scheduleType]: cached }));
+    }
   }, [activeFirstLastScheduleType]);
 
   useEffect(() => {
@@ -364,14 +375,55 @@ export function HomeScreen({
     };
   }, [activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
 
+  useEffect(() => {
+    let controller;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      controller?.abort();
+      controller = new AbortController();
+      loadFirstLastTransitNotifications({
+        scheduleType: activeFirstLastScheduleType,
+        forceRefresh: true,
+        signal: controller.signal,
+      }).catch((error) => {
+        if (error?.name !== "AbortError") {
+          console.warn("첫차·막차 경로 갱신 실패:", error?.code ?? error?.message);
+        }
+      });
+    });
+
+    return () => {
+      controller?.abort();
+      subscription.remove();
+    };
+  }, [activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
+
   const saveFirstLastRoute = useCallback(async (route, places) => {
     const scheduleType = activeFirstLastScheduleType;
+    const originPlace = places?.originPlace ?? places?.origin;
+    const destinationPlace = places?.destinationPlace ?? places?.destination;
+    const estimatedDepartureTimestamp = parseEstimatedDepartureAt(route?.estimatedDepartureAt);
+    const routeSummary = createFirstLastRouteSummary(route, {
+      ...places,
+      ...(estimatedDepartureTimestamp !== undefined
+        ? { departureTimestamp: estimatedDepartureTimestamp }
+        : {}),
+    });
     const summary = {
-      ...createFirstLastRouteSummary(route, places),
-      originPlace: places?.origin,
-      destinationPlace: places?.destination,
-      originAddress: getPlaceAddress(places?.origin),
-      destinationAddress: getPlaceAddress(places?.destination),
+      ...routeSummary,
+      originPlace,
+      destinationPlace,
+      originAddress: getPlaceAddress(originPlace),
+      destinationAddress: getPlaceAddress(destinationPlace),
+      estimatedDepartureAt: route?.estimatedDepartureAt,
+      estimatedDepartureTimestamp,
+      departureTime: formatSeoulTime(estimatedDepartureTimestamp) ?? routeSummary.departureTime,
+      arrivalTime: formatSeoulTime(
+        estimatedDepartureTimestamp + routeSummary.totalDurationMinutes * 60000,
+      ) ?? routeSummary.arrivalTime,
+      remainingMinutes: estimatedDepartureTimestamp !== undefined
+        ? Math.max(0, Math.ceil((estimatedDepartureTimestamp - Date.now()) / 60000))
+        : routeSummary.remainingMinutes,
       scheduleType,
     };
 
@@ -381,19 +433,19 @@ export function HomeScreen({
       });
       const notificationId = getCreatedNotificationId(notificationResponse);
 
-      setFirstLastRouteSummary(
-        writeCachedFirstLastRouteSummary(
-          notificationId !== undefined && notificationId !== null
-            ? {
-                ...summary,
-                notificationId,
-              }
-            : summary,
-          scheduleType,
-        ),
+      const savedSummary = writeCachedFirstLastRouteSummary(
+        notificationId !== undefined && notificationId !== null
+          ? { ...summary, notificationId }
+          : summary,
+        scheduleType,
       );
+      setFirstLastRouteSummaries((current) => ({
+        ...current,
+        [scheduleType]: savedSummary,
+      }));
     } catch (error) {
       console.warn("첫막차 경로 등록 실패:", error?.code ?? error?.message);
+      throw error;
     }
   }, [activeFirstLastScheduleType]);
 
@@ -601,6 +653,11 @@ export function HomeScreen({
               <ScheduleAlarmAddScreen
                 initialStep={scheduleAlarmInitialStep}
                 initialValues={scheduleAlarmInitialValues}
+                scheduleType={
+                  scheduleAlarmInitialStep === "routeSetup"
+                    ? activeFirstLastScheduleType
+                    : "NORMAL"
+                }
                 mapTitle={
                   scheduleAlarmInitialStep === "routeSetup"
                     ? "경로 재설정"
@@ -637,12 +694,13 @@ export function HomeScreen({
                 actionLabel="이 경로로 설정"
                 initialDestination={firstLastRoutePlaces.destination}
                 initialOrigin={firstLastRoutePlaces.origin}
+                scheduleType={activeFirstLastScheduleType}
                 onBackPress={() => {
                   blurActiveElement();
                   setFirstLastRouteSetupStep("map");
                 }}
-                onRouteSelect={(route, places) => {
-                  saveFirstLastRoute(route, places);
+                onRouteSelect={async (route, places) => {
+                  await saveFirstLastRoute(route, places);
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
                 }}

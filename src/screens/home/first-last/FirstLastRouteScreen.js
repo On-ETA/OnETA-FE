@@ -131,7 +131,7 @@ export function FirstLastRouteScreen({
             <>
               <View style={styles.summaryRow}>
                 <View style={styles.summaryBlock}>
-                  <Text style={styles.summaryLabel}>남은 시간</Text>
+                  <Text style={[styles.summaryLabel, styles.summaryLabelLeft]}>남은 시간</Text>
                   <View style={styles.remainingGroup}>
                     <Text style={styles.remainingNumber}>
                       {Number.isFinite(remainingMinutes)
@@ -426,6 +426,7 @@ const styles = StyleSheet.create({
   },
   summaryBlock: {
     gap: 8,
+    alignItems: "flex-start",
   },
   summaryBlockRight: {
     alignItems: "flex-end",
@@ -440,6 +441,9 @@ const styles = StyleSheet.create({
     textAlign: "right",
     color: colors.gray06,
   },
+  summaryLabelLeft: {
+    textAlign: "left",
+  },
   remainingGroup: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -452,11 +456,10 @@ const styles = StyleSheet.create({
     color: colors.black,
   },
   remainingUnit: {
-    marginBottom: 4,
     fontFamily: "SUIT",
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: "700",
-    lineHeight: 38,
+    lineHeight: 42,
     color: colors.black,
   },
   departureTime: {

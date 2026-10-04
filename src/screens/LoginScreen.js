@@ -15,7 +15,7 @@ import { login } from "../api/auth/login";
 import { extractAuthTokens, setAuthTokens } from "../api/auth/tokens";
 import { startGoogleAuth } from "../api/google";
 import { clearHomeCacheAsync } from "../api/homeCache";
-import { preloadHomeCache } from "../api/homePreload";
+import { cancelHomePreload, preloadHomeCache } from "../api/homePreload";
 import {
   AppScreen,
   FormTextInput,
@@ -145,9 +145,10 @@ export function LoginScreen({
         throw new Error("로그인 응답에 인증 토큰이 없습니다.");
       }
 
+      await cancelHomePreload();
       await clearHomeCacheAsync();
       await setAuthTokens(authTokens, { persist: remember });
-      await preloadHomeCache({ reset: true });
+      preloadHomeCache().catch(() => null);
       onLoginPress?.();
     } catch (error) {
       setLoginError(getLoginErrorMessage(error));
