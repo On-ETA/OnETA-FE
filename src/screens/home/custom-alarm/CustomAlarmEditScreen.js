@@ -400,14 +400,14 @@ export function ScheduleAlarmEditScreen({
         <View style={styles.timeSection}>
           <View style={styles.timeSummaryRow}>
             <View style={styles.timeSummaryBlock}>
-              <Text style={styles.fieldLabel}>출발 적정 시간</Text>
+              <Text style={styles.fieldLabel}>예상 출발 시간</Text>
               <View style={styles.timeCard}>
                 <Text style={styles.timeCardText}>{formattedStartTime}</Text>
               </View>
             </View>
             <ChevronRightIcon />
             <View style={styles.timeSummaryBlock}>
-              <Text style={styles.fieldLabel}>도착 예정 시간</Text>
+              <Text style={styles.fieldLabel}>목표 도착 시간</Text>
               <View style={styles.timeCard}>
                 <Text style={styles.timeCardText}>{formattedArrivalTime}</Text>
               </View>

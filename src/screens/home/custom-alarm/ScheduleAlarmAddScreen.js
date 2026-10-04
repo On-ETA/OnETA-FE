@@ -2859,7 +2859,7 @@ function ScheduleAlarmFinalStep({
 
   const finalInfoSubText =
     selectedReminderOffsets.length > 0
-      ? `출발 적정 시간 ${selectedReminderOffsets[0]}분 전인 ${getFormattedStartTime(
+      ? `예상 출발 시간 ${selectedReminderOffsets[0]}분 전인 ${getFormattedStartTime(
           arrivalTime,
           displayDuration + Number(selectedReminderOffsets[0]),
         )}에 알려드릴게요.`
@@ -3055,7 +3055,7 @@ function ScheduleAlarmFinalStep({
                 styles.finalLabel
               }
             >
-              출발 적정 시간
+              예상 출발 시간
             </Text>
 
             <View
@@ -3087,7 +3087,7 @@ function ScheduleAlarmFinalStep({
                 styles.finalLabel
               }
             >
-              도착 예정 시간
+              목표 도착 시간
             </Text>
 
             <View

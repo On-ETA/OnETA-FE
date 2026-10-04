@@ -8,7 +8,6 @@ import { getArrivalNotificationById, updateArrivalNotification } from "../api/no
 import {
   homeCacheKeys,
   readHomeCache,
-  readHomeCacheAsync,
   removeHomeCache,
   writeHomeCache,
 } from "../api/homeCache";
@@ -239,28 +238,6 @@ export function HomeScreen({
   const [customAlarmRefreshKey, setCustomAlarmRefreshKey] = useState(CUSTOM_ALARM_REFRESH_KEY);
   const loadingFirstLastResetRef = useRef(false);
 
-  useEffect(() => {
-    let isActive = true;
-
-    readHomeCacheAsync(getFirstLastRouteCacheKey(activeFirstLastScheduleType), null).then((cachedSummary) => {
-      if (isActive) {
-        const summary = readCachedFirstLastRouteSummary(activeFirstLastScheduleType) ??
-          (cachedSummary?.cacheVersion === 2 &&
-          cachedSummary.scheduleType === activeFirstLastScheduleType
-            ? cachedSummary
-            : null);
-        setFirstLastRouteSummaries((current) => ({
-          ...current,
-          [activeFirstLastScheduleType]: summary,
-        }));
-      }
-    });
-
-    return () => {
-      isActive = false;
-    };
-  }, [activeFirstLastScheduleType]);
-
   const loadFirstLastTransitNotifications = useCallback(async ({
     scheduleType = activeFirstLastScheduleType,
     forceRefresh = false,
@@ -282,7 +259,8 @@ export function HomeScreen({
       writeCachedFirstLastRouteSummary(summary, scheduleType);
       setFirstLastRouteSummaries((current) => ({ ...current, [scheduleType]: summary }));
     } else {
-      setFirstLastRouteSummaries((current) => ({ ...current, [scheduleType]: cached }));
+      clearCachedFirstLastRouteSummary(scheduleType);
+      setFirstLastRouteSummaries((current) => ({ ...current, [scheduleType]: null }));
     }
   }, [activeFirstLastScheduleType]);
 

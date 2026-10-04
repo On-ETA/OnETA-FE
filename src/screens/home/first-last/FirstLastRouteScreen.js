@@ -150,9 +150,6 @@ export function FirstLastRouteScreen({
                   <Text style={[styles.summaryLabel, styles.summaryLabelLeft]}>남은 시간</Text>
                   <View style={styles.remainingGroup}>
                     <Text
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.5}
-                      numberOfLines={1}
                       style={[styles.remainingNumber, { flexShrink: 1 }]}
                     >
                       {formatDurationMinutes(remainingMinutes)}
