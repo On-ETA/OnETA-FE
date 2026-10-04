@@ -3,12 +3,38 @@ import { StyleSheet, Text, View } from "react-native";
 
 import SmallBusAsset from "../../assets/images/smallbus.svg";
 import BusGreenAsset from "../../assets/images/bus_g.svg";
+import SubwayIcon from "../../assets/subway/subway_i.svg";
+import S1Icon from "../../assets/subway/s_1.svg";
+import S2Icon from "../../assets/subway/s_2.svg";
+import S3Icon from "../../assets/subway/s_3.svg";
+import S4Icon from "../../assets/subway/s_4.svg";
+import S5Icon from "../../assets/subway/s_5.svg";
+import S6Icon from "../../assets/subway/s_6.svg";
+import S7Icon from "../../assets/subway/s_7.svg";
+import S8Icon from "../../assets/subway/s_8.svg";
+import S9Icon from "../../assets/subway/s_9.svg";
+import SBIcon from "../../assets/subway/s_b.svg";
+import NBIcon from "../../assets/subway/n_b.svg";
+import ACIcon from "../../assets/subway/a_c.svg";
+import GCIcon from "../../assets/subway/g_c.svg";
+import GGIcon from "../../assets/subway/g_g.svg";
 import WalkAsset from "../../assets/images/man.svg";
 import { colors } from "../theme";
 import { normalizeTimelineSegments } from "../utils/routeSegments";
+import { getSubwayIconKey, getTransitColors } from "../utils/transitColors";
+
+const SUBWAY_ICONS = {
+  s_1: S1Icon, s_2: S2Icon, s_3: S3Icon, s_4: S4Icon, s_5: S5Icon,
+  s_6: S6Icon, s_7: S7Icon, s_8: S8Icon, s_9: S9Icon,
+  s_b: SBIcon, n_b: NBIcon, a_c: ACIcon, g_c: GCIcon, g_g: GGIcon,
+};
 
 function formatBusNumberLabel(busNumber) {
   const text = String(busNumber ?? "").trim();
+
+  if (/\uC218\uC778\uBD84\uB2F9/.test(text)) {
+    return "\uC218\uC778\uBD84\uB2F9\uC120";
+  }
 
   if (!text) {
     return "버스";
@@ -35,7 +61,7 @@ export function RouteTimeline({ segments: routeSegments = [], style }) {
       {segments.map((segment, index) => {
         const isTransit = segment.transitType !== "WALK";
         const duration = Math.max(segment.durationMinutes ?? 0, 0);
-
+        const transitColors = isTransit ? getTransitColors(segment) : null;
         return (
           <View
             key={segment.id ?? `${segment.transitType}-${index}`}
@@ -46,13 +72,25 @@ export function RouteTimeline({ segments: routeSegments = [], style }) {
                 flexGrow: 1 + Math.sqrt(Math.max(duration, 1) / totalDuration),
                 flexBasis: 0,
                 flexShrink: 1,
+                ...(isTransit && transitColors.isSubway && {
+                  backgroundColor: transitColors.light,
+                }),
               },
             ]}
           >
             {isTransit || index === 0 ? (
-              <View style={isTransit ? styles.busIcon : styles.walkIcon}>
+              <View
+                style={[
+                  isTransit ? styles.busIcon : styles.walkIcon,
+                  isTransit && { backgroundColor: transitColors.strong },
+                ]}
+              >
                 {isTransit ? (
-                  <SmallBusAsset width={7} height={8} />
+                  transitColors?.isSubway ? (
+                    <SubwayIcon width={7} height={8} />
+                  ) : (
+                    <SmallBusAsset width={7} height={8} />
+                  )
                 ) : (
                   <WalkAsset width={6} height={10} />
                 )}
@@ -76,6 +114,10 @@ export function RouteTimeline({ segments: routeSegments = [], style }) {
           .filter((segment) => segment.transitType !== "WALK")
           .map((segment, transitIndex, transitSegments) => {
             const stations = Array.isArray(segment.stations) ? segment.stations : [];
+            const segmentColors = getTransitColors(segment);
+            const SegmentLineIcon = segmentColors.isSubway
+              ? SUBWAY_ICONS[getSubwayIconKey(segment)]
+              : null;
             const boardingStop = segment.startStation || segment.boardingStopName || stations[0]?.name || "승차 정류장";
             const arrivalStop = segment.endStation || segment.arrivalStopName || stations[stations.length - 1]?.name || "하차 정류장";
             const busNumber = formatBusNumberLabel(
@@ -101,9 +143,30 @@ export function RouteTimeline({ segments: routeSegments = [], style }) {
                 <Text style={styles.stopLabel}>{row.label}</Text>
                 <Text numberOfLines={1} style={styles.stopName}>{row.name}</Text>
                 {row.active ? (
-                  <View style={styles.busBadge}>
-                    <BusGreenAsset width={13} height={13} />
-                    <Text style={styles.busNumber}>{busNumber}</Text>
+                  <View
+                    style={[
+                      styles.busBadge,
+                      {
+                        borderColor: getTransitColors(segment).isSubway
+                          ? getTransitColors(segment).light
+                          : colors.main,
+                        backgroundColor: colors.white,
+                      },
+                    ]}
+                  >
+                    {SegmentLineIcon ? (
+                      <SegmentLineIcon width={13} height={13} />
+                    ) : (
+                      <BusGreenAsset width={13} height={13} />
+                    )}
+                    <Text
+                      style={[
+                        styles.busNumber,
+                        { color: getTransitColors(segment).strong },
+                      ]}
+                    >
+                      {busNumber}
+                    </Text>
                   </View>
                 ) : null}
               </View>
