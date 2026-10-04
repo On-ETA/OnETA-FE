@@ -3621,7 +3621,7 @@ function WheelPickerColumn({
   valueRef.current = value;
   onChangeRef.current = onChange;
 
-  const initialCenterIndex = Math.floor((options.length - 1) / 2);
+  const selectedIndex = Math.max(options.indexOf(value), 0);
 
   const scrollToIndex = (
     index,
@@ -3646,11 +3646,11 @@ function WheelPickerColumn({
 
     const scrollTimer = setTimeout(() => {
       requestAnimationFrame(() => {
-        scrollToIndex(initialCenterIndex, false);
-        scrollOffsetRef.current = initialCenterIndex * TIME_PICKER_ITEM_HEIGHT;
-        lastReportedIndexRef.current = initialCenterIndex;
-        if (options[initialCenterIndex] !== valueRef.current) {
-          onChangeRef.current(options[initialCenterIndex]);
+        scrollToIndex(selectedIndex, false);
+        scrollOffsetRef.current = selectedIndex * TIME_PICKER_ITEM_HEIGHT;
+        lastReportedIndexRef.current = selectedIndex;
+        if (options[selectedIndex] !== valueRef.current) {
+          onChangeRef.current(options[selectedIndex]);
         }
         hasPositionedRef.current = true;
       });
@@ -3802,11 +3802,11 @@ function WheelPickerColumn({
         onLayout={() => {
           if (visible && !hasPositionedRef.current) {
             requestAnimationFrame(() => {
-              scrollToIndex(initialCenterIndex, false);
-              scrollOffsetRef.current = initialCenterIndex * TIME_PICKER_ITEM_HEIGHT;
-              lastReportedIndexRef.current = initialCenterIndex;
-              if (options[initialCenterIndex] !== valueRef.current) {
-                onChangeRef.current(options[initialCenterIndex]);
+              scrollToIndex(selectedIndex, false);
+              scrollOffsetRef.current = selectedIndex * TIME_PICKER_ITEM_HEIGHT;
+              lastReportedIndexRef.current = selectedIndex;
+              if (options[selectedIndex] !== valueRef.current) {
+                onChangeRef.current(options[selectedIndex]);
               }
               hasPositionedRef.current = true;
             });
