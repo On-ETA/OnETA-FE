@@ -40,9 +40,9 @@ import { blurActiveElement } from "../../../utils/accessibility";
 import { normalizeTimelineSegments } from "../../../utils/routeSegments";
 
 const DEFAULT_TIME = {
-  period: "오전",
-  hour: "11",
-  minute: "30",
+  period: "오후",
+  hour: "01",
+  minute: "00",
 };
 
 const TIME_PICKER_ITEM_HEIGHT = 58;
