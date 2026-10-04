@@ -11,13 +11,55 @@ import Svg, { Circle, Path } from "react-native-svg";
 
 import BackIcon from "../../../../assets/images/L.svg";
 import WalkAsset from "../../../../assets/images/man.svg";
+import BGaIcon from "../../../../assets/bus/b_ga.svg";
+import BJiIcon from "../../../../assets/bus/b_ji.svg";
+import BGwIcon from "../../../../assets/bus/b_gw.svg";
+import BSIcon from "../../../../assets/bus/b_s.svg";
+import BOIcon from "../../../../assets/bus/b_o.svg";
+import S1Icon from "../../../../assets/subway/s_1.svg";
+import S2Icon from "../../../../assets/subway/s_2.svg";
+import S3Icon from "../../../../assets/subway/s_3.svg";
+import S4Icon from "../../../../assets/subway/s_4.svg";
+import S5Icon from "../../../../assets/subway/s_5.svg";
+import S6Icon from "../../../../assets/subway/s_6.svg";
+import S7Icon from "../../../../assets/subway/s_7.svg";
+import S8Icon from "../../../../assets/subway/s_8.svg";
+import S9Icon from "../../../../assets/subway/s_9.svg";
+import SubwayIcon from "../../../../assets/subway/subway_i.svg";
 import {
   getTransitNotification,
   getTransitNotifications,
 } from "../../../api/notifications/transit";
 import { colors, layout } from "../../../theme";
 import { normalizeTimelineSegments } from "../../../utils/routeSegments";
-import { getTransitColors } from "../../../utils/transitColors";
+import { getBusIconKey, getSubwayIconKey, getTransitColors } from "../../../utils/transitColors";
+
+const DETAIL_TRANSIT_ICONS = {
+  b_ga: BGaIcon,
+  b_ji: BJiIcon,
+  b_gw: BGwIcon,
+  b_s: BSIcon,
+  b_o: BOIcon,
+  s_1: S1Icon,
+  s_2: S2Icon,
+  s_3: S3Icon,
+  s_4: S4Icon,
+  s_5: S5Icon,
+  s_6: S6Icon,
+  s_7: S7Icon,
+  s_8: S8Icon,
+  s_9: S9Icon,
+};
+
+function DetailTransitIcon({ segment, size = 13 }) {
+  const colorsForSegment = getTransitColors(segment);
+  const iconKey = colorsForSegment.isSubway
+    ? getSubwayIconKey(segment)
+    : getBusIconKey(segment);
+  const Icon = DETAIL_TRANSIT_ICONS[iconKey];
+
+  return Icon ? <Icon width={size} height={size} /> : <BusIcon size={size} />;
+}
 
 
 export function FirstLastRouteDetailScreen({
@@ -238,6 +280,7 @@ function TimelineSummary({ items }) {
     <View style={styles.timeline}>
       {items.map((item, index) => {
         const isBus = item.type === "bus";
+        const transitColors = isBus ? getTransitColors(item) : null;
 
         return (
           <View
@@ -247,21 +290,28 @@ function TimelineSummary({ items }) {
               isBus
                 ? styles.timelineBusSegment
                 : styles.timelineWalkSegment,
+              isBus && { backgroundColor: transitColors.light },
             ]}
           >
-            <View
-              style={[
-                styles.timelineIcon,
-                isBus &&
-                  styles.timelineBusIcon,
-              ]}
-            >
-              {isBus ? (
-                <BusIcon size={12} />
-              ) : (
-                <WalkAsset width={8} height={13} />
-              )}
-            </View>
+            {isBus || index === 0 ? (
+              <View
+                style={[
+                  styles.timelineIcon,
+                  isBus &&
+                    [styles.timelineBusIcon, { backgroundColor: transitColors.strong }],
+                ]}
+              >
+                {isBus ? (
+                  transitColors.isSubway ? (
+                    <SubwayIcon width={7} height={8} />
+                  ) : (
+                    <DetailTransitIcon segment={item} size={12} />
+                  )
+                ) : (
+                  <WalkAsset width={6} height={10} />
+                )}
+              </View>
+            ) : null}
 
             <View
               style={styles.timelineTextWrap}
@@ -365,7 +415,7 @@ function WalkStep({ step }) {
     <View style={styles.walkStep}>
       <View style={styles.walkStepInner}>
         <View style={styles.walkStepIcon}>
-          <WalkAsset width={8} height={13} />
+          <WalkAsset width={6} height={10} />
         </View>
 
         <Text style={styles.walkText}>
@@ -443,27 +493,19 @@ function BusStep({ step }) {
             style={[
               styles.busBadge,
               {
-                ...(getTransitColors(step).isSubway
-                  ? {
-                      borderWidth: 1,
-                      borderColor: getTransitColors(step).light,
-                      backgroundColor: colors.white,
-                    }
-                  : {
-                      backgroundColor: colors.bus,
-                    }),
+                borderWidth: 1,
+                borderColor: getTransitColors(step).light,
+                backgroundColor: colors.white,
               },
             ]}
           >
-            <BusIcon size={13} />
+            <DetailTransitIcon segment={step} size={13} />
 
             <Text
               style={[
                 styles.busBadgeText,
                 {
-                  color: getTransitColors(step).isSubway
-                    ? getTransitColors(step).strong
-                    : colors.white,
+                  color: getTransitColors(step).light,
                 },
               ]}
             >
@@ -819,6 +861,10 @@ function normalizeTimeline(timeline, segments = []) {
     return segments.map((segment) => ({
       type: segment.transitType === "WALK" ? "walk" : "bus",
       minutes: toNumber(segment.durationMinutes),
+      transitName: segment.transitName,
+      routeNumber: segment.routeNumber,
+      busNumber: segment.busNumber,
+      raw: segment.raw,
     }));
   }
 
@@ -832,6 +878,10 @@ function normalizeTimeline(timeline, segments = []) {
       minutes: toNumber(
         item?.minutes,
       ),
+      transitName: item?.transitName ?? item?.routeNumber ?? item?.busNumber,
+      routeNumber: item?.routeNumber,
+      busNumber: item?.busNumber,
+      raw: item?.raw,
     }))
     .filter(
       (item) => item.minutes >= 0,
@@ -1368,12 +1418,12 @@ const styles = StyleSheet.create({
   },
 
   walkStepIcon: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     marginRight: 8,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
+    borderRadius: 9,
     backgroundColor: colors.gray06,
   },
 

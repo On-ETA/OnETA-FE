@@ -16,26 +16,53 @@ const SUBWAY_LINE_COLORS = [
 ];
 
 const DEFAULT_TRANSIT_COLORS = {
-  strong: "#1FCB68",
-  light: "#E4FCEB",
+  strong: "#33D878",
+  light: "#8BE9B2",
 };
 
+const BUS_TYPE_COLORS = [
+  { key: "b_ga", labels: ["간선", "TRUNK"], strong: "#1668BB", light: "#1A7EE1" },
+  { key: "b_ji", labels: ["지선", "BRANCH", "VILLAGE"], strong: "#249A1C", light: "#2BB522" },
+  { key: "b_gw", labels: ["광역", "METROPOLITAN"], strong: "#D81E1E", light: "#F33A3A" },
+  { key: "b_s", labels: ["순환", "CIRCULAR"], strong: "#E19300", light: "#FAAF00" },
+];
+
+function getTransitName(segment) {
+  return [
+    segment?.transitName,
+    segment?.routeNumber,
+    segment?.busNumber,
+    segment?.raw?.transitName,
+    segment?.raw?.busType,
+    segment?.raw?.routeType,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
 export function getTransitColors(segment) {
-  const name = String(
-    segment?.transitName ??
-      segment?.routeNumber ??
-      segment?.busNumber ??
-      segment?.raw?.transitName ??
-      "",
-  ).trim();
+  const name = getTransitName(segment);
 
   const line = SUBWAY_LINE_COLORS.find(([label]) =>
     label.length === 1 ? new RegExp(`(^|\\D)${label}호선`).test(name) : name.includes(label),
   );
 
-  return line
-    ? { strong: line[1], light: line[2], isSubway: true }
-    : { ...DEFAULT_TRANSIT_COLORS, isSubway: false };
+  if (line) {
+    return { strong: line[1], light: line[2], isSubway: true };
+  }
+
+  const busType = BUS_TYPE_COLORS.find(({ labels }) =>
+    labels.some((label) => name.toUpperCase().includes(label)),
+  );
+
+  return busType
+    ? { strong: busType.strong, light: busType.light, busIconKey: busType.key, isSubway: false }
+    : { ...DEFAULT_TRANSIT_COLORS, busIconKey: "b_o", isSubway: false };
+}
+
+export function getBusIconKey(segment) {
+  return getTransitColors(segment).busIconKey ?? "b_o";
 }
 
 export function getSubwayIconKey(segment) {
