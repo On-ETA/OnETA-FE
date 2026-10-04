@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { AppState, BackHandler, Platform, StyleSheet, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, AppState, BackHandler, Platform, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAddresses } from "../api/addresses";
+import { getArrivalNotificationById, updateArrivalNotification } from "../api/notifications/arrival";
 import {
   homeCacheKeys,
   readHomeCache,
@@ -234,7 +235,8 @@ export function HomeScreen({
     [TRANSIT_SCHEDULE_TYPES.last]: readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.last),
   }));
   const firstLastRouteSummary = firstLastRouteSummaries[activeFirstLastScheduleType] ?? null;
-  const customAlarmRefreshKey = CUSTOM_ALARM_REFRESH_KEY;
+  const [customAlarmRefreshKey, setCustomAlarmRefreshKey] = useState(CUSTOM_ALARM_REFRESH_KEY);
+  const loadingFirstLastResetRef = useRef(false);
 
   useEffect(() => {
     let isActive = true;
@@ -351,8 +353,8 @@ export function HomeScreen({
     };
   }, [activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
 
-  const saveFirstLastRoute = useCallback(async (route, places) => {
-    const scheduleType = activeFirstLastScheduleType;
+  const saveFirstLastRoute = useCallback(async (route, places, existingNotification = firstLastRouteSummary) => {
+    const scheduleType = existingNotification?.scheduleType ?? activeFirstLastScheduleType;
     const originPlace = places?.originPlace ?? places?.origin;
     const destinationPlace = places?.destinationPlace ?? places?.destination;
     const estimatedDepartureTimestamp = parseEstimatedDepartureAt(route?.estimatedDepartureAt);
@@ -381,10 +383,28 @@ export function HomeScreen({
     };
 
     try {
-      const notificationResponse = await createTransitNotification({
-        payload: createTransitNotificationPayload(route, summary, scheduleType),
-      });
-      const notificationId = getCreatedNotificationId(notificationResponse);
+      const existingId = existingNotification?.notificationId;
+      if (existingNotification && (existingId === undefined || existingId === null || existingId === "")) {
+        throw new Error("재설정할 첫차·막차 알림 id가 없습니다.");
+      }
+      const payload = createTransitNotificationPayload(route, summary, scheduleType);
+      if (existingId !== undefined && existingId !== null) {
+        await updateArrivalNotification({
+          id: existingId,
+          payload: {
+            ...payload,
+            reminderOffsetMinutes: existingNotification.reminderOffsetMinutes ?? payload.reminderOffsetMinutes,
+            repeatDays: existingNotification.repeatDays ?? [],
+            ...(existingNotification.routeName ? { routeName: existingNotification.routeName } : {}),
+            ...(existingNotification.targetArrivalTime ? { targetArrivalTime: existingNotification.targetArrivalTime } : {}),
+          },
+        });
+        await getTransitNotifications({ scheduleType, forceRefresh: true }).catch(() => null);
+      }
+      const notificationResponse = existingId === undefined || existingId === null
+        ? await createTransitNotification({ payload })
+        : null;
+      const notificationId = existingId ?? getCreatedNotificationId(notificationResponse);
 
       const savedSummary = writeCachedFirstLastRouteSummary(
         notificationId !== undefined && notificationId !== null
@@ -400,17 +420,18 @@ export function HomeScreen({
       console.warn("첫막차 경로 등록 실패:", error?.code ?? error?.message);
       throw error;
     }
-  }, [activeFirstLastScheduleType]);
+  }, [activeFirstLastScheduleType, firstLastRouteSummary]);
 
   const handleFirstLastRouteConfigured = useCallback(async (route, places) => {
-    await saveFirstLastRoute(route, places);
+    await saveFirstLastRoute(route, places, scheduleAlarmInitialValues);
     blurActiveElement();
     setIsScheduleAlarmAddVisible(false);
     setScheduleAlarmInitialStep("form");
     setScheduleAlarmInitialValues(null);
-  }, [saveFirstLastRoute]);
+  }, [saveFirstLastRoute, scheduleAlarmInitialValues]);
 
   const handleScheduleAlarmSaved = useCallback(() => {
+    setCustomAlarmRefreshKey((value) => value + 1);
     blurActiveElement();
     setIsScheduleAlarmAddVisible(false);
     setScheduleAlarmInitialStep("form");
@@ -458,13 +479,30 @@ export function HomeScreen({
     setIsRouteDetailVisible(true);
   }, []);
 
-  const handleRouteSetupPress = useCallback(() => {
-    blurActiveElement();
-    setIsScheduleAlarmAddVisible(true);
-    setScheduleAlarmInitialStep("routeSetup");
-    setScheduleAlarmInitialValues({
-      routePlaces: getFirstLastRouteSetupPlaces(firstLastRouteSummary),
-    });
+  const handleRouteSetupPress = useCallback(async () => {
+    if (loadingFirstLastResetRef.current) return;
+    loadingFirstLastResetRef.current = true;
+    try {
+      const id = firstLastRouteSummary?.notificationId;
+      if (firstLastRouteSummary && (id === undefined || id === null || id === "")) {
+        throw new Error("재설정할 첫차·막차 알림 id가 없습니다.");
+      }
+      const notification = id !== undefined && id !== null
+        ? await getArrivalNotificationById({ id })
+        : null;
+      blurActiveElement();
+      setScheduleAlarmInitialValues(notification ? {
+        ...notification,
+        notificationId: notification.notificationId ?? id,
+        routePlaces: getFirstLastRouteSetupPlaces(notification),
+      } : null);
+      setScheduleAlarmInitialStep("routeSetup");
+      setIsScheduleAlarmAddVisible(true);
+    } catch (error) {
+      Alert.alert("경로 재설정 실패", error?.message ?? "첫차·막차 알림을 불러오지 못했습니다.");
+    } finally {
+      loadingFirstLastResetRef.current = false;
+    }
   }, [firstLastRouteSummary]);
 
   const handleScheduleAlarmAddPress = useCallback(() => {

@@ -1,6 +1,14 @@
 export const fontFamily = "SUIT";
 
 export const typography = {
+  head03Sb: {
+    fontFamily,
+    fontSize: 20,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 20,
+    letterSpacing: -0.2,
+  },
   head01Sb: {
     fontFamily,
     fontSize: 20,

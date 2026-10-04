@@ -25,7 +25,7 @@ import RouteClearIcon from "../../../../assets/images/x.svg";
 import BigBusAsset from "../../../../assets/images/bigbus.svg";
 
 import { searchAddresses } from "../../../api/address/search";
-import { createArrivalNotification } from "../../../api/notifications/arrival";
+import { saveArrivalNotification } from "../../../api/notifications/arrival";
 import {
   searchFirstLastTransitRoutes,
   searchTransitRoutes,
@@ -631,6 +631,10 @@ export function ScheduleAlarmAddScreen({
   if (step === "alarmFinal") {
     return (
       <ScheduleAlarmFinalStep
+        notificationId={initialValues?.notificationId}
+        initialReminderOffsetMinutes={initialValues?.reminderOffsetMinutes}
+        initialRepeatDays={initialValues?.repeatDays}
+        scheduleType={scheduleType}
         arrivalTime={
           arrivalTime
         }
@@ -2678,6 +2682,10 @@ export function ScheduleRouteResultStep({
 }
 
 function ScheduleAlarmFinalStep({
+  notificationId,
+  initialReminderOffsetMinutes,
+  initialRepeatDays = [],
+  scheduleType = "NORMAL",
   arrivalTime,
   onBackPress,
   onPrevPress,
@@ -2690,7 +2698,9 @@ function ScheduleAlarmFinalStep({
   const [
     selectedDays,
     setSelectedDays,
-  ] = useState([]);
+  ] = useState(() => initialRepeatDays.map((day) =>
+    ["월", "화", "수", "목", "금", "토", "일"][["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].indexOf(day)],
+  ).filter(Boolean));
 
   const [
     isSubmitting,
@@ -2710,14 +2720,11 @@ function ScheduleAlarmFinalStep({
   const [
     reminders,
     setReminders,
-  ] = useState({
-    1: false,
-    3: false,
-    5: false,
-    10: true,
-    15: false,
-    30: false,
-    60: false,
+  ] = useState(() => {
+    const offsets = (initialReminderOffsetMinutes ?? [10]).map(Number);
+    return Object.fromEntries([1, 3, 5, 10, 15, 30, 60, ...offsets].map((minute) =>
+      [minute, offsets.includes(minute)],
+    ));
   });
 
   const days = [
@@ -2898,14 +2905,14 @@ function ScheduleAlarmFinalStep({
       setIsSubmitting(true);
 
       try {
-        await createArrivalNotification(
+        await saveArrivalNotification(
           {
+            id: notificationId,
             payload: {
               routeName:
                 selectedRouteName,
 
-              scheduleType:
-                "NORMAL",
+              scheduleType,
 
               targetArrivalTime,
 

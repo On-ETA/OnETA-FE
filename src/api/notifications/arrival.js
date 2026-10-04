@@ -397,6 +397,13 @@ export async function updateArrivalNotification({
   return response;
 }
 
+export function saveArrivalNotification(options = {}) {
+  const { id } = options;
+  return id !== undefined && id !== null && id !== ""
+    ? updateArrivalNotification(options)
+    : createArrivalNotification(options);
+}
+
 export async function updateArrivalNotificationStatus({
   id,
   payload,

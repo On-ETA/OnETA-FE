@@ -417,7 +417,10 @@ export function ScheduleAlarmEditScreen({
             accessibilityRole="button"
             onPress={() =>
               onResetRoutePress?.({
+                notificationId,
                 routeName,
+                reminderOffsetMinutes: arrivalAlarm?.reminderOffsetMinutes,
+                repeatDays: selectedDays.map((day) => koreanDayToApiDay[day]).filter(Boolean),
                 scheduleType: arrivalAlarm?.scheduleType ?? "NORMAL",
                 arrivalTime:
                   arrivalAlarm?.targetArrivalTime ??

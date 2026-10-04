@@ -12,7 +12,7 @@ import LoadIcon from "../../../../public/images/load.svg";
 import SettingIcon from "../../../../public/images/setting.svg";
 import TrashIcon from "../../../../assets/images/trash_g.svg";
 import { RouteTimeline } from "../../../components/RouteTimeline";
-import { colors } from "../../../theme";
+import { colors, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 import { formatDurationMinutes } from "../../../utils/formatDuration";
 
@@ -55,6 +55,7 @@ export function FirstLastRouteScreen({
     60: false,
   });
   const hasConfiguredRoute = Boolean(routeSummary);
+  const hasEstimatedDeparture = Number.isFinite(routeSummary?.estimatedDepartureTimestamp);
   const remainingMinutes = Number.isFinite(routeSummary?.estimatedDepartureTimestamp)
     ? Math.max(
         0,
@@ -160,7 +161,7 @@ export function FirstLastRouteScreen({
                 <View style={[styles.summaryBlock, styles.summaryBlockRight]}>
                   <Text style={styles.summaryLabel}>예상 출발 시간</Text>
                   <Text style={styles.departureTime}>
-                    {routeSummary.departureTime ?? ""}
+                    {hasEstimatedDeparture ? routeSummary.departureTime || "—" : "—"}
                   </Text>
                 </View>
               </View>
@@ -170,7 +171,7 @@ export function FirstLastRouteScreen({
                   {Number.isFinite(routeSummary.totalDurationMinutes) ? `총 ${formatDurationMinutes(routeSummary.totalDurationMinutes)}` : ""}
                 </Text>
                 <Text style={styles.summaryLabel}>
-                  {routeSummary.arrivalTime ? `예상 도착 ${routeSummary.arrivalTime}` : ""}
+                  {`예상 도착 ${hasEstimatedDeparture ? routeSummary.arrivalTime || "—" : "—"}`}
                 </Text>
               </View>
               <RouteTimeline
@@ -487,21 +488,14 @@ const styles = StyleSheet.create({
   },
   remainingGroup: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
+    minHeight: 42,
     alignSelf: "stretch",
   },
   remainingNumber: {
-    fontFamily: "SUIT",
-    fontSize: 36,
-    fontWeight: "700",
-    lineHeight: 42,
-    color: colors.black,
-  },
-  remainingUnit: {
-    fontFamily: "SUIT",
-    fontSize: 36,
-    fontWeight: "700",
-    lineHeight: 42,
+    ...typography.head03Sb,
+    fontSize: 30,
+    lineHeight: 30,
     color: colors.black,
   },
   departureTime: {
