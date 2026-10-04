@@ -17,6 +17,7 @@ import {
 } from "../../../api/notifications/transit";
 import { colors, layout } from "../../../theme";
 import { normalizeTimelineSegments } from "../../../utils/routeSegments";
+import { getTransitColors } from "../../../utils/transitColors";
 
 
 export function FirstLastRouteDetailScreen({
@@ -438,11 +439,33 @@ function BusStep({ step }) {
         </View>
 
         <View style={styles.busInfoLine}>
-          <View style={styles.busBadge}>
+          <View
+            style={[
+              styles.busBadge,
+              {
+                ...(getTransitColors(step).isSubway
+                  ? {
+                      borderWidth: 1,
+                      borderColor: getTransitColors(step).light,
+                      backgroundColor: colors.white,
+                    }
+                  : {
+                      backgroundColor: colors.bus,
+                    }),
+              },
+            ]}
+          >
             <BusIcon size={13} />
 
             <Text
-              style={styles.busBadgeText}
+              style={[
+                styles.busBadgeText,
+                {
+                  color: getTransitColors(step).isSubway
+                    ? getTransitColors(step).strong
+                    : colors.white,
+                },
+              ]}
             >
               {step.routeNumber ||
                 "버스"}
