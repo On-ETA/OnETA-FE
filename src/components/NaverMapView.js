@@ -209,6 +209,7 @@ function WebNaverMapView({
             onCameraIdleRef.current?.({
               latitude,
               longitude,
+              zoom: map.getZoom?.(),
             });
           },
         );
@@ -460,6 +461,7 @@ function NativeNaverMap({
     onCameraIdle?.({
       latitude,
       longitude,
+      zoom: event?.zoom ?? event?.camera?.zoom,
     });
   };
 
@@ -562,4 +564,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     backgroundColor: "rgba(255, 255, 255, 0.86)",
   },
+
 });

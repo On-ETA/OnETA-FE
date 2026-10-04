@@ -41,6 +41,10 @@ import { AddressManagementScreen } from "../../AddressManagementScreen";
 import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 import { normalizeTimelineSegments } from "../../../utils/routeSegments";
+import {
+  formatSeoulTime,
+  parseEstimatedDepartureAt,
+} from "../../../utils/firstLastRouteSummary";
 
 const DEFAULT_TIME = {
   period: "오전",
@@ -654,12 +658,12 @@ export function ScheduleAlarmAddScreen({
         onBackPress={
           handleBackPress
         }
-        onRouteSelect={(
+        onRouteSelect={async (
           route,
           places,
         ) => {
           if (onRouteConfigured) {
-            onRouteConfigured(
+            await onRouteConfigured(
               route,
               places,
             );
@@ -1152,6 +1156,11 @@ export function ScheduleRouteMapStep({
   ] = useState(null);
 
   const [
+    isResolvingInitialLocation,
+    setIsResolvingInitialLocation,
+  ] = useState(true);
+
+  const [
     mapSelectedCoordinate,
     setMapSelectedCoordinate,
   ] = useState(null);
@@ -1160,6 +1169,8 @@ export function ScheduleRouteMapStep({
     currentMapCenter,
     setCurrentMapCenter,
   ] = useState(null);
+
+  const [mapZoomLevel, setMapZoomLevel] = useState(15);
 
   const hasAppliedInitialUserLocation =
     useRef(false);
@@ -1231,6 +1242,10 @@ export function ScheduleRouteMapStep({
         }
       } catch {
         // Current location is optional for this screen.
+      } finally {
+        if (isActive) {
+          setIsResolvingInitialLocation(false);
+        }
       }
     }
 
@@ -1497,6 +1512,9 @@ export function ScheduleRouteMapStep({
     setMapSelectionError("");
     setIsReverseGeocoding(false);
     setPlaceKeyword(value);
+    if (value.trim()) {
+      setMapZoomLevel(13);
+    }
   };
 
   const handleMapPress = async ({
@@ -1660,6 +1678,7 @@ export function ScheduleRouteMapStep({
   const handleMapCameraIdle = ({
     latitude,
     longitude,
+    zoom,
   }) => {
     const resolvedLatitude =
       Number(latitude);
@@ -1675,6 +1694,11 @@ export function ScheduleRouteMapStep({
       )
     ) {
       return;
+    }
+
+    const resolvedZoom = Number(zoom);
+    if (Number.isFinite(resolvedZoom)) {
+      setMapZoomLevel(resolvedZoom);
     }
 
     setCurrentMapCenter(
@@ -1861,14 +1885,16 @@ export function ScheduleRouteMapStep({
         styles.mapScreen
       }
     >
-      <NaverMapView
-        center={mapCenter ?? undefined}
-        level={hasPlaceKeyword ? 13 : 15}
-        markers={mapMarkers}
-        onCameraIdle={handleMapCameraIdle}
-        onMapPress={handleMapPress}
-        showCenterMarker={false}
-      />
+      {!isResolvingInitialLocation && (
+        <NaverMapView
+          center={mapCenter ?? undefined}
+          level={mapZoomLevel}
+          markers={mapMarkers}
+          onCameraIdle={handleMapCameraIdle}
+          onMapPress={handleMapPress}
+          showCenterMarker={false}
+        />
+      )}
 
       <View
         style={
@@ -2379,6 +2405,31 @@ export function ScheduleRouteResultStep({
     setRouteError,
   ] = useState("");
 
+  const [selectionError, setSelectionError] = useState("");
+  const [isSelectingRoute, setIsSelectingRoute] = useState(false);
+
+  const handleRouteSelect = async (selectedRoute) => {
+    if (isSelectingRoute) return;
+
+    setIsSelectingRoute(true);
+    setSelectionError("");
+
+    try {
+      await onRouteSelect?.(selectedRoute, {
+        origin: getRoutePlaceText(origin),
+        destination: getRoutePlaceText(destination),
+        originPlace: origin,
+        destinationPlace: destination,
+      });
+    } catch (error) {
+      setSelectionError(
+        error?.message || "경로를 설정하지 못했습니다. 다시 시도해주세요.",
+      );
+    } finally {
+      setIsSelectingRoute(false);
+    }
+  };
+
   useEffect(() => {
     let isActive = true;
 
@@ -2551,6 +2602,12 @@ export function ScheduleRouteResultStep({
         </Text>
       </View>
 
+      {selectionError ? (
+        <Text accessibilityRole="alert" style={styles.routeSelectionError}>
+          {selectionError}
+        </Text>
+      ) : null}
+
       <ScrollView style={styles.routeResultContent} contentContainerStyle={styles.routeResultList}>
         {isLoadingRoutes ? (
           <View
@@ -2586,6 +2643,9 @@ export function ScheduleRouteResultStep({
         ) : (
           routes.map((selectedRoute, routeIndex) => {
             const displayDuration = selectedRoute.totalDurationMinutes ?? 0;
+            const estimatedDepartureTime = formatSeoulTime(
+              parseEstimatedDepartureAt(selectedRoute.estimatedDepartureAt),
+            );
             return (
           <View key={selectedRoute.id ?? `route-${routeIndex}`} style={styles.routeResultCard}>
             {routeIndex === 0 || displayDuration === minimumDuration ? (
@@ -2627,6 +2687,11 @@ export function ScheduleRouteResultStep({
                 분
               </Text>
               </View>
+              {estimatedDepartureTime ? (
+                <Text style={styles.estimatedDepartureText}>
+                  예상 출발 {estimatedDepartureTime}
+                </Text>
+              ) : null}
             </View>
 
             <RouteTimeline
@@ -2639,29 +2704,8 @@ export function ScheduleRouteResultStep({
 
             <Pressable
               accessibilityRole="button"
-              onPress={() =>
-                onRouteSelect?.(
-                  selectedRoute,
-
-                  {
-                    origin:
-                      getRoutePlaceText(
-                        origin,
-                      ),
-
-                    destination:
-                      getRoutePlaceText(
-                        destination,
-                      ),
-
-                    originPlace:
-                      origin,
-
-                    destinationPlace:
-                      destination,
-                  },
-                )
-              }
+              disabled={isSelectingRoute}
+              onPress={() => handleRouteSelect(selectedRoute)}
               style={
                 styles.routeAlarmButton
               }
@@ -3083,9 +3127,9 @@ function ScheduleAlarmFinalStep({
                   formattedArrivalTime
                 }
               </Text>
+              </View>
+              </View>
             </View>
-          </View>
-        </View>
 
         <Pressable
           accessibilityRole="button"
@@ -4819,6 +4863,15 @@ const styles =
       color: colors.gray06,
     },
 
+    routeSelectionError: {
+      ...typography.body02M,
+      color: colors.gray09,
+      textAlign: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: colors.gray02,
+    },
+
     optionBadges: {
       flexDirection: "row",
       gap: 8,
@@ -4854,6 +4907,14 @@ const styles =
       gap: 12,
     },
     routeDurationRow: { flexDirection: "row", alignItems: "flex-end", flexShrink: 0 },
+
+    estimatedDepartureText: {
+      flexShrink: 1,
+      fontFamily: "SUIT",
+      fontSize: 14,
+      color: colors.gray08,
+      textAlign: "right",
+    },
 
     totalTimeNumber: {
       fontFamily: "SUIT",

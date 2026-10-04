@@ -124,7 +124,7 @@ test("transit notifications use fresh cache and refetch expired entries", async 
     "../client": {
       requestJson: async () => {
         requests += 1;
-        return { data: [{ notificationId: requests, routeDetails: "{}" }] };
+        return { data: [{ notificationId: requests, routeDetails: "{}", scheduleType: "FIRST_TRANSIT" }] };
       },
     },
     "../homeCache": {
@@ -146,6 +146,43 @@ test("transit notifications use fresh cache and refetch expired entries", async 
   const refreshed = await transit.getTransitNotifications();
   assert.equal(requests, 2);
   assert.equal(refreshed[0].notificationId, 2);
+});
+
+test("first and last transit lists keep only their own schedule type", async () => {
+  const cache = new Map();
+  const requests = [];
+  const transit = load("src/api/notifications/transit.js", {
+    "../auth/tokens": { getAccessToken: () => "access" },
+    "../auth/reissue": { reissueAuthTokens: async () => ({ accessToken: "next" }) },
+    "../client": {
+      requestJson: async ({ path }) => {
+        requests.push(path);
+        return {
+          data: [
+            { notificationId: 1, scheduleType: "FIRST_TRANSIT", routeDetails: "{}" },
+            { notificationId: 2, scheduleType: "LAST_TRANSIT", routeDetails: "{}" },
+          ],
+        };
+      },
+    },
+    "../homeCache": {
+      homeCacheKeys: {
+        firstTransitNotifications: "first",
+        lastTransitNotifications: "last",
+      },
+      readHomeCacheAsync: async (key) => cache.get(key),
+      writeHomeCacheAsync: async (key, value) => cache.set(key, value),
+    },
+  });
+
+  const first = await transit.getTransitNotifications({ scheduleType: "FIRST_TRANSIT" });
+  const last = await transit.getTransitNotifications({ scheduleType: "LAST_TRANSIT" });
+  assert.deepEqual(first.map((item) => item.notificationId), [1]);
+  assert.deepEqual(last.map((item) => item.notificationId), [2]);
+  assert.equal(cache.get("first").notifications[0].scheduleType, "FIRST_TRANSIT");
+  assert.equal(cache.get("last").notifications[0].scheduleType, "LAST_TRANSIT");
+  assert.ok(requests[0].includes("scheduleType=FIRST_TRANSIT"));
+  assert.ok(requests[1].includes("scheduleType=LAST_TRANSIT"));
 });
 
 test("cancelled home preload drains old requests before a new preload starts", async () => {
@@ -239,4 +276,94 @@ test("normal and first-last route searches send scheduleType to separate endpoin
   );
   assert.equal(new URLSearchParams(paths[1].split("?")[1]).get("originX"), "126.891116");
   await assert.rejects(routes.searchFirstLastTransitRoutes(places), /scheduleType/);
+});
+
+test("first-last search unwraps route data and preserves departure metadata", async () => {
+  const cache = new Map();
+  let requests = 0;
+  const routes = load("src/api/transit/routes.js", {
+    "../auth/tokens": { getAccessToken: () => "access" },
+    "../auth/reissue": { reissueAuthTokens: async () => ({ accessToken: "next" }) },
+    "../client": {
+      requestJson: async () => {
+        requests += 1;
+        return {
+          code: "SUCCESS",
+          data: [{
+            route: {
+              routeId: "ROUTE_4ca59ef0b8b547f2",
+              originAddress: "37.212014, 127.057355",
+              destinationAddress: "37.220558, 127.074864",
+              totalDurationMinutes: 32,
+              segments: [
+                { transitType: "WALK", durationMinutes: 8 },
+                { transitType: "BUS", transitName: "1550-1", durationMinutes: 8 },
+              ],
+            },
+            scheduleType: "FIRST_TRANSIT",
+            estimatedDepartureAt: "2026-10-04T04:52:00+09:00",
+          }],
+        };
+      },
+    },
+    "../homeCache": {
+      homeCacheKeys: { transitRouteSearch: "route-search" },
+      readHomeCacheAsync: async (key) => cache.get(key),
+      writeHomeCacheAsync: async (key, value) => cache.set(key, value),
+    },
+  });
+
+  const options = { originX: 127.057355, originY: 37.212014, scheduleType: "FIRST_TRANSIT" };
+  const [candidate] = await routes.searchFirstLastTransitRoutes(options);
+  assert.equal(candidate.routeId, "ROUTE_4ca59ef0b8b547f2");
+  assert.equal(candidate.totalDurationMinutes, 32);
+  assert.equal(candidate.segments[1].transitName, "1550-1");
+  assert.equal(candidate.scheduleType, "FIRST_TRANSIT");
+  assert.equal(candidate.estimatedDepartureAt, "2026-10-04T04:52:00+09:00");
+  assert.equal(candidate.raw.routeId, candidate.routeId);
+  assert.equal((await routes.searchFirstLastTransitRoutes(options))[0].routeId, candidate.routeId);
+  assert.equal(requests, 1);
+});
+
+test("first-last search preserves T005 message for the route screen", async () => {
+  const message = "첫차·막차 시간표를 확인할 수 없는 경로입니다. 서울 버스·지하철 지원 범위를 확인해주세요.";
+  const routes = load("src/api/transit/routes.js", {
+    "../auth/tokens": { getAccessToken: () => "access" },
+    "../auth/reissue": { reissueAuthTokens: async () => ({ accessToken: "next" }) },
+    "../client": {
+      requestJson: async () => ({ code: "T005", message }),
+    },
+    "../homeCache": {
+      homeCacheKeys: { transitRouteSearch: "route-search" },
+      readHomeCacheAsync: async () => null,
+      writeHomeCacheAsync: async () => {},
+    },
+  });
+
+  await assert.rejects(
+    routes.searchFirstLastTransitRoutes({ scheduleType: "FIRST_TRANSIT" }),
+    (error) => error.code === "T005" && error.message === message,
+  );
+});
+
+test("transit notification registration preserves T005 message", async () => {
+  const message = "첫차·막차 시간표를 확인할 수 없는 경로입니다. 서울 버스·지하철 지원 범위를 확인해주세요.";
+  const transit = load("src/api/notifications/transit.js", {
+    "../auth/tokens": { getAccessToken: () => "access" },
+    "../auth/reissue": { reissueAuthTokens: async () => ({ accessToken: "next" }) },
+    "../client": { requestJson: async () => ({ code: "T005", message }) },
+    "../homeCache": {
+      homeCacheKeys: {
+        firstTransitNotifications: "first",
+        lastTransitNotifications: "last",
+      },
+      readHomeCacheAsync: async () => null,
+      writeHomeCacheAsync: async () => {},
+    },
+  });
+
+  await assert.rejects(
+    transit.createTransitNotification({ payload: { scheduleType: "FIRST_TRANSIT" } }),
+    (error) => error.code === "T005" && error.message === message,
+  );
 });

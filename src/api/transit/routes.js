@@ -141,7 +141,8 @@ function normalizeSegment(segment, index) {
   };
 }
 
-export function normalizeTransitRoute(route) {
+export function normalizeTransitRoute(result) {
+  const route = result?.route ?? result;
   const segments = Array.isArray(route?.segments)
     ? route.segments.map(normalizeSegment)
     : [];
@@ -154,6 +155,8 @@ export function normalizeTransitRoute(route) {
     realTimeDurationMinutes: route?.realTimeDurationMinutes,
     totalCost: route?.totalCost,
     transferCount: route?.transferCount ?? 0,
+    scheduleType: result?.scheduleType ?? route?.scheduleType,
+    estimatedDepartureAt: result?.estimatedDepartureAt ?? route?.estimatedDepartureAt,
     segments,
     raw: route,
   };
@@ -194,6 +197,7 @@ async function searchRoutes(endpoint, cacheTtlMs, {
 
     if (
       cached &&
+      cached.version === 2 &&
       Date.now() - cached.savedAt < cacheTtlMs &&
       Array.isArray(cached.routes)
     ) {
@@ -224,6 +228,7 @@ async function searchRoutes(endpoint, cacheTtlMs, {
       ? { ...cachedSearches.searches }
       : {};
   searches[requestPath] = {
+    version: 2,
     savedAt: Date.now(),
     ttlMs: cacheTtlMs,
     routes: normalizedRoutes,

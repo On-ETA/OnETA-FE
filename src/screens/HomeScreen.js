@@ -199,13 +199,17 @@ function getFirstLastRouteCacheKey(scheduleType) {
 }
 
 function readCachedFirstLastRouteSummary(scheduleType = TRANSIT_SCHEDULE_TYPES.first) {
-  return readHomeCache(getFirstLastRouteCacheKey(scheduleType), null);
+  const summary = readHomeCache(getFirstLastRouteCacheKey(scheduleType), null);
+  return summary?.cacheVersion === 2 && summary.scheduleType === scheduleType
+    ? summary
+    : null;
 }
 
 function writeCachedFirstLastRouteSummary(summary, scheduleType = TRANSIT_SCHEDULE_TYPES.first) {
   if (summary) {
     writeHomeCache(getFirstLastRouteCacheKey(scheduleType), {
       ...summary,
+      cacheVersion: 2,
       scheduleType,
     });
   }
@@ -213,6 +217,7 @@ function writeCachedFirstLastRouteSummary(summary, scheduleType = TRANSIT_SCHEDU
   return summary
     ? {
         ...summary,
+        cacheVersion: 2,
         scheduleType,
       }
     : summary;
@@ -271,9 +276,11 @@ export function HomeScreen({
     useState(false);
   const [editingCustomAlarm, setEditingCustomAlarm] = useState(null);
   const [currentAddressLabel, setCurrentAddressLabel] = useState("");
-  const [firstLastRouteSummary, setFirstLastRouteSummary] = useState(
-    () => readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.first),
-  );
+  const [firstLastRouteSummaries, setFirstLastRouteSummaries] = useState(() => ({
+    [TRANSIT_SCHEDULE_TYPES.first]: readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.first),
+    [TRANSIT_SCHEDULE_TYPES.last]: readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.last),
+  }));
+  const firstLastRouteSummary = firstLastRouteSummaries[activeFirstLastScheduleType] ?? null;
   const customAlarmRefreshKey = CUSTOM_ALARM_REFRESH_KEY;
 
   useEffect(() => {
@@ -281,9 +288,15 @@ export function HomeScreen({
 
     readHomeCacheAsync(getFirstLastRouteCacheKey(activeFirstLastScheduleType), null).then((cachedSummary) => {
       if (isActive) {
-        setFirstLastRouteSummary(
-          readCachedFirstLastRouteSummary(activeFirstLastScheduleType) ?? cachedSummary,
-        );
+        const summary = readCachedFirstLastRouteSummary(activeFirstLastScheduleType) ??
+          (cachedSummary?.cacheVersion === 2 &&
+          cachedSummary.scheduleType === activeFirstLastScheduleType
+            ? cachedSummary
+            : null);
+        setFirstLastRouteSummaries((current) => ({
+          ...current,
+          [activeFirstLastScheduleType]: summary,
+        }));
       }
     });
 
@@ -311,9 +324,9 @@ export function HomeScreen({
     if (selectedNotification) {
       const summary = createFirstLastRouteSummaryFromNotification(selectedNotification);
       writeCachedFirstLastRouteSummary(summary, scheduleType);
-      setFirstLastRouteSummary(summary);
+      setFirstLastRouteSummaries((current) => ({ ...current, [scheduleType]: summary }));
     } else {
-      setFirstLastRouteSummary(cached);
+      setFirstLastRouteSummaries((current) => ({ ...current, [scheduleType]: cached }));
     }
   }, [activeFirstLastScheduleType]);
 
@@ -387,12 +400,30 @@ export function HomeScreen({
 
   const saveFirstLastRoute = useCallback(async (route, places) => {
     const scheduleType = activeFirstLastScheduleType;
+    const originPlace = places?.originPlace ?? places?.origin;
+    const destinationPlace = places?.destinationPlace ?? places?.destination;
+    const estimatedDepartureTimestamp = parseEstimatedDepartureAt(route?.estimatedDepartureAt);
+    const routeSummary = createFirstLastRouteSummary(route, {
+      ...places,
+      ...(estimatedDepartureTimestamp !== undefined
+        ? { departureTimestamp: estimatedDepartureTimestamp }
+        : {}),
+    });
     const summary = {
-      ...createFirstLastRouteSummary(route, places),
-      originPlace: places?.origin,
-      destinationPlace: places?.destination,
-      originAddress: getPlaceAddress(places?.origin),
-      destinationAddress: getPlaceAddress(places?.destination),
+      ...routeSummary,
+      originPlace,
+      destinationPlace,
+      originAddress: getPlaceAddress(originPlace),
+      destinationAddress: getPlaceAddress(destinationPlace),
+      estimatedDepartureAt: route?.estimatedDepartureAt,
+      estimatedDepartureTimestamp,
+      departureTime: formatSeoulTime(estimatedDepartureTimestamp) ?? routeSummary.departureTime,
+      arrivalTime: formatSeoulTime(
+        estimatedDepartureTimestamp + routeSummary.totalDurationMinutes * 60000,
+      ) ?? routeSummary.arrivalTime,
+      remainingMinutes: estimatedDepartureTimestamp !== undefined
+        ? Math.max(0, Math.ceil((estimatedDepartureTimestamp - Date.now()) / 60000))
+        : routeSummary.remainingMinutes,
       scheduleType,
     };
 
@@ -402,19 +433,19 @@ export function HomeScreen({
       });
       const notificationId = getCreatedNotificationId(notificationResponse);
 
-      setFirstLastRouteSummary(
-        writeCachedFirstLastRouteSummary(
-          notificationId !== undefined && notificationId !== null
-            ? {
-                ...summary,
-                notificationId,
-              }
-            : summary,
-          scheduleType,
-        ),
+      const savedSummary = writeCachedFirstLastRouteSummary(
+        notificationId !== undefined && notificationId !== null
+          ? { ...summary, notificationId }
+          : summary,
+        scheduleType,
       );
+      setFirstLastRouteSummaries((current) => ({
+        ...current,
+        [scheduleType]: savedSummary,
+      }));
     } catch (error) {
       console.warn("첫막차 경로 등록 실패:", error?.code ?? error?.message);
+      throw error;
     }
   }, [activeFirstLastScheduleType]);
 
@@ -668,8 +699,8 @@ export function HomeScreen({
                   blurActiveElement();
                   setFirstLastRouteSetupStep("map");
                 }}
-                onRouteSelect={(route, places) => {
-                  saveFirstLastRoute(route, places);
+                onRouteSelect={async (route, places) => {
+                  await saveFirstLastRoute(route, places);
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
                 }}

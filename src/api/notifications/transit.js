@@ -41,7 +41,7 @@ async function writeTransitNotificationsCache(scheduleType, notifications) {
   const cacheKey = getTransitNotificationsCacheKey(normalizedScheduleType);
 
   await writeHomeCacheAsync(cacheKey, {
-    version: 2,
+    version: 3,
     savedAt: Date.now(),
     notifications,
   });
@@ -209,7 +209,7 @@ export function normalizeTransitNotification(notification) {
       : [],
     routeDetails: notification?.routeDetails,
     route,
-    scheduleType: notification?.scheduleType ?? "NORMAL",
+    scheduleType: notification?.scheduleType ?? route?.scheduleType ?? "NORMAL",
     enabled: Boolean(notification?.isActive),
     isActive: Boolean(notification?.isActive),
     payload: notification,
@@ -230,7 +230,7 @@ export async function getTransitNotifications({
     const cachedNotifications = await readHomeCacheAsync(cacheKey);
 
     if (
-      cachedNotifications?.version === 2 &&
+      cachedNotifications?.version === 3 &&
       Number.isFinite(cachedNotifications.savedAt) &&
       Date.now() - cachedNotifications.savedAt < TRANSIT_NOTIFICATIONS_CACHE_TTL_MS &&
       Array.isArray(cachedNotifications.notifications)
@@ -249,7 +249,9 @@ export async function getTransitNotifications({
 
   return writeTransitNotificationsCache(
     normalizedScheduleType,
-    pickTransitNotificationList(response).map(normalizeTransitNotification),
+    pickTransitNotificationList(response)
+      .map(normalizeTransitNotification)
+      .filter((notification) => notification.scheduleType === normalizedScheduleType),
   );
 }
 
