@@ -775,7 +775,7 @@ export function ScheduleAlarmAddScreen({
         </Pressable>
       </View>
 
-      <TimePickerSheet
+      {isTimePickerVisible && <TimePickerSheet
         onClose={() => {
           blurActiveElement();
 
@@ -796,7 +796,7 @@ export function ScheduleAlarmAddScreen({
         visible={
           isTimePickerVisible
         }
-      />
+      />}
     </View>
   );
 }
@@ -3507,12 +3507,6 @@ function TimePickerSheet({
     setDraftTime,
   ] = useState(() => normalizePickerTime(value));
 
-  useEffect(() => {
-    if (visible) {
-      setDraftTime(normalizePickerTime(value));
-    }
-  }, [value, visible]);
-
   const selectTime = (
     patch,
   ) => {
@@ -3662,7 +3656,8 @@ function WheelPickerColumn({
   const onChangeRef = useRef(onChange);
   const isMomentumScrollingRef =
     useRef(false);
-  const hasPositionedRef = useRef(false);
+  // Opening/layout scroll events must not overwrite the saved time.
+  const hasInteractedRef = useRef(false);
   const lastReportedIndexRef = useRef(-1);
   const scrollOffsetRef = useRef(0);
   const settlingIndexRef = useRef(null);
@@ -3673,6 +3668,10 @@ function WheelPickerColumn({
   onChangeRef.current = onChange;
 
   const selectedIndex = Math.max(options.indexOf(value), 0);
+  const initialContentOffset = useRef({
+    x: 0,
+    y: selectedIndex * TIME_PICKER_ITEM_HEIGHT,
+  }).current;
 
   const scrollToIndex = (
     index,
@@ -3691,19 +3690,16 @@ function WheelPickerColumn({
 
   useEffect(() => {
     if (!visible) {
-      hasPositionedRef.current = false;
       return undefined;
     }
 
     const scrollTimer = setTimeout(() => {
       requestAnimationFrame(() => {
-        scrollToIndex(selectedIndex, false);
-        scrollOffsetRef.current = selectedIndex * TIME_PICKER_ITEM_HEIGHT;
-        lastReportedIndexRef.current = selectedIndex;
-        if (options[selectedIndex] !== valueRef.current) {
-          onChangeRef.current(options[selectedIndex]);
-        }
-        hasPositionedRef.current = true;
+        if (hasInteractedRef.current) return;
+        const currentIndex = Math.max(options.indexOf(valueRef.current), 0);
+        scrollToIndex(currentIndex, false);
+        scrollOffsetRef.current = currentIndex * TIME_PICKER_ITEM_HEIGHT;
+        lastReportedIndexRef.current = currentIndex;
       });
     }, 50);
 
@@ -3727,6 +3723,7 @@ function WheelPickerColumn({
   };
 
   const handleScrollEnd = () => {
+    if (!hasInteractedRef.current) return;
     const offsetY = scrollOffsetRef.current;
     const nextIndex =
       Math.min(
@@ -3761,6 +3758,7 @@ function WheelPickerColumn({
   };
 
   const handleScroll = (event) => {
+    if (!hasInteractedRef.current) return;
     const offsetY = event.nativeEvent.contentOffset?.y ?? 0;
     scrollOffsetRef.current = offsetY;
     if (
@@ -3818,8 +3816,10 @@ function WheelPickerColumn({
           accessibilityLabel
         }
         decelerationRate="fast"
+        contentOffset={initialContentOffset}
         nestedScrollEnabled
         onScrollBeginDrag={() => {
+          hasInteractedRef.current = true;
           clearDragEndTimer();
           isMomentumScrollingRef.current = false;
           settlingIndexRef.current = null;
@@ -3850,16 +3850,14 @@ function WheelPickerColumn({
         ref={
           scrollRef
         }
-        onLayout={() => {
-          if (visible && !hasPositionedRef.current) {
+        onContentSizeChange={() => {
+          if (visible && !hasInteractedRef.current) {
             requestAnimationFrame(() => {
-              scrollToIndex(selectedIndex, false);
-              scrollOffsetRef.current = selectedIndex * TIME_PICKER_ITEM_HEIGHT;
-              lastReportedIndexRef.current = selectedIndex;
-              if (options[selectedIndex] !== valueRef.current) {
-                onChangeRef.current(options[selectedIndex]);
-              }
-              hasPositionedRef.current = true;
+              if (hasInteractedRef.current) return;
+              const currentIndex = Math.max(options.indexOf(valueRef.current), 0);
+              scrollToIndex(currentIndex, false);
+              scrollOffsetRef.current = currentIndex * TIME_PICKER_ITEM_HEIGHT;
+              lastReportedIndexRef.current = currentIndex;
             });
           }
         }}
@@ -3894,6 +3892,7 @@ function WheelPickerColumn({
                   option
                 }
                 onPress={() => {
+                  hasInteractedRef.current = true;
                   onChangeRef.current(option);
 
                   scrollToIndex(
