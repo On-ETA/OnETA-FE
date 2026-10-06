@@ -19,6 +19,7 @@ import RightIcon from "../../assets/images/R.svg";
 import packageJson from "../../package.json";
 import { logout } from "../api/auth/logout";
 import { getMyPage } from "../api/mypage";
+import { homeCacheKeys, readHomeCache } from "../api/homeCache";
 import { deleteUser } from "../api/user";
 import { AppScreen, HomeTopSection } from "../components";
 import { colors, typography } from "../theme";
@@ -26,8 +27,8 @@ import { blurActiveElement } from "../utils/accessibility";
 
 const defaultMyPageInfo = {
   appVersion: packageJson.version,
-  email: "abcdg@gmail.com",
-  nickname: "홍길동",
+  email: "",
+  nickname: "",
 };
 
 const ACCOUNT_ITEMS = [
@@ -58,6 +59,7 @@ function isAuthError(error) {
 
 export function MyPageScreen({
   embedded = false,
+  isFocused = true,
   onBackPress,
   onProfilePress,
   showHeader = true,
@@ -77,31 +79,37 @@ export function MyPageScreen({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawErrorMessage, setWithdrawErrorMessage] = useState("");
-  const [myPageInfo, setMyPageInfo] = useState(defaultMyPageInfo);
+  const [myPageInfo, setMyPageInfo] = useState(() => {
+    const cached = readHomeCache(homeCacheKeys.myPage);
+    return {
+      ...defaultMyPageInfo,
+      email: cached?.email ?? defaultMyPageInfo.email,
+      nickname: cached?.nickname ?? defaultMyPageInfo.nickname,
+    };
+  });
   useEffect(() => {
+    if (!isFocused) return undefined;
     let isActive = true;
+    const controller = new AbortController();
 
     async function loadMyPageInfo() {
       try {
-        const data = await getMyPage();
+        const data = await getMyPage({ signal: controller.signal });
 
         if (!isActive) {
           return;
         }
 
-        setMyPageInfo({
+        const nextInfo = {
           appVersion: defaultMyPageInfo.appVersion,
           email: data.email ?? defaultMyPageInfo.email,
           nickname: data.nickname ?? defaultMyPageInfo.nickname,
-        });
+        };
+        setMyPageInfo(current => current.email === nextInfo.email && current.nickname === nextInfo.nickname
+          ? current : nextInfo);
       } catch (error) {
-        if (isActive) {
-          if (isAuthError(error)) {
-            onLogoutComplete?.();
-            return;
-          }
-
-          setMyPageInfo(defaultMyPageInfo);
+        if (isActive && isAuthError(error)) {
+          onLogoutComplete?.();
         }
       }
     }
@@ -110,8 +118,9 @@ export function MyPageScreen({
 
     return () => {
       isActive = false;
+      controller.abort();
     };
-  }, []);
+  }, [isFocused]);
 
   const openWithdrawConfirm = () => {
     blurActiveElement();

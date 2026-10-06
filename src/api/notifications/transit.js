@@ -9,7 +9,7 @@ import {
 } from "../homeCache";
 
 const TRANSIT_NOTIFICATIONS_ENDPOINT = "/api/notifications/transit";
-const TRANSIT_NOTIFICATIONS_CACHE_TTL_MS = 60 * 1000;
+const TRANSIT_NOTIFICATIONS_CACHE_TTL_MS = 5 * 60 * 1000;
 export const TRANSIT_SCHEDULE_TYPES = {
   first: "FIRST_TRANSIT",
   last: "LAST_TRANSIT",
@@ -201,6 +201,7 @@ export function normalizeTransitNotification(notification) {
     title: routeName,
     targetArrivalTime: notification?.targetArrivalTime,
     estimatedDepartureAt: notification?.estimatedDepartureAt,
+    fetchedAt: notification?.fetchedAt ?? Date.now(),
     arrivalTime: formatTransitTargetTime(notification?.targetArrivalTime),
     reminderOffsetMinutes: Array.isArray(notification?.reminderOffsetMinutes)
       ? notification.reminderOffsetMinutes
@@ -236,7 +237,10 @@ export async function getTransitNotifications({
       Date.now() - cachedNotifications.savedAt < TRANSIT_NOTIFICATIONS_CACHE_TTL_MS &&
       Array.isArray(cachedNotifications.notifications)
     ) {
-      return cachedNotifications.notifications;
+      return cachedNotifications.notifications.map(notification => ({
+        ...notification,
+        fetchedAt: notification.fetchedAt ?? cachedNotifications.savedAt,
+      }));
     }
   }
 

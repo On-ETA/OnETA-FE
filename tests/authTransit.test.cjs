@@ -142,7 +142,10 @@ test("transit notifications use fresh cache and refetch expired entries", async 
   await transit.getTransitNotifications();
   assert.equal(requests, 1);
 
-  cache.get("first").savedAt = Date.now() - 120_000;
+  cache.get("first").savedAt = Date.now() - 4 * 60_000;
+  await transit.getTransitNotifications();
+  assert.equal(requests, 1);
+  cache.get("first").savedAt = Date.now() - 6 * 60_000;
   const refreshed = await transit.getTransitNotifications();
   assert.equal(requests, 2);
   assert.equal(refreshed[0].notificationId, 2);

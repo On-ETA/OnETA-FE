@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Modal,
@@ -25,6 +25,7 @@ import { Header } from "../../../components";
 import { RouteTimeline } from "../../../components/RouteTimeline";
 import { colors, typography } from "../../../theme";
 import { normalizeTimelineSegments } from "../../../utils/routeSegments";
+import { getArrivalNotificationPatch } from "../../../utils/arrivalNotificationPatch";
 
 const days = ["월", "화", "수", "목", "금", "토", "일"];
 const apiDayToKoreanDay = {
@@ -70,30 +71,6 @@ function formatArrivalTime(time) {
   return `${String(time.hour ?? 0).padStart(2, "0")}:${String(
     time.minute ?? 0,
   ).padStart(2, "0")}`;
-}
-
-function formatTargetArrivalTimeForApi(time) {
-  if (!time) {
-    return "";
-  }
-
-  if (typeof time === "string") {
-    const [hour = "00", minute = "00", second = "00"] = time.split(":");
-
-    return {
-      hour: Number(hour),
-      minute: Number(minute),
-      second: Number(second),
-      nano: 0,
-    };
-  }
-
-  return {
-    hour: Number(time.hour ?? 0),
-    minute: Number(time.minute ?? 0),
-    second: Number(time.second ?? 0),
-    nano: Number(time.nano ?? 0),
-  };
 }
 
 function getPrimaryTransitSegment(route) {
@@ -233,6 +210,7 @@ export function ScheduleAlarmEditScreen({
     getRepeatDays(alarm?.repeatDays),
   );
   const [arrivalAlarm, setArrivalAlarm] = useState(alarm);
+  const originalAlarmRef = useRef(alarm);
   const [isLoadingAlarm, setIsLoadingAlarm] = useState(false);
   const [isSavingAlarm, setIsSavingAlarm] = useState(false);
   const [alarmError, setAlarmError] = useState("");
@@ -302,6 +280,7 @@ export function ScheduleAlarmEditScreen({
         });
 
         if (isActive) {
+          originalAlarmRef.current = nextAlarm;
           setArrivalAlarm(nextAlarm);
           setRouteName(nextAlarm.routeName ?? "");
           setSelectedDays(getRepeatDays(nextAlarm.repeatDays));
@@ -322,6 +301,7 @@ export function ScheduleAlarmEditScreen({
             );
 
             if (fallbackAlarm) {
+              originalAlarmRef.current = fallbackAlarm;
               setArrivalAlarm(fallbackAlarm);
               setRouteName(fallbackAlarm.routeName ?? "");
               setSelectedDays(getRepeatDays(fallbackAlarm.repeatDays));
@@ -377,24 +357,24 @@ export function ScheduleAlarmEditScreen({
       return;
     }
 
-    const payload = {
+    const payload = getArrivalNotificationPatch(originalAlarmRef.current, {
       routeName: routeName.trim() || undefined,
-      targetArrivalTime: formatTargetArrivalTimeForApi(
-        arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
-      ),
       reminderOffsetMinutes,
       repeatDays: selectedDays
         .map((day) => koreanDayToApiDay[day])
         .filter(Boolean),
-      routeDetails: getRouteDetails(arrivalAlarm),
-      scheduleType: arrivalAlarm?.scheduleType,
-    };
+    });
 
     Object.keys(payload).forEach((key) => {
       if (payload[key] === undefined || payload[key] === "") {
         delete payload[key];
       }
     });
+
+    if (Object.keys(payload).length === 0) {
+      onSavePress?.();
+      return;
+    }
 
     setIsSavingAlarm(true);
 

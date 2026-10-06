@@ -375,10 +375,7 @@ export async function updateArrivalNotification({
   const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationEndpoint(id),
     method: "PATCH",
-    body: {
-      ...payload,
-      scheduleType: payload?.scheduleType ?? "NORMAL",
-    },
+    body: payload,
     accessToken,
     signal,
     errorMessage: "도착 알림 수정에 실패했습니다.",
