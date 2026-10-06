@@ -1,5 +1,5 @@
 ﻿import React, { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppState, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
 import ArrowRightIcon from "../../../../assets/images/R_w.svg";
@@ -15,6 +15,7 @@ import { RouteTimeline } from "../../../components/RouteTimeline";
 import { colors, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 import { formatDurationMinutes } from "../../../utils/formatDuration";
+import { getCorrectedRemainingMinutes } from "../../../utils/firstLastRouteSummary";
 
 const PRE_DEPARTURE_ALARMS = [
   { key: "1", label: "1분 전" },
@@ -42,8 +43,16 @@ export function FirstLastRouteScreen({
 
   React.useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 30_000);
-    return () => clearInterval(timer);
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") setCurrentTime(Date.now());
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
   }, []);
+
+  React.useEffect(() => setCurrentTime(Date.now()), [routeSummary]);
 
   const isLastRouteActive = activeScheduleType === LAST_TRANSIT;
   const [alarmSettings, setAlarmSettings] = useState({
@@ -57,12 +66,7 @@ export function FirstLastRouteScreen({
   });
   const hasConfiguredRoute = Boolean(routeSummary);
   const hasEstimatedDeparture = Number.isFinite(routeSummary?.estimatedDepartureTimestamp);
-  const remainingMinutes = Number.isFinite(routeSummary?.estimatedDepartureTimestamp)
-    ? Math.max(
-        0,
-        Math.ceil((routeSummary.estimatedDepartureTimestamp - currentTime) / 60000),
-      )
-    : routeSummary?.remainingMinutes;
+  const remainingMinutes = getCorrectedRemainingMinutes(routeSummary, currentTime);
   const enabledAlarmLabels = PRE_DEPARTURE_ALARMS
     .filter((alarm) => alarmSettings[alarm.key])
     .map((alarm) => alarm.label.replace(" 전", ""));
@@ -150,7 +154,8 @@ export function FirstLastRouteScreen({
                   <Text style={[styles.summaryLabel, styles.summaryLabelLeft]}>남은 시간</Text>
                   <View style={styles.remainingGroup}>
                     <Text
-                      style={[styles.remainingNumber, { flexShrink: 1 }]}
+                      numberOfLines={1}
+                      style={styles.remainingNumber}
                     >
                       {formatDurationMinutes(remainingMinutes)}
                     </Text>
@@ -338,7 +343,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   routeCardPanel: {
-    paddingTop: 24,
+    paddingTop: 16,
     paddingHorizontal: 16,
     paddingBottom: 26,
     gap: 16,
@@ -352,7 +357,6 @@ const styles = StyleSheet.create({
   },
   emptyRouteCardPanel: {
     display: "flex",
-    paddingTop: 16,
     paddingBottom: 16,
     flexDirection: "column",
     alignItems: "flex-start",
@@ -360,16 +364,20 @@ const styles = StyleSheet.create({
   },
   routeCardTop: {
     width: "100%",
+    height: 34,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   routeHeaderActions: {
+    height: 34,
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "stretch",
     gap: 8,
   },
   routeTitleGroup: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -459,16 +467,21 @@ const styles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 12,
   },
   summaryBlock: {
     gap: 8,
     alignItems: "flex-start",
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: "auto",
     minWidth: 0,
   },
   summaryBlockRight: {
+    flexGrow: 0,
+    marginLeft: "auto",
     alignItems: "flex-end",
   },
   summaryLabel: {

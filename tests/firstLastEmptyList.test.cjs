@@ -32,6 +32,10 @@ function fixture(scheduleType, result) {
     '../api/homeCache': { homeCacheKeys: keys, readHomeCache: (key, fallback) => cache.get(key) ?? fallback,
       writeHomeCache: (key, value) => cache.set(key, value), removeHomeCache: key => cache.delete(key) },
     '../api/addresses': { getAddresses: async () => [] },
+    '../utils/transitRefresh': { startTransitRefresh: ({ refresh }) => {
+      refresh({ forceRefresh: false, signal: new AbortController().signal }).catch(() => {});
+      return () => {};
+    } },
     '../api/notifications/transit': { TRANSIT_SCHEDULE_TYPES: types, getTransitNotifications: async options => {
       requests.push(options); if (result instanceof Error) throw result; return result;
     } },

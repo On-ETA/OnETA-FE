@@ -13,6 +13,7 @@ import {
   HomeScreen,
   InquiryScreen,
   LoginScreen,
+  MyPageScreen,
   NoticeDetailScreen,
   NoticesScreen,
   NotificationsScreen,
@@ -184,10 +185,12 @@ function createHomeScreenNavigationProps(navigation) {
   };
 }
 
-function useAuthenticatedRoute(navigation, route) {
+function useAuthenticatedRoute(navigation, route, { preload = true, renderExistingSession = false } = {}) {
   const accessToken = route?.params?.accessToken;
   const refreshToken = route?.params?.refreshToken;
-  const [isReady, setIsReady] = React.useState(false);
+  const [isReady, setIsReady] = React.useState(() =>
+    renderExistingSession && !accessToken && Boolean(getAccessToken()),
+  );
   const didPreloadRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -200,7 +203,7 @@ function useAuthenticatedRoute(navigation, route) {
           await clearHomeCacheAsync();
           await setAuthTokens({ accessToken, refreshToken }, { persist: true });
 
-          if (!didPreloadRef.current) {
+          if (preload && !didPreloadRef.current) {
             didPreloadRef.current = true;
             preloadHomeCache().catch(() => null);
           }
@@ -212,7 +215,7 @@ function useAuthenticatedRoute(navigation, route) {
         }
 
         if (getAccessToken()) {
-          if (!didPreloadRef.current) {
+          if (preload && !didPreloadRef.current) {
             didPreloadRef.current = true;
             preloadHomeCache().catch(() => null);
           }
@@ -243,7 +246,7 @@ function useAuthenticatedRoute(navigation, route) {
       isActive = false;
       unsubscribeAuthRequired();
     };
-  }, [accessToken, refreshToken, navigation]);
+  }, [accessToken, refreshToken, navigation, preload]);
 
   return isReady;
 }
@@ -378,6 +381,7 @@ function HomeRoute({ navigation, route }) {
 
   return (
     <HomeScreen
+      isFocused={isFocused}
       backHandlingEnabled={isFocused}
       initialTab={route.params?.initialTab ?? "home"}
       {...homeScreenNavigationProps}
@@ -462,7 +466,10 @@ function CustomAlarmRoute({ navigation, route }) {
 }
 
 function MyPageRoute({ navigation, route }) {
-  const isReady = useAuthenticatedRoute(navigation, route);
+  const isReady = useAuthenticatedRoute(navigation, route, {
+    preload: false,
+    renderExistingSession: true,
+  });
   const isFocused = useIsFocused();
   const homeScreenNavigationProps = React.useMemo(
     () => createHomeScreenNavigationProps(navigation),
@@ -474,9 +481,10 @@ function MyPageRoute({ navigation, route }) {
   }
 
   return (
-    <HomeScreen
-      backHandlingEnabled={isFocused}
-      initialTab="myPage"
+    <MyPageScreen
+      isFocused={isFocused}
+      onBackPress={() => goBackOrReset(navigation, routes.home)}
+      onProfilePress={homeScreenNavigationProps.onOpenAccountInfo}
       {...homeScreenNavigationProps}
     />
   );

@@ -83,6 +83,7 @@ export function createFirstLastRouteSummary(route, places = {}, now = Date.now()
     ?? numberValue(route, "totalDurationMinutes");
 
   return {
+    remainingTimeUpdatedAt: now,
     route,
     segments,
     transitLegs: transitSegments.map((segment, index) => ({
@@ -105,4 +106,14 @@ export function createFirstLastRouteSummary(route, places = {}, now = Date.now()
       ?? (totalDurationMinutes === undefined ? undefined : clock(previewDeparture + totalDurationMinutes * 60000)),
     preDepartureAlarmMinutes: 10,
   };
+}
+
+export function getCorrectedRemainingMinutes(summary, now = Date.now()) {
+  if (Number.isFinite(summary?.estimatedDepartureTimestamp)) {
+    return Math.max(0, Math.ceil((summary.estimatedDepartureTimestamp - now) / 60000));
+  }
+  if (!Number.isFinite(summary?.remainingMinutes)) return undefined;
+  const elapsed = Number.isFinite(summary?.remainingTimeUpdatedAt)
+    ? Math.max(0, now - summary.remainingTimeUpdatedAt) / 60000 : 0;
+  return Math.max(0, Math.ceil(summary.remainingMinutes - elapsed));
 }

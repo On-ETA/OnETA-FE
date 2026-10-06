@@ -44,6 +44,27 @@ test('new schedule without an ID continues to use registration POST', async () =
   assert.equal(f.calls[0].body.scheduleType, 'NORMAL');
 });
 
+test('partial updates send only supplied fields without adding a schedule type', async () => {
+  for (const payload of [{ routeName: 'new name' }, { repeatDays: [] }, { reminderOffsetMinutes: [30] }, { routeDetails: '{}' }]) {
+    const f = fixture();
+    await f.api.updateArrivalNotification({ id: 89, payload });
+    assert.equal(JSON.stringify(f.calls[0].body), JSON.stringify(payload));
+  }
+});
+
+test('edit payload omits unchanged values and preserves cleared repeat days', () => {
+  const exports = {};
+  const { code } = babel.transformSync(fs.readFileSync(path.join(__dirname, '../src/utils/arrivalNotificationPatch.js'), 'utf8'), {
+    configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'],
+  });
+  vm.runInNewContext(code, { exports });
+  const before = { routeName: 'old', repeatDays: ['MON', 'FRI'], reminderOffsetMinutes: [5, 30], targetArrivalTime: { hour: 13, minute: 0 } };
+  const patch = exports.getArrivalNotificationPatch(before, { ...before, routeName: 'new', repeatDays: ['FRI', 'MON'], reminderOffsetMinutes: [30, 5], targetArrivalTime: '13:00:00' });
+  assert.equal(JSON.stringify(patch), JSON.stringify({ routeName: 'new' }));
+  assert.equal(JSON.stringify(exports.getArrivalNotificationPatch(before, { repeatDays: [] })), '{"repeatDays":[]}');
+  assert.equal(JSON.stringify(exports.getArrivalNotificationPatch(before, before)), '{}');
+});
+
 test('failed route update never falls back to creating a duplicate schedule', async () => {
   const f = fixture(async () => { throw Object.assign(new Error('not found'), { status: 400 }); });
   await assert.rejects(f.api.saveArrivalNotification({ id: 89, payload: {} }), /not found/);

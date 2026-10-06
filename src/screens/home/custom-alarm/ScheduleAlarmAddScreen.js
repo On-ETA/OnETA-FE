@@ -31,10 +31,14 @@ import {
   searchTransitRoutes,
 } from "../../../api/transit/routes";
 import { Header } from "../../../components";
-import { NaverMapView } from "../../../components/NaverMapView";
+import { NaverMapView, preloadNaverMap } from "../../../components/NaverMapView";
+import { MapLoadingOverlay } from "../../../components/MapLoadingOverlay";
+import { NAVER_MAP_DEFAULT_CENTER } from "../../../config/naverMap";
+import { getLocationErrorMessage } from "../../../utils/locationError";
 import { RouteTimeline } from "../../../components/RouteTimeline";
 import {
   getCurrentCoordinate,
+  getCachedCurrentCoordinate,
   reverseGeocode,
 } from "../../../components/reverseGeocode";
 import { AddressManagementScreen } from "../../AddressManagementScreen";
@@ -42,6 +46,7 @@ import { colors, layout, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 import { normalizeTimelineSegments } from "../../../utils/routeSegments";
 import { getRouteSetupPlaces } from "../../../utils/routeSetupPlaces";
+import { getArrivalNotificationPatch } from "../../../utils/arrivalNotificationPatch";
 import {
   formatSeoulTime,
   parseEstimatedDepartureAt,
@@ -586,6 +591,7 @@ export function ScheduleAlarmAddScreen({
           setStep("routeResult")
         }
         onPlacePress={(type) => {
+          preloadNaverMap().catch(() => null);
           setActivePlaceType(type);
           setStep("route");
         }}
@@ -630,6 +636,7 @@ export function ScheduleAlarmAddScreen({
   if (step === "alarmFinal") {
     return (
       <ScheduleAlarmFinalStep
+        initialValues={initialValues}
         notificationId={initialValues?.notificationId}
         initialReminderOffsetMinutes={initialValues?.reminderOffsetMinutes}
         initialRepeatDays={initialValues?.repeatDays}
@@ -1106,12 +1113,7 @@ export function ScheduleRouteMapStep({
   const [
     userLocation,
     setUserLocation,
-  ] = useState(null);
-
-  const [
-    isResolvingInitialLocation,
-    setIsResolvingInitialLocation,
-  ] = useState(true);
+  ] = useState(() => getCachedCurrentCoordinate());
 
   const [
     mapSelectedCoordinate,
@@ -1121,12 +1123,27 @@ export function ScheduleRouteMapStep({
   const [
     currentMapCenter,
     setCurrentMapCenter,
-  ] = useState(null);
+  ] = useState(() => getMapCenterFromPlaces(origin, destination, initialActivePlaceType)
+    ?? userLocation ?? NAVER_MAP_DEFAULT_CENTER);
+
+  const [isMapReady, setIsMapReady] = useState(false);
+  const [isMapLoading, setIsMapLoading] = useState(true);
+  const [isLoadingCurrentLocation, setIsLoadingCurrentLocation] = useState(!userLocation);
+  const [currentLocationError, setCurrentLocationError] = useState("");
+  const hasInteractedWithMapRef = useRef(false);
+  const locationRetryTimerRef = useRef(null);
+
+  const stopAutomaticLocation = () => {
+    hasInteractedWithMapRef.current = true;
+    hasAppliedInitialUserLocation.current = true;
+    clearTimeout(locationRetryTimerRef.current);
+    setIsLoadingCurrentLocation(false);
+  };
 
   const [mapZoomLevel, setMapZoomLevel] = useState(15);
 
   const hasAppliedInitialUserLocation =
-    useRef(false);
+    useRef(Boolean(getMapCenterFromPlaces(origin, destination, initialActivePlaceType)));
 
   const [
     mapSelectedResults,
@@ -1175,11 +1192,15 @@ export function ScheduleRouteMapStep({
     let isActive = true;
 
     async function loadCurrentLocation() {
+      if (!isActive || hasInteractedWithMapRef.current) return;
+      setIsLoadingCurrentLocation(true);
       try {
         const coordinate =
           await getCurrentCoordinate();
 
         if (isActive) {
+          setIsLoadingCurrentLocation(false);
+          setCurrentLocationError("");
           setUserLocation(
             coordinate,
           );
@@ -1193,11 +1214,12 @@ export function ScheduleRouteMapStep({
             );
           }
         }
-      } catch {
-        // Current location is optional for this screen.
-      } finally {
-        if (isActive) {
-          setIsResolvingInitialLocation(false);
+      } catch (error) {
+        if (!isActive) return;
+        setIsLoadingCurrentLocation(false);
+        setCurrentLocationError(getLocationErrorMessage(error));
+        if (!hasInteractedWithMapRef.current) {
+          locationRetryTimerRef.current = setTimeout(loadCurrentLocation, 5000);
         }
       }
     }
@@ -1206,6 +1228,7 @@ export function ScheduleRouteMapStep({
 
     return () => {
       isActive = false;
+      clearTimeout(locationRetryTimerRef.current);
     };
   }, []);
 
@@ -1456,6 +1479,7 @@ export function ScheduleRouteMapStep({
   const handlePlaceKeywordChange = (
     value,
   ) => {
+    if (value.trim()) stopAutomaticLocation();
     mapPressRequestIdRef.current +=
       1;
 
@@ -1474,6 +1498,7 @@ export function ScheduleRouteMapStep({
     latitude,
     longitude,
   }) => {
+    stopAutomaticLocation();
     const resolvedLatitude =
       Number(latitude);
     const resolvedLongitude =
@@ -1682,6 +1707,7 @@ export function ScheduleRouteMapStep({
     type,
     value,
   ) => {
+    stopAutomaticLocation();
     const nextPlace =
       createRoutePlace(value);
 
@@ -1703,6 +1729,7 @@ export function ScheduleRouteMapStep({
   const selectPlaceResult = (
     result,
   ) => {
+    stopAutomaticLocation();
     const nextPlace =
       createRoutePlaceFromSearchResult(
         result,
@@ -1838,7 +1865,13 @@ export function ScheduleRouteMapStep({
         styles.mapScreen
       }
     >
-      {!isResolvingInitialLocation && (
+      <View
+        style={{ flex: 1 }}
+        onStartShouldSetResponderCapture={() => {
+          stopAutomaticLocation();
+          return false;
+        }}
+      >
         <NaverMapView
           center={mapCenter ?? undefined}
           level={mapZoomLevel}
@@ -1846,8 +1879,14 @@ export function ScheduleRouteMapStep({
           onCameraIdle={handleMapCameraIdle}
           onMapPress={handleMapPress}
           showCenterMarker={false}
+          onReady={() => {
+            setIsMapReady(true);
+            setIsMapLoading(false);
+          }}
+          onError={() => setIsMapLoading(false)}
         />
-      )}
+        {isMapLoading && <MapLoadingOverlay />}
+      </View>
 
       <View
         style={
@@ -2292,9 +2331,16 @@ export function ScheduleRouteMapStep({
       ) : (
         <View
           style={
-            styles.mapAddressListFooter
+          styles.mapAddressListFooter
           }
         >
+          {isMapReady && (currentLocationError || isLoadingCurrentLocation) ? (
+            <Text accessibilityLiveRegion="polite" style={styles.currentLocationStatus}>
+              {currentLocationError
+                ? `위치 조회 실패: ${currentLocationError}${!hasInteractedWithMapRef.current ? " 자동으로 다시 시도합니다." : ""}`
+                : "현 위치를 불러오는 중"}
+            </Text>
+          ) : null}
           <Pressable
             accessibilityRole="button"
             onPress={onAddressListPress}
@@ -2714,6 +2760,7 @@ export function ScheduleRouteResultStep({
 }
 
 function ScheduleAlarmFinalStep({
+  initialValues,
   notificationId,
   initialReminderOffsetMinutes,
   initialRepeatDays = [],
@@ -2943,37 +2990,21 @@ function ScheduleAlarmFinalStep({
       setIsSubmitting(true);
 
       try {
-        await saveArrivalNotification(
-          {
-            id: notificationId,
-            payload: {
-              routeName:
-                selectedRouteName,
-
-              scheduleType,
-
-              targetArrivalTime,
-
-              reminderOffsetMinutes:
-                selectedReminderOffsets,
-
-              repeatDays:
-                selectedDays
-                  .map(
-                    mapDayToApiValue,
-                  )
-                  .filter(Boolean),
-
-              routeDetails:
-                JSON.stringify(
-                  createScheduleRouteDetails(
-                    route,
-                    routePlaces,
-                  ),
-                ),
-            },
-          },
-        );
+        const values = {
+          routeName: selectedRouteName,
+          scheduleType,
+          targetArrivalTime,
+          reminderOffsetMinutes: selectedReminderOffsets,
+          repeatDays: selectedDays.map(mapDayToApiValue).filter(Boolean),
+          routeDetails: JSON.stringify(createScheduleRouteDetails(route, routePlaces)),
+        };
+        const isEditing = notificationId !== undefined && notificationId !== null && notificationId !== "";
+        const payload = isEditing
+          ? getArrivalNotificationPatch(initialValues, values)
+          : values;
+        if (Object.keys(payload).length > 0) {
+          await saveArrivalNotification({ id: notificationId, payload });
+        }
 
         await onSavePress?.();
       } catch (error) {
@@ -4593,6 +4624,17 @@ const styles =
       bottom: 0,
       paddingHorizontal: 20,
       paddingBottom: 16,
+    },
+
+    currentLocationStatus: {
+      ...typography.caption01M,
+      color: colors.gray08,
+      backgroundColor: "rgba(255,255,255,0.94)",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 8,
+      borderRadius: 8,
+      textAlign: "center",
     },
 
     mapAddressListButton: {

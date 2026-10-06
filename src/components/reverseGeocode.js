@@ -2,6 +2,7 @@ import * as Location from "expo-location";
 import { Platform } from "react-native";
 
 import { NAVER_MAP_CLIENT_ID } from "../config/naverMap";
+import { createCurrentLocationRequest } from "../utils/currentLocationRequest";
 
 let permissionPromise = null;
 let naverGeocoderScriptPromise = null;
@@ -83,10 +84,8 @@ async function ensureForegroundLocationPermission() {
       }
 
       return true;
-    })().catch((error) => {
+    })().finally(() => {
       permissionPromise = null;
-
-      throw error;
     });
   }
 
@@ -264,7 +263,7 @@ async function reverseGeocodeOnWeb(coordinate) {
   });
 }
 
-export async function getCurrentCoordinate() {
+async function fetchCurrentCoordinate() {
   await ensureForegroundLocationPermission();
 
   const lastKnownPosition =
@@ -293,6 +292,10 @@ export async function getCurrentCoordinate() {
     longitude: position?.coords?.longitude,
   });
 }
+
+const currentLocation = createCurrentLocationRequest(fetchCurrentCoordinate);
+export const getCurrentCoordinate = currentLocation.getCoordinate;
+export const getCachedCurrentCoordinate = currentLocation.getCachedCoordinate;
 
 export async function reverseGeocode({
   latitude,

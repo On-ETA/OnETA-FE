@@ -148,7 +148,7 @@ export function CustomAlarmScreen({
 
       try {
         const alarms = await getMyDepotNotifications({
-          forceRefresh: true,
+          forceRefresh: refreshKey > 0 || notificationRefreshKey > 0,
           signal: controller.signal,
         });
 

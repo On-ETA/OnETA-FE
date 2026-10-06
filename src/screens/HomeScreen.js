@@ -5,6 +5,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAddresses } from "../api/addresses";
 import { getArrivalNotificationById, updateArrivalNotification } from "../api/notifications/arrival";
+import { getArrivalNotificationPatch } from "../utils/arrivalNotificationPatch";
+import { getCurrentCoordinate } from "../components/reverseGeocode";
+import { startTransitRefresh } from "../utils/transitRefresh";
 import {
   homeCacheKeys,
   readHomeCache,
@@ -69,7 +72,7 @@ function createFirstLastRouteSummaryFromNotification(notification) {
     ...(estimatedDepartureTimestamp !== undefined
       ? { departureTimestamp: estimatedDepartureTimestamp }
       : {}),
-  });
+  }, notification?.fetchedAt ?? Date.now());
   const reminderOffsetMinutes = Array.isArray(notification?.reminderOffsetMinutes)
     ? notification.reminderOffsetMinutes
     : [];
@@ -194,6 +197,7 @@ function findTransitNotificationById(notifications, notificationId) {
 }
 
 export function HomeScreen({
+  isFocused = true,
   backHandlingEnabled = true,
   notificationCount = 0,
   initialTab = "home",
@@ -292,45 +296,20 @@ export function HomeScreen({
     };
   }, []);
 
-  useEffect(() => {
-    const controller = new AbortController();
-
-    loadFirstLastTransitNotifications({
-      scheduleType: activeFirstLastScheduleType,
-      signal: controller.signal,
-    }).catch((error) => {
-      if (error?.name !== "AbortError") {
-        console.warn("첫막차 경로 조회 실패:", error?.code ?? error?.message);
-      }
-    });
-
-    return () => {
-      controller.abort();
-    };
-  }, [activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
+  const isFirstLastVisible = isFocused && activeTab === "home" && activeHomeTab === "firstLast"
+    && !isAddressManagerVisible && !isRouteDetailVisible && !firstLastRouteSetupStep
+    && !isScheduleAlarmAddVisible && !isGarageDepartureAddVisible && !editingCustomAlarm;
 
   useEffect(() => {
-    let controller;
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state !== "active") return;
-      controller?.abort();
-      controller = new AbortController();
-      loadFirstLastTransitNotifications({
-        scheduleType: activeFirstLastScheduleType,
-        forceRefresh: true,
-        signal: controller.signal,
-      }).catch((error) => {
-        if (error?.name !== "AbortError") {
-          console.warn("첫차·막차 경로 갱신 실패:", error?.code ?? error?.message);
-        }
-      });
+    if (!isFirstLastVisible) return undefined;
+    return startTransitRefresh({
+      appState: AppState,
+      refresh: options => loadFirstLastTransitNotifications({
+        ...options, scheduleType: activeFirstLastScheduleType,
+      }),
+      onError: error => console.warn("첫차·막차 갱신 실패:", error?.code ?? error?.message),
     });
-
-    return () => {
-      controller?.abort();
-      subscription.remove();
-    };
-  }, [activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
+  }, [isFirstLastVisible, activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
 
   const saveFirstLastRoute = useCallback(async (route, places, existingNotification = firstLastRouteSummary) => {
     const scheduleType = existingNotification?.scheduleType ?? activeFirstLastScheduleType;
@@ -370,13 +349,13 @@ export function HomeScreen({
       if (existingId !== undefined && existingId !== null) {
         await updateArrivalNotification({
           id: existingId,
-          payload: {
+          payload: getArrivalNotificationPatch(existingNotification, {
             ...payload,
             reminderOffsetMinutes: existingNotification.reminderOffsetMinutes ?? payload.reminderOffsetMinutes,
             repeatDays: existingNotification.repeatDays ?? [],
             ...(existingNotification.routeName ? { routeName: existingNotification.routeName } : {}),
             ...(existingNotification.targetArrivalTime ? { targetArrivalTime: existingNotification.targetArrivalTime } : {}),
-          },
+          }),
         });
         await getTransitNotifications({ scheduleType, forceRefresh: true }).catch(() => null);
       }
@@ -460,6 +439,7 @@ export function HomeScreen({
 
   const handleRouteSetupPress = useCallback(async () => {
     if (loadingFirstLastResetRef.current) return;
+    getCurrentCoordinate().catch(() => null);
     loadingFirstLastResetRef.current = true;
     try {
       const id = firstLastRouteSummary?.notificationId;
@@ -503,6 +483,7 @@ export function HomeScreen({
   }, [activeFirstLastScheduleType, firstLastRouteSummaries]);
 
   const handleScheduleAlarmAddPress = useCallback(() => {
+    getCurrentCoordinate().catch(() => null);
     blurActiveElement();
     setIsScheduleAlarmAddVisible(true);
     setScheduleAlarmInitialStep("form");
@@ -714,6 +695,7 @@ export function HomeScreen({
                   setEditingCustomAlarm(null);
                 }}
                 onResetRoutePress={(initialValues) => {
+                  getCurrentCoordinate().catch(() => null);
                   blurActiveElement();
                   setEditingCustomAlarm(null);
                   setIsScheduleAlarmAddVisible(true);

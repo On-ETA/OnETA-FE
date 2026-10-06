@@ -4,6 +4,7 @@
   "private": true,
   "main": "index.js",
   "scripts": {
+    "postinstall": "node scripts/patch-naver-map-loaded.cjs",
     "test": "node --test tests/*.test.cjs",
     "dev": "expo start",
     "start": "expo start",
@@ -15,7 +16,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@mj-studio/react-native-naver-map": "^2.9.0",
+    "@mj-studio/react-native-naver-map": "2.9.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-firebase/app": "^26.4.0",
     "@react-native-firebase/installations": "^26.4.0",

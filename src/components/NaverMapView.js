@@ -28,8 +28,7 @@ function loadNaverMapsScript(clientId) {
       script.async = true;
       script.src =
         "https://oapi.map.naver.com/openapi/v3/maps.js" +
-        `?ncpKeyId=${encodeURIComponent(clientId)}` +
-        "&submodules=geocoder";
+        `?ncpKeyId=${encodeURIComponent(clientId)}`;
 
       script.onload = () => {
         if (globalThis.naver?.maps) {
@@ -56,6 +55,11 @@ function loadNaverMapsScript(clientId) {
   }
 
   return naverMapsScriptPromise;
+}
+
+export function preloadNaverMap() {
+  if (Platform.OS !== "web") return Promise.resolve();
+  return loadNaverMapsScript(NAVER_MAP_CLIENT_ID);
 }
 
 function normalizeMarkers(
@@ -90,6 +94,8 @@ function WebNaverMapView({
   markers,
   onCameraIdle,
   onMapPress,
+  onReady,
+  onError,
   showCenterMarker,
   style,
 }) {
@@ -99,6 +105,10 @@ function WebNaverMapView({
   const markerRefs = useRef([]);
   const onCameraIdleRef = useRef(onCameraIdle);
   const onMapPressRef = useRef(onMapPress);
+  const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
+  onReadyRef.current = onReady;
+  onErrorRef.current = onError;
 
   useEffect(() => {
     onCameraIdleRef.current = onCameraIdle;
@@ -129,6 +139,10 @@ function WebNaverMapView({
     [markerPositions],
   );
 
+  // Location can resolve while the SDK is loading. Initialize with the latest props.
+  const initialMapStateRef = useRef(null);
+  initialMapStateRef.current = { center, level, markerPositions };
+
   const mapId = useMemo(() => {
     naverMapIdSeed += 1;
 
@@ -139,6 +153,8 @@ function WebNaverMapView({
     let isActive = true;
     let clickListener = null;
     let idleListener = null;
+    let readyListener = null;
+    let hasNotifiedReady = false;
 
     setErrorMessage("");
 
@@ -157,12 +173,14 @@ function WebNaverMapView({
 
         mapElement.innerHTML = "";
 
+        const initialState = initialMapStateRef.current;
+
         const map = new maps.Map(mapElement, {
           center: new maps.LatLng(
-            center.latitude,
-            center.longitude,
+            initialState.center.latitude,
+            initialState.center.longitude,
           ),
-          zoom: level,
+          zoom: initialState.level,
           scaleControl: false,
           logoControl: false,
           mapDataControl: false,
@@ -170,7 +188,13 @@ function WebNaverMapView({
 
         mapsRef.current = maps;
         mapRef.current = map;
-        markerRefs.current = markerPositions.map(
+        readyListener = maps.Event.addListener(map, "tilesloaded", () => {
+          if (isActive && !hasNotifiedReady) {
+            hasNotifiedReady = true;
+            onReadyRef.current?.();
+          }
+        });
+        markerRefs.current = initialState.markerPositions.map(
           (marker) =>
             new maps.Marker({
               map,
@@ -259,6 +283,7 @@ function WebNaverMapView({
           error?.message ??
             "네이버 지도를 불러오지 못했습니다.",
         );
+        onErrorRef.current?.(error);
       });
 
     return () => {
@@ -269,6 +294,9 @@ function WebNaverMapView({
       markerRefs.current = [];
       mapRef.current = null;
       mapsRef.current = null;
+      if (readyListener && globalThis.naver?.maps?.Event) {
+        globalThis.naver.maps.Event.removeListener(readyListener);
+      }
 
       if (
         clickListener &&
@@ -383,6 +411,7 @@ function NativeNaverMap({
   markers,
   onCameraIdle,
   onMapPress,
+  onReady,
   showCenterMarker,
   style,
 }) {
@@ -400,6 +429,12 @@ function NativeNaverMap({
       ),
     [markers, center, showCenterMarker],
   );
+
+  const camera = useMemo(() => ({
+    latitude: center.latitude,
+    longitude: center.longitude,
+    zoom: level,
+  }), [center.latitude, center.longitude, level]);
 
   const handleTapMap = (event) => {
     /*
@@ -467,11 +502,7 @@ function NativeNaverMap({
 
   return (
     <NativeNaverMapView
-      camera={{
-        latitude: center.latitude,
-        longitude: center.longitude,
-        zoom: level,
-      }}
+      camera={camera}
       isShowCompass={false}
       isShowLocationButton={false}
       isShowScaleBar={false}
@@ -481,6 +512,8 @@ function NativeNaverMap({
       style={[styles.container, style]}
       onCameraIdle={handleCameraIdle}
       onTapMap={handleTapMap}
+      // Patched native bridge emits this only after the SDK's first map load.
+      onInitialized={onReady}
     >
       {markerPositions.map((marker, index) => (
         <NaverMapMarkerOverlay
@@ -500,6 +533,8 @@ export function NaverMapView({
   markers,
   onCameraIdle,
   onMapPress,
+  onReady,
+  onError,
   showCenterMarker = true,
   style,
 }) {
@@ -515,6 +550,8 @@ export function NaverMapView({
         markers={markers}
         onCameraIdle={onCameraIdle}
         onMapPress={onMapPress}
+        onReady={onReady}
+        onError={onError}
         showCenterMarker={showCenterMarker}
         style={style}
       />
@@ -528,6 +565,7 @@ export function NaverMapView({
       markers={markers}
       onCameraIdle={onCameraIdle}
       onMapPress={onMapPress}
+      onReady={onReady}
       showCenterMarker={showCenterMarker}
       style={style}
     />

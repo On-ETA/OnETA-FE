@@ -1,4 +1,6 @@
-export async function getCurrentCoordinate() {
+import { createCurrentLocationRequest } from "../utils/currentLocationRequest";
+
+async function fetchCurrentCoordinate() {
   if (typeof navigator === "undefined" || !navigator.geolocation) {
     throw new Error("현재 위치 기능을 사용할 수 없습니다.");
   }
@@ -35,6 +37,10 @@ export async function getCurrentCoordinate() {
     );
   });
 }
+
+const currentLocation = createCurrentLocationRequest(fetchCurrentCoordinate);
+export const getCurrentCoordinate = currentLocation.getCoordinate;
+export const getCachedCurrentCoordinate = currentLocation.getCachedCoordinate;
 
 export async function reverseGeocode() {
   throw new Error("웹에서는 위치 주소 변환 기능을 사용할 수 없습니다.");
