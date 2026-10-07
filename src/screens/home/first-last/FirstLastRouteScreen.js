@@ -733,7 +733,8 @@ const styles = StyleSheet.create({
   },
   noticeBubble: {
     display: "flex",
-    alignSelf: "stretch",
+    width: 328,
+    maxWidth: "100%",
     marginTop: 18,
     padding: 12,
     flexDirection: "row",
