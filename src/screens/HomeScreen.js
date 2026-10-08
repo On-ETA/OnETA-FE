@@ -42,7 +42,7 @@ import { blurActiveElement } from "../utils/accessibility";
 import { getRouteSetupPlaces } from "../utils/routeSetupPlaces";
 import {
   createFirstLastRouteSummary,
-  formatSeoulTime,
+  formatSeoulDateTimeLabel,
   parseEstimatedDepartureAt,
 } from "../utils/firstLastRouteSummary";
 
@@ -92,7 +92,7 @@ function createFirstLastRouteSummaryFromNotification(notification) {
     estimatedDepartureAt,
     estimatedDepartureTimestamp,
     departureTime:
-      formatSeoulTime(estimatedDepartureTimestamp) ?? summary.departureTime,
+      formatSeoulDateTimeLabel(estimatedDepartureTimestamp) ?? summary.departureTime,
     remainingMinutes:
       estimatedDepartureTimestamp !== undefined
         ? Math.max(
@@ -127,6 +127,7 @@ function createTransitNotificationPayload(route, summary, scheduleType = TRANSIT
       destY: summary?.destinationPlace?.y ?? routeDetails?.destY,
     }),
     scheduleType: summary?.scheduleType ?? route?.scheduleType ?? scheduleType,
+    selectedDepartureAt: summary?.estimatedDepartureAt ?? route?.estimatedDepartureAt,
   };
 }
 
@@ -347,7 +348,7 @@ export function HomeScreen({
       estimatedDepartureAt: route?.estimatedDepartureAt,
       estimatedDepartureTimestamp,
       departureTime: formatSeoulTime(estimatedDepartureTimestamp) ?? routeSummary.departureTime,
-      arrivalTime: formatSeoulTime(
+      arrivalTime: formatSeoulDateTimeLabel(
         estimatedDepartureTimestamp + routeSummary.totalDurationMinutes * 60000,
       ) ?? routeSummary.arrivalTime,
       remainingMinutes: estimatedDepartureTimestamp !== undefined
