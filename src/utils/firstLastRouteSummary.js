@@ -49,6 +49,20 @@ export function formatSeoulTime(timestamp) {
   ).padStart(2, "0")}`;
 }
 
+// Preserve the operating date in first/last UI; 23:00 tomorrow is not 23:00 today.
+export function formatSeoulDateTimeLabel(timestamp, now = Date.now()) {
+  const time = formatSeoulTime(timestamp);
+  if (!time || !Number.isFinite(now)) return undefined;
+  const koreaDay = value => new Date(value + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const day = koreaDay(timestamp);
+  const today = koreaDay(now);
+  const dayDifference = Math.round((Date.parse(day) - Date.parse(today)) / 86400000);
+  if (dayDifference === 0) return `오늘 ${time}`;
+  if (dayDifference === 1) return `내일 ${time}`;
+  if (dayDifference === -1) return `어제 ${time}`;
+  return `${day.slice(5).replace("-", "/")} ${time}`;
+}
+
 function timeValue(source, key) {
   const value = source?.[key] ?? source?.raw?.[key];
   if (typeof value === "string" && /^\d{1,2}:\d{2}/.test(value)) {
