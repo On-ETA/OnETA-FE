@@ -64,3 +64,43 @@ test('missing coordinates stay absent rather than becoming zero', () => {
   assert.equal(places.origin.x, undefined);
   assert.equal(places.destination.y, undefined);
 });
+
+test('time-only reset restores coordinate-only addresses and sends all required coordinates', async () => {
+  let request;
+  const api = load('src/api/transit/routes.js', {
+    '../auth/tokens': { getAccessToken: () => 'access' },
+    '../auth/reissue': { reissueAuthTokens: async () => { throw new Error('unexpected refresh'); } },
+    '../client': { requestJson: async options => { request = options; return { code: 'SUCCESS', data: [] }; } },
+    '../homeCache': { homeCacheKeys: { transitRouteSearch: 'search' }, readHomeCacheAsync: async () => null, writeHomeCacheAsync: async () => {} },
+  });
+  const initialValues = { arrivalTime: '13:25:00', routeDetails: {
+    route: { originAddress: '37.565774, 126.924854', destinationAddress: '37.582594, 126.939724', segments: [] },
+  } };
+  const { origin, destination } = getRouteSetupPlaces(initialValues);
+  await api.searchTransitRoutes({ originX: origin.x, originY: origin.y, originAddress: origin.address,
+    destX: destination.x, destY: destination.y, destAddress: destination.address, scheduleType: 'NORMAL' });
+  const query = new URLSearchParams(request.path.split('?')[1]);
+  for (const [key, value] of Object.entries({ originX: '126.924854', originY: '37.565774',
+    destX: '126.939724', destY: '37.582594', originAddress: '37.565774, 126.924854',
+    destAddress: '37.582594, 126.939724', scheduleType: 'NORMAL' })) assert.equal(query.get(key), value);
+});
+
+test('coordinate text is a fallback and never replaces saved endpoint coordinates', () => {
+  const places = getRouteSetupPlaces({ routeDetails: {
+    route: fixture.data.route, origin: '37.565774, 126.924854', destination: '37.582594, 126.939724',
+  } });
+  assert.equal(places.origin.x, 126.925554591431);
+  assert.equal(places.origin.y, 37.550874837441);
+  assert.equal(places.destination.x, 126.914234922156);
+  assert.equal(places.destination.y, 37.5594419505475);
+});
+
+test('ordinary addresses and invalid coordinate text do not fabricate coordinates', () => {
+  for (const address of ['서울 마포구 와우산로 94', '91, 126.924854', '37.565774, 181', '37.565774, 126.924854 extra']) {
+    const places = getRouteSetupPlaces({ routeDetails: { origin: address, destination: address } });
+    assert.equal(places.origin.x, undefined);
+    assert.equal(places.origin.y, undefined);
+    assert.equal(places.destination.x, undefined);
+    assert.equal(places.destination.y, undefined);
+  }
+});

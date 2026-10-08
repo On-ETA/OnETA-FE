@@ -20,6 +20,23 @@ export const homeCacheKeys = {
 };
 
 const memoryCache = new Map();
+const cacheVersions = new Map();
+const storageOperations = new Map();
+
+function markCacheChange(cacheKey) {
+  cacheVersions.set(cacheKey, (cacheVersions.get(cacheKey) ?? 0) + 1);
+}
+
+function enqueueStorageOperation(cacheKey, task) {
+  const previous = storageOperations.get(cacheKey) ?? Promise.resolve();
+  const pending = previous.catch(() => null).then(task);
+  storageOperations.set(cacheKey, pending);
+  const cleanup = () => {
+    if (storageOperations.get(cacheKey) === pending) storageOperations.delete(cacheKey);
+  };
+  pending.then(cleanup, cleanup);
+  return pending;
+}
 
 function getWebStorage() {
   if (typeof globalThis === "undefined") {
@@ -66,11 +83,11 @@ export function readHomeCache(key, fallbackValue = null) {
 
 export function writeHomeCache(key, value) {
   const cacheKey = getCacheKey(key);
-
+  markCacheChange(cacheKey);
   memoryCache.set(cacheKey, value);
 
   if (Platform.OS !== "web") {
-    AsyncStorage.setItem(cacheKey, JSON.stringify(value)).catch(() => {
+    enqueueStorageOperation(cacheKey, () => AsyncStorage.setItem(cacheKey, JSON.stringify(value))).catch(() => {
       // Cache writes should never block the app flow.
     });
 
@@ -94,7 +111,7 @@ export function writeHomeCache(key, value) {
 
 export async function writeHomeCacheAsync(key, value) {
   const cacheKey = getCacheKey(key);
-
+  markCacheChange(cacheKey);
   memoryCache.set(cacheKey, value);
 
   if (Platform.OS === "web") {
@@ -113,22 +130,21 @@ export async function writeHomeCacheAsync(key, value) {
     return value;
   }
 
-  await AsyncStorage.setItem(cacheKey, JSON.stringify(value)).catch(() => null);
+  await enqueueStorageOperation(cacheKey, () => AsyncStorage.setItem(cacheKey, JSON.stringify(value))).catch(() => null);
 
   return value;
 }
 
 export function removeHomeCache(key) {
   const cacheKey = getCacheKey(key);
-
+  markCacheChange(cacheKey);
   memoryCache.delete(cacheKey);
 
   if (Platform.OS !== "web") {
-    AsyncStorage.removeItem(cacheKey).catch(() => {
+    return enqueueStorageOperation(cacheKey, () => AsyncStorage.removeItem(cacheKey)).catch(() => {
       // Ignore cache cleanup failures.
     });
 
-    return;
   }
 
   const storage = getWebStorage();
@@ -149,33 +165,7 @@ export function clearHomeCache() {
 }
 
 export async function clearHomeCacheAsync() {
-  Object.values(homeCacheKeys).forEach((key) => {
-    memoryCache.delete(getCacheKey(key));
-  });
-
-  if (Platform.OS === "web") {
-    const storage = getWebStorage();
-
-    if (!storage) {
-      return;
-    }
-
-    Object.values(homeCacheKeys).forEach((key) => {
-      try {
-        storage.removeItem(getCacheKey(key));
-      } catch {
-        // Ignore cache cleanup failures.
-      }
-    });
-
-    return;
-  }
-
-  await Promise.all(
-    Object.values(homeCacheKeys).map((key) =>
-      AsyncStorage.removeItem(getCacheKey(key)).catch(() => null),
-    ),
-  );
+  await Promise.all(Object.values(homeCacheKeys).map(removeHomeCache));
 }
 
 export async function readHomeCacheAsync(key, fallbackValue = null) {
@@ -190,7 +180,11 @@ export async function readHomeCacheAsync(key, fallbackValue = null) {
   }
 
   try {
+    await storageOperations.get(cacheKey)?.catch(() => null);
+    if (memoryCache.has(cacheKey)) return memoryCache.get(cacheKey);
+    const version = cacheVersions.get(cacheKey);
     const value = await AsyncStorage.getItem(cacheKey);
+    if (version !== cacheVersions.get(cacheKey)) return readHomeCache(key, fallbackValue);
     const parsedValue = value ? JSON.parse(value) : fallbackValue;
 
     if (value) {

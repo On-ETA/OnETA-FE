@@ -26,7 +26,6 @@ function isAuthError(error) {
 
 export async function logout({ accessToken = getAccessToken(), signal } = {}) {
   await cancelHomePreload();
-  await clearHomeCacheAsync();
 
   try {
     const response = await requestJson({
@@ -38,11 +37,13 @@ export async function logout({ accessToken = getAccessToken(), signal } = {}) {
     });
 
     await clearAuthTokens();
+    await clearHomeCacheAsync();
 
     return response;
   } catch (error) {
     if (isAuthError(error)) {
       await clearAuthTokens();
+      await clearHomeCacheAsync();
     }
 
     throw error;

@@ -8,6 +8,7 @@ import { getArrivalNotificationById, updateArrivalNotification } from "../api/no
 import { getArrivalNotificationPatch } from "../utils/arrivalNotificationPatch";
 import { getCurrentCoordinate } from "../components/reverseGeocode";
 import { startTransitRefresh } from "../utils/transitRefresh";
+import { FCM_NOTIFICATION_TYPES, subscribeNotifications } from "../notifications/events";
 import {
   homeCacheKeys,
   readHomeCache,
@@ -267,6 +268,21 @@ export function HomeScreen({
       setFirstLastRouteSummaries((current) => ({ ...current, [scheduleType]: null }));
     }
   }, [activeFirstLastScheduleType]);
+
+  useEffect(() => {
+    let controller;
+    const unsubscribe = subscribeNotifications((message, update) => {
+      if (message?.data?.type !== FCM_NOTIFICATION_TYPES.transit) return;
+      const result = update?.results?.find(item => item.scheduleType === activeFirstLastScheduleType);
+      if (update && result?.status !== "fulfilled") return;
+      controller?.abort();
+      controller = new AbortController();
+      loadFirstLastTransitNotifications({ signal: controller.signal }).catch((error) => {
+        if (error?.name !== "AbortError") console.warn("첫차·막차 알림 갱신 실패:", error?.code ?? error?.message);
+      });
+    });
+    return () => { controller?.abort(); unsubscribe(); };
+  }, [activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
 
   useEffect(() => {
     let isActive = true;

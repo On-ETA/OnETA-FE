@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Modal,
@@ -29,7 +29,8 @@ import {
 } from "../../../api/notifications/arrival";
 import { colors, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
-import { subscribeNotifications } from "../../../notifications/events";
+import { FCM_NOTIFICATION_TYPES, subscribeNotifications } from "../../../notifications/events";
+import { homeCacheKeys } from "../../../api/homeCache";
 
 // TODO: API 연동 시 아래 더미 데이터를 교체하세요.
 // GET /home/custom-alarms
@@ -122,10 +123,25 @@ export function CustomAlarmScreen({
   const [isDeletingAlarms, setIsDeletingAlarms] = useState(false);
   const [updatingScheduleAlarmIds, setUpdatingScheduleAlarmIds] = useState([]);
   const [updatingGarageAlarmIds, setUpdatingGarageAlarmIds] = useState([]);
-  const [notificationRefreshKey, setNotificationRefreshKey] = useState(0);
+  const garageRequest = useRef(null);
+  const scheduleRequest = useRef(null);
 
-  useEffect(() => subscribeNotifications(() => {
-    setNotificationRefreshKey((value) => value + 1);
+  useEffect(() => subscribeNotifications((message, { results = [] } = {}) => {
+    if (message?.data?.type === FCM_NOTIFICATION_TYPES.schedule) {
+      const result = results.find(item => item.key === homeCacheKeys.scheduleNotifications);
+      if (!result) return;
+      scheduleRequest.current?.abort();
+      if (result.status === "fulfilled") setScheduleAlarms(result.value);
+      setScheduleAlarmError(result.status === "rejected" ? result.error?.message || "? ?? ??? ???? ?????." : "");
+      setIsLoadingScheduleAlarms(false);
+    } else if (message?.data?.type === FCM_NOTIFICATION_TYPES.depot) {
+      const result = results.find(item => item.key === homeCacheKeys.depotNotifications);
+      if (!result) return;
+      garageRequest.current?.abort();
+      if (result.status === "fulfilled") setGarageAlarms(result.value);
+      setGarageAlarmError(result.status === "rejected" ? result.error?.message || "??? ??? ???? ?????." : "");
+      setIsLoadingGarageAlarms(false);
+    }
   }), []);
   const [editingSections, setEditingSections] = useState({
     garage: false,
@@ -141,69 +157,46 @@ export function CustomAlarmScreen({
   useEffect(() => {
     let isActive = true;
     const controller = new AbortController();
-
+    garageRequest.current = controller;
     async function loadGarageAlarms() {
       setIsLoadingGarageAlarms(true);
       setGarageAlarmError("");
-
       try {
-        const alarms = await getMyDepotNotifications({
-          forceRefresh: refreshKey > 0 || notificationRefreshKey > 0,
-          signal: controller.signal,
-        });
-
-        if (isActive) {
-          setGarageAlarms(alarms);
-        }
+        const alarms = await getMyDepotNotifications({ signal: controller.signal });
+        if (isActive && !controller.signal.aborted) setGarageAlarms(alarms);
       } catch (error) {
-        if (isActive) {
-          setGarageAlarms([]);
-          setGarageAlarmError(
-            error?.message ?? "차고지 출발 알림을 불러오지 못했습니다.",
-          );
+        if (isActive && !controller.signal.aborted && error?.name !== "AbortError") {
+          setGarageAlarmError(error?.message ?? "??? ?? ??? ???? ?????.");
         }
       } finally {
-        if (isActive) {
-          setIsLoadingGarageAlarms(false);
-        }
+        if (isActive && !controller.signal.aborted) setIsLoadingGarageAlarms(false);
       }
     }
+    loadGarageAlarms();
+    return () => { isActive = false; controller.abort(); };
+  }, [refreshKey]);
 
+  useEffect(() => {
+    let isActive = true;
+    const controller = new AbortController();
+    scheduleRequest.current = controller;
     async function loadScheduleAlarms() {
       setIsLoadingScheduleAlarms(true);
       setScheduleAlarmError("");
-
       try {
-        const alarms = await getArrivalNotifications({
-          forceRefresh: refreshKey > 0 || notificationRefreshKey > 0,
-          signal: controller.signal,
-        });
-
-        if (isActive) {
-          setScheduleAlarms(alarms);
-        }
+        const alarms = await getArrivalNotifications({ signal: controller.signal });
+        if (isActive && !controller.signal.aborted) setScheduleAlarms(alarms);
       } catch (error) {
-        if (isActive) {
-          setScheduleAlarms([]);
-          setScheduleAlarmError(
-            error?.message ?? "내 일정 알림을 불러오지 못했습니다.",
-          );
+        if (isActive && !controller.signal.aborted && error?.name !== "AbortError") {
+          setScheduleAlarmError(error?.message ?? "? ?? ??? ???? ?????.");
         }
       } finally {
-        if (isActive) {
-          setIsLoadingScheduleAlarms(false);
-        }
+        if (isActive && !controller.signal.aborted) setIsLoadingScheduleAlarms(false);
       }
     }
-
-    loadGarageAlarms();
     loadScheduleAlarms();
-
-    return () => {
-      isActive = false;
-      controller.abort();
-    };
-  }, [refreshKey, notificationRefreshKey]);
+    return () => { isActive = false; controller.abort(); };
+  }, [refreshKey]);
 
   const toggleEditSection = (sectionKey) => {
     setEditingSections((current) => {

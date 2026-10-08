@@ -14,6 +14,7 @@ function fixture(scheduleType, result) {
   const state = [];
   const effects = [];
   const requests = [];
+  let notificationListener;
   const react = {
     createElement: () => null, memo: component => component,
     useCallback: callback => callback, useRef: value => ({ current: value }),
@@ -26,6 +27,10 @@ function fixture(scheduleType, result) {
     },
   };
   const mocks = {
+    '../notifications/events': { FCM_NOTIFICATION_TYPES: { transit: 'firstandlast' }, subscribeNotifications: listener => {
+      notificationListener = listener;
+      return () => { notificationListener = null; };
+    } },
     react,
     'react-native': { Platform: { OS: 'web', select: value => value.web }, StyleSheet: { create: value => value },
       AppState: { addEventListener: () => ({ remove() {} }) } },
@@ -49,13 +54,27 @@ function fixture(scheduleType, result) {
   const exports = {};
   vm.runInNewContext(code, { exports, AbortController, console: { warn() {} }, require: name => mocks[name] ?? {} });
   exports.HomeScreen({});
-  return { cache, state, effects, requests, first, last };
+  return { cache, state, effects, requests, first, last, notify: message => notificationListener?.(message) };
 }
 
 async function runEffects(f) {
   f.effects.forEach(effect => effect());
   await new Promise(resolve => setImmediate(resolve));
 }
+
+test('home refreshes the displayed transit summary from cache only for firstandlast FCM', async () => {
+  const f = fixture('LAST_TRANSIT', []);
+  await runEffects(f);
+  const initialRequests = f.requests.length;
+  f.notify({ data: { type: 'normal' } });
+  await new Promise(setImmediate);
+  assert.equal(f.requests.length, initialRequests);
+  f.notify({ data: { type: 'firstandlast' } });
+  await new Promise(setImmediate);
+  assert.equal(f.requests.length, initialRequests + 1);
+  assert.equal(f.requests.at(-1).scheduleType, 'LAST_TRANSIT');
+  assert.equal(f.requests.at(-1).forceRefresh, false);
+});
 
 test('empty last-transit response clears the cached last route and screen while preserving the first route', async () => {
   const f = fixture('LAST_TRANSIT', []);
