@@ -201,6 +201,10 @@ async function searchRoutes(endpoint, cacheTtlMs, {
       cached &&
       cached.version === 2 &&
       Date.now() - cached.savedAt < cacheTtlMs &&
+      // Do not reuse a 23:59 search after crossing into the next Seoul date.
+      (endpoint !== FIRST_LAST_ROUTES_SEARCH_ENDPOINT ||
+        Math.floor((Date.now() + 9 * 3600000) / 86400000) ===
+        Math.floor((cached.savedAt + 9 * 3600000) / 86400000)) &&
       Array.isArray(cached.routes)
     ) {
       return cached.routes;
