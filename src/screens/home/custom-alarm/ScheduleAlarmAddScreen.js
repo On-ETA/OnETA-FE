@@ -48,7 +48,7 @@ import { normalizeTimelineSegments } from "../../../utils/routeSegments";
 import { getRouteSetupPlaces } from "../../../utils/routeSetupPlaces";
 import { getArrivalNotificationPatch } from "../../../utils/arrivalNotificationPatch";
 import {
-  formatSeoulTime,
+  formatSeoulDateTimeLabel,
   parseEstimatedDepartureAt,
 } from "../../../utils/firstLastRouteSummary";
 
@@ -2675,7 +2675,7 @@ export function ScheduleRouteResultStep({
         ) : (
           routes.map((selectedRoute, routeIndex) => {
             const displayDuration = selectedRoute.totalDurationMinutes ?? 0;
-            const estimatedDepartureTime = formatSeoulTime(
+            const estimatedDepartureTime = formatSeoulDateTimeLabel(
               parseEstimatedDepartureAt(selectedRoute.estimatedDepartureAt),
             );
             return (
