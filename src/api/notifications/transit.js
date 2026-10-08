@@ -310,6 +310,7 @@ export async function createTransitNotification({
         ? payload.routeDetails
         : JSON.stringify(payload?.routeDetails ?? {}),
     scheduleType: normalizeTransitScheduleType(payload?.scheduleType),
+    selectedDepartureAt: payload?.selectedDepartureAt,
   };
 
   const response = await requestTransitNotificationJson({
