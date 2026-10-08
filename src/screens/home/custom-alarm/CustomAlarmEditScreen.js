@@ -181,15 +181,7 @@ function getRouteDetails(alarm) {
   const route = alarm?.route ?? alarm?.raw?.route ?? parsedRouteDetails?.route;
 
   if (parsedRouteDetails?.route) {
-    return JSON.stringify({
-      route: parsedRouteDetails.route,
-      origin: parsedRouteDetails.origin,
-      destination: parsedRouteDetails.destination,
-      originAddress: parsedRouteDetails.originAddress,
-      destinationAddress: parsedRouteDetails.destinationAddress,
-      originPlace: parsedRouteDetails.originPlace,
-      destinationPlace: parsedRouteDetails.destinationPlace,
-    });
+    return JSON.stringify(parsedRouteDetails);
   }
 
   if (route) {

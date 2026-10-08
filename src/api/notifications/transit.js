@@ -1,4 +1,4 @@
-import { getAccessToken } from "../auth/tokens";
+import { getAccessToken, getAuthSessionId } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
 import {
@@ -10,6 +10,7 @@ import {
 
 const TRANSIT_NOTIFICATIONS_ENDPOINT = "/api/notifications/transit";
 const TRANSIT_NOTIFICATIONS_CACHE_TTL_MS = 5 * 60 * 1000;
+const transitListRequestIds = new Map();
 export const TRANSIT_SCHEDULE_TYPES = {
   first: "FIRST_TRANSIT",
   last: "LAST_TRANSIT",
@@ -225,11 +226,16 @@ export async function getTransitNotifications({
   scheduleType = TRANSIT_SCHEDULE_TYPES.first,
   signal,
 } = {}) {
+  const sessionId = getAuthSessionId?.();
   const normalizedScheduleType = normalizeTransitScheduleType(scheduleType);
   const cacheKey = getTransitNotificationsCacheKey(normalizedScheduleType);
 
   if (!forceRefresh) {
     const cachedNotifications = await readHomeCacheAsync(cacheKey);
+
+    if (signal?.aborted || sessionId !== getAuthSessionId?.()) {
+      throw Object.assign(new Error("첫차·막차 목록 요청이 취소되었습니다."), { name: "AbortError" });
+    }
 
     if (
       cachedNotifications?.version === 3 &&
@@ -244,6 +250,11 @@ export async function getTransitNotifications({
     }
   }
 
+  if (signal?.aborted || sessionId !== getAuthSessionId?.()) {
+    throw Object.assign(new Error("첫차·막차 목록 요청이 취소되었습니다."), { name: "AbortError" });
+  }
+  const requestId = (transitListRequestIds.get(cacheKey) ?? 0) + 1;
+  transitListRequestIds.set(cacheKey, requestId);
   const response = await requestTransitNotificationJson({
     path: buildTransitNotificationsPath(normalizedScheduleType),
     method: "GET",
@@ -252,6 +263,9 @@ export async function getTransitNotifications({
     errorMessage: "첫막차 경로 목록을 불러오지 못했습니다.",
   });
 
+  if (signal?.aborted || requestId !== transitListRequestIds.get(cacheKey) || sessionId !== getAuthSessionId?.()) {
+    throw Object.assign(new Error("첫차·막차 목록 요청이 취소되었습니다."), { name: "AbortError" });
+  }
   return writeTransitNotificationsCache(
     normalizedScheduleType,
     pickTransitNotificationList(response)

@@ -107,7 +107,6 @@ export async function getUser({ accessToken = getAccessToken(), signal } = {}) {
 
 export async function deleteUser({ accessToken = getAccessToken(), signal } = {}) {
   await cancelHomePreload();
-  await clearHomeCacheAsync();
 
   const data = await requestUserJson({
     path: USER_ENDPOINT,
@@ -118,6 +117,7 @@ export async function deleteUser({ accessToken = getAccessToken(), signal } = {}
   });
 
   await clearAuthTokens();
+  await clearHomeCacheAsync();
 
   return data;
 }

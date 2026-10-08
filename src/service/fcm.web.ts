@@ -143,6 +143,13 @@ export async function deleteFcmToken() {
 export function listenForegroundMessage(callback: (message: WebRemoteMessage) => void) {
   let unsubscribe = () => {};
   let disposed = false;
+  const serviceWorker = typeof navigator !== "undefined" ? navigator.serviceWorker : undefined;
+  const onBackgroundMessage = (event: MessageEvent) => {
+    if (!disposed && event.data?.type === "ONETA_FCM_RECEIVED") {
+      callback(event.data.payload);
+    }
+  };
+  serviceWorker?.addEventListener("message", onBackgroundMessage);
 
   getWebMessaging().then((messaging) => {
     if (disposed || !messaging) return;
@@ -155,6 +162,7 @@ export function listenForegroundMessage(callback: (message: WebRemoteMessage) =>
   return () => {
     disposed = true;
     unsubscribe();
+    serviceWorker?.removeEventListener("message", onBackgroundMessage);
   };
 }
 

@@ -1,4 +1,4 @@
-import { getAccessToken } from "../auth/tokens";
+import { getAccessToken, getAuthSessionId } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
 import {
@@ -10,6 +10,7 @@ import {
 
 const SCHEDULE_NOTIFICATIONS_ENDPOINT = "/api/notifications/schedules";
 const ARRIVAL_NOTIFICATIONS_ENDPOINT = "/api/notifications/arrival";
+let arrivalListRequestId = 0;
 
 function buildArrivalNotificationEndpoint(id) {
   return `${ARRIVAL_NOTIFICATIONS_ENDPOINT}/${encodeURIComponent(id)}`;
@@ -248,6 +249,8 @@ export async function getArrivalNotifications({
   forceRefresh = false,
   signal,
 } = {}) {
+  const sessionId = getAuthSessionId?.();
+  if (signal?.aborted) throw Object.assign(new Error("일정 목록 요청이 취소되었습니다."), { name: "AbortError" });
   if (!forceRefresh) {
     const cachedNotifications = readHomeCache(homeCacheKeys.scheduleNotifications);
 
@@ -256,6 +259,7 @@ export async function getArrivalNotifications({
     }
   }
 
+  const requestId = ++arrivalListRequestId;
   const response = await requestArrivalNotificationJson({
     path: SCHEDULE_NOTIFICATIONS_ENDPOINT,
     method: "GET",
@@ -264,6 +268,9 @@ export async function getArrivalNotifications({
     errorMessage: "도착 알림 목록을 불러오지 못했습니다.",
   });
 
+  if (signal?.aborted || requestId !== arrivalListRequestId || sessionId !== getAuthSessionId?.()) {
+    throw Object.assign(new Error("일정 목록 요청이 취소되었습니다."), { name: "AbortError" });
+  }
   return writeHomeCache(
     homeCacheKeys.scheduleNotifications,
     pickArrivalNotificationList(response)

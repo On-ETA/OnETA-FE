@@ -6,6 +6,15 @@ const { test } = require("node:test");
 const babel = require("@babel/core");
 
 function load(file, mocks = {}, globals = {}) {
+  if (file === "src/service/fcm.ts") {
+    mocks = {
+      "../api/auth/tokens": { getAccessToken: () => null, hydrateAuthTokens: async () => {} },
+      "../api/notifications/arrival": { getArrivalNotifications: async () => [] },
+      "../api/homeCache": { homeCacheKeys: { scheduleNotifications: 'schedules' }, removeHomeCache() {}, writeHomeCacheAsync: async () => {} },
+      "../notifications/events": { invalidateNotifications: async () => {} },
+      ...mocks,
+    };
+  }
   const filename = path.resolve(__dirname, "..", file);
   const { code } = babel.transformSync(fs.readFileSync(filename, "utf8"), {
     filename, configFile: false, babelrc: false,
@@ -121,7 +130,7 @@ function lifecycleFixture({ permission = true, send = async () => {}, initial = 
     "../api/auth/tokens": auth,
     "../service/fcm": fcm,
     "./deviceTokenRegistration": registration,
-    "./events": { invalidateNotifications: () => calls.invalidations++ },
+    "./events": { invalidateNotifications: message => { calls.invalidations++; (calls.messages ??= []).push(message); } },
   }, {
     setTimeout: (fn, delay) => { timers.set(++timerId, { fn, delay }); return timerId; },
     clearTimeout: (id) => timers.delete(id),
@@ -215,6 +224,36 @@ test("foreground and open events deduplicate separately; messages do not show af
   stop();
 });
 
+test("received FCM types are passed to the refresh handler even in an inactive tab without showing a banner", () => {
+  const f = lifecycleFixture();
+  f.auth.setAuthTokens({ accessToken: 'access' });
+  const stop = f.start();
+  f.appState.currentState = 'background';
+  for (const type of ['depot', 'normal', 'firstandlast', undefined]) {
+    f.handlers.message({ messageId: String(type), data: { type } });
+  }
+  assert.equal(f.calls.invalidations, 4);
+  assert.deepEqual(f.calls.messages.map(message => message.data.type), ['depot', 'normal', 'firstandlast', undefined]);
+  assert.equal(f.foreground.length, 0);
+  stop();
+});
+
+test("web forwards background receipts from its service worker and unsubscribes on cleanup", async () => {
+  let listener;
+  const serviceWorker = {
+    addEventListener: (_, callback) => { listener = callback; },
+    removeEventListener: (_, callback) => { assert.equal(callback, listener); listener = null; },
+  };
+  const fcm = load('src/service/fcm.web.ts', {}, { navigator: { serviceWorker } });
+  const messages = [];
+  const stop = fcm.listenForegroundMessage(message => messages.push(message));
+  listener({ data: { type: 'ONETA_FCM_RECEIVED', payload: { messageId: 'background' } } });
+  assert.equal(messages[0].messageId, 'background');
+  stop();
+  assert.equal(listener, null);
+  await new Promise(setImmediate);
+});
+
 test("logout cancels a pending registration and the next account gets a new token", async () => {
   const response = deferred();
   const f = lifecycleFixture({ send: () => response.promise });
@@ -284,6 +323,52 @@ test("background handler persists receipt metadata, not notification contents", 
   assert.equal(stored.value.messageId, "background-1");
   assert.equal(typeof stored.value.receivedAt, "number");
   assert.equal(JSON.stringify(stored).includes("private"), false);
+});
+
+test("background FCM restores auth and passes the type to the shared refresh handler with persistence enabled", async () => {
+  let handler, accessToken;
+  const requests = [];
+  const fcm = load("src/service/fcm.ts", {
+    "react-native": { Platform: { OS: "android" } },
+    "@react-native-firebase/messaging": {
+      getMessaging: () => ({}),
+      setBackgroundMessageHandler: (_, callback) => { handler = callback; },
+    },
+    "@react-native-async-storage/async-storage": { setItem: async () => {} },
+    "../api/auth/tokens": { getAccessToken: () => accessToken,
+      hydrateAuthTokens: async () => { accessToken = 'saved-access'; } },
+    "../notifications/events": { invalidateNotifications: async (message, options) => {
+      assert.equal(accessToken, 'saved-access'); requests.push({ message, options });
+    } },
+  });
+  fcm.registerBackgroundFcmHandler();
+  for (const type of ['depot', 'normal', 'firstandlast', undefined]) {
+    await handler({ data: { type } });
+  }
+  assert.equal(requests.length, 4);
+  assert.deepEqual(requests.map(request => request.message.data.type), ['depot', 'normal', 'firstandlast', undefined]);
+  for (const { options } of requests) {
+    assert.equal(options.persist, true);
+  }
+});
+
+test("a background schedule refresh failure does not prevent subsequent FCM refreshes", async () => {
+  let handler, calls = 0;
+  const fcm = load("src/service/fcm.ts", {
+    "react-native": { Platform: { OS: "android" } },
+    "@react-native-firebase/messaging": { getMessaging: () => ({}),
+      setBackgroundMessageHandler: (_, callback) => { handler = callback; } },
+    "@react-native-async-storage/async-storage": { setItem: async () => {} },
+    "../api/auth/tokens": { getAccessToken: () => 'access' },
+    "../notifications/events": { invalidateNotifications: async () => {
+      if (++calls === 1) throw new Error('offline');
+      return [];
+    } },
+  });
+  fcm.registerBackgroundFcmHandler();
+  await handler({ messageId: 'first' });
+  await handler({ messageId: 'second' });
+  assert.equal(calls, 2);
 });
 
 test("notification navigation waits for navigation readiness and authenticated home", () => {

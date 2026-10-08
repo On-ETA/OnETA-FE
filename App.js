@@ -185,7 +185,7 @@ function createHomeScreenNavigationProps(navigation) {
   };
 }
 
-function useAuthenticatedRoute(navigation, route, { preload = true, renderExistingSession = false } = {}) {
+function useAuthenticatedRoute(navigation, route, { preload = false, renderExistingSession = true } = {}) {
   const accessToken = route?.params?.accessToken;
   const refreshToken = route?.params?.refreshToken;
   const [isReady, setIsReady] = React.useState(() =>
@@ -200,8 +200,8 @@ function useAuthenticatedRoute(navigation, route, { preload = true, renderExisti
       try {
         if (accessToken) {
           await cancelHomePreload();
-          await clearHomeCacheAsync();
           await setAuthTokens({ accessToken, refreshToken }, { persist: true });
+          await clearHomeCacheAsync();
 
           if (preload && !didPreloadRef.current) {
             didPreloadRef.current = true;
@@ -368,7 +368,7 @@ function SignupCompleteRoute({ navigation, route }) {
 }
 
 function HomeRoute({ navigation, route }) {
-  const isReady = useAuthenticatedRoute(navigation, route);
+  const isReady = useAuthenticatedRoute(navigation, route, { preload: true });
   const isFocused = useIsFocused();
   const homeScreenNavigationProps = React.useMemo(
     () => createHomeScreenNavigationProps(navigation),
@@ -436,8 +436,8 @@ function OAuthCallbackRoute({ navigation, route }) {
         }
 
         await cancelHomePreload();
-        await clearHomeCacheAsync();
         await setAuthTokens(authTokens, { persist: true });
+        await clearHomeCacheAsync();
         resetTo(navigation, routes.home);
       } catch (error) {
         resetTo(navigation, routes.login, {
@@ -466,10 +466,7 @@ function CustomAlarmRoute({ navigation, route }) {
 }
 
 function MyPageRoute({ navigation, route }) {
-  const isReady = useAuthenticatedRoute(navigation, route, {
-    preload: false,
-    renderExistingSession: true,
-  });
+  const isReady = useAuthenticatedRoute(navigation, route);
   const isFocused = useIsFocused();
   const homeScreenNavigationProps = React.useMemo(
     () => createHomeScreenNavigationProps(navigation),

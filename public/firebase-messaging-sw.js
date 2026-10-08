@@ -17,11 +17,13 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.messagin
 
   const messaging = firebase.messaging();
 
-  messaging.onBackgroundMessage((payload) => {
+  messaging.onBackgroundMessage(async (payload) => {
+    const windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    windows.forEach((client) => client.postMessage({ type: "ONETA_FCM_RECEIVED", payload }));
     const title = payload.notification?.title || payload.data?.title || "ON-ETA";
     const body = payload.notification?.body || payload.data?.body;
 
-    self.registration.showNotification(title, {
+    await self.registration.showNotification(title, {
       body,
       data: payload,
       icon: "/images/pabicon.png",

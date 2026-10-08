@@ -17,6 +17,8 @@ import {
   type RemoteMessage,
 } from "@react-native-firebase/messaging";
 import { PermissionsAndroid, Platform } from "react-native";
+import { getAccessToken, hydrateAuthTokens } from "../api/auth/tokens";
+import { invalidateNotifications } from "../notifications/events";
 
 export const supportsFcm = true;
 
@@ -79,5 +81,11 @@ export function registerBackgroundFcmHandler() {
       messageId: message.messageId ?? null,
       receivedAt: Date.now(),
     }));
+    try {
+      if (!getAccessToken()) await hydrateAuthTokens();
+      await invalidateNotifications(message, { persist: true });
+    } catch (error) {
+      console.warn("[FCM] Background notification refresh failed", error?.code ?? error?.name);
+    }
   });
 }

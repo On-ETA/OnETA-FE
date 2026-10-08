@@ -13,18 +13,31 @@ function coordinate(...values) {
   return undefined;
 }
 
+function coordinatesFromText(value) {
+  if (typeof value !== "string") return {};
+  // Older routes may store the endpoint as "latitude, longitude".
+  const match = value.match(/^\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*$/);
+  if (!match) return {};
+  const y = Number(match[1]);
+  const x = Number(match[2]);
+  return Math.abs(y) <= 90 && Math.abs(x) <= 180 ? { x, y } : {};
+}
+
 function place(source, address, x, y) {
   const object = source && typeof source === "object" ? source : {};
   const raw = object.raw ?? {};
   const label = object.label || object.name || object.placeName ||
     (typeof source === "string" ? source : "") || object.address || address || "";
+  const textCoordinates = [object.address, address, label]
+    .map(coordinatesFromText)
+    .find((value) => value.x !== undefined) ?? {};
   return {
     ...object,
     label,
     name: object.name ?? label,
     address: object.address || object.roadAddress || object.detail || address || label,
-    x: coordinate(object.x, raw.x, object.longitude, x),
-    y: coordinate(object.y, raw.y, object.latitude, y),
+    x: coordinate(object.x, raw.x, object.longitude, x, textCoordinates.x),
+    y: coordinate(object.y, raw.y, object.latitude, y, textCoordinates.y),
   };
 }
 

@@ -1,4 +1,4 @@
-import { getAccessToken } from "../auth/tokens";
+import { getAccessToken, getAuthSessionId } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
 import {
@@ -10,6 +10,7 @@ import {
 
 const DEPOT_NOTIFICATIONS_ENDPOINT = "/api/notifications/depot";
 const MY_DEPOT_NOTIFICATIONS_ENDPOINT = "/api/notifications/depot/my";
+let depotListRequestId = 0;
 
 function buildDepotNotificationEndpoint(userBusId) {
   return `${DEPOT_NOTIFICATIONS_ENDPOINT}/${encodeURIComponent(userBusId)}`;
@@ -129,6 +130,8 @@ export async function getMyDepotNotifications({
   forceRefresh = false,
   signal,
 } = {}) {
+  const sessionId = getAuthSessionId?.();
+  if (signal?.aborted) throw Object.assign(new Error("차고지 목록 요청이 취소되었습니다."), { name: "AbortError" });
   if (!forceRefresh) {
     const cachedNotifications = readHomeCache(homeCacheKeys.depotNotifications);
 
@@ -137,6 +140,7 @@ export async function getMyDepotNotifications({
     }
   }
 
+  const requestId = ++depotListRequestId;
   const response = await requestDepotNotificationJson({
     path: MY_DEPOT_NOTIFICATIONS_ENDPOINT,
     method: "GET",
@@ -145,6 +149,9 @@ export async function getMyDepotNotifications({
     errorMessage: "차고지 출발 알림 목록을 불러오지 못했습니다.",
   });
 
+  if (signal?.aborted || requestId !== depotListRequestId || sessionId !== getAuthSessionId?.()) {
+    throw Object.assign(new Error("차고지 목록 요청이 취소되었습니다."), { name: "AbortError" });
+  }
   return writeHomeCache(
     homeCacheKeys.depotNotifications,
     pickDepotNotificationList(response).map(normalizeDepotNotification),

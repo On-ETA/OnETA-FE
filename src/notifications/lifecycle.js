@@ -143,15 +143,15 @@ export function startFcm({ onForegroundMessage, onNotificationOpen, onSessionEnd
 
   function open(message) {
     if (disposed || !message || !firstDelivery(seenOpens, message)) return;
-    invalidateNotifications();
+    invalidateNotifications(message);
     onNotificationOpen(message);
   }
 
   const unsubscribeMessage = listenForegroundMessage((message) => {
     fcmDiag("foreground message received", { messageId: message?.messageId ?? null });
-    if (!isActive() || !getAccessToken() || !firstDelivery(seenMessages, message)) return;
-    invalidateNotifications();
-    onForegroundMessage(message);
+    if (disposed || !getAccessToken() || !firstDelivery(seenMessages, message)) return;
+    invalidateNotifications(message);
+    if (isActive()) onForegroundMessage(message);
   });
   const unsubscribeOpen = listenNotificationOpen(open);
   const unsubscribeToken = listenTokenRefresh((token) => {

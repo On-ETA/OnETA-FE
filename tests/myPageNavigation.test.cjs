@@ -24,26 +24,32 @@ function hooks() {
     flush: () => effects.splice(0).map(callback => callback()) };
 }
 
-function routeFixture(token = 'access') {
+function routeFixture(token = 'access', routeName = 'MyPageRoute', params = {}) {
   const h = hooks();
   const source = fs.readFileSync(path.join(__dirname, '../App.js'), 'utf8');
-  const names = ['MyPageRoute', 'useAuthenticatedRoute', 'createHomeScreenNavigationProps', 'navigateTo', 'goBackOrReset', 'resetTo'];
+  const names = [routeName, 'useAuthenticatedRoute', 'createHomeScreenNavigationProps', 'navigateTo', 'goBackOrReset', 'resetTo'];
   const ast = babel.parseSync(source, { configFile: false, babelrc: false, parserOpts: { plugins: ['jsx'] } });
   const selected = ast.program.body.filter(node => node.type === 'FunctionDeclaration' && names.includes(node.id.name))
     .map(node => source.slice(node.start, node.end)).join('\n');
-  const { code } = babel.transformSync(selected + '\nexports.MyPageRoute = MyPageRoute;', {
+  const { code } = babel.transformSync(selected + `\nexports.Route = ${routeName};`, {
     configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-react-jsx'],
   });
   const exports = {};
   let preloads = 0;
   const calls = [];
   const navigation = { navigate: name => calls.push(name), canGoBack: () => true, goBack: () => calls.push('back'), reset: state => calls.push(state.routes[0].name) };
-  vm.runInNewContext(code, { exports, React: h.react, useIsFocused: () => true, MyPageScreen: 'MyPageScreen',
+  vm.runInNewContext(code, { exports, React: h.react, useIsFocused: () => true,
+    MyPageScreen: 'MyPageScreen', HomeScreen: 'HomeScreen', CustomAlarmScreen: 'CustomAlarmScreen',
+    InquiryScreen: 'InquiryScreen', NoticesScreen: 'NoticesScreen', NoticeDetailScreen: 'NoticeDetailScreen',
+    NotificationsScreen: 'NotificationsScreen', AccountInfoScreen: 'AccountInfoScreen', ChangePasswordScreen: 'ChangePasswordScreen',
     routes: { home: 'Home', login: 'Login', accountInfo: 'AccountInfo', notifications: 'Notifications' },
     getAccessToken: () => token, subscribeAuthRequired: () => () => {}, blurActiveElement() {},
+    subscribeNotifications: () => () => {},
+    FCM_NOTIFICATION_TYPES: { transit: 'firstandlast' },
+    cancelHomePreload: async () => {}, clearHomeCacheAsync: async () => {}, setAuthTokens: async () => {},
     preloadHomeCache: async () => { preloads++; },
   });
-  return { h, calls, navigation, preloads: () => preloads, render: () => h.render(exports.MyPageRoute, { navigation, route: {} }) };
+  return { h, calls, navigation, preloads: () => preloads, render: () => h.render(exports.Route, { navigation, route: { params } }) };
 }
 
 test('my page renders directly on the first frame and does not preload home data', async () => {
@@ -65,6 +71,39 @@ test('my page does not render without a session and redirects to login', async (
   f.h.flush();
   await new Promise(setImmediate);
   assert.deepEqual(f.calls, ['Login']);
+});
+
+const protectedRoutes = ['HomeRoute', 'CustomAlarmRoute', 'MyPageRoute', 'InquiryRoute', 'NoticesRoute',
+  'NoticeDetailRoute', 'NotificationsRoute', 'AccountInfoRoute', 'ChangePasswordRoute'];
+
+test('every protected page renders on the first frame with an existing session; only home preloads', async () => {
+  for (const routeName of protectedRoutes) {
+    const f = routeFixture('access', routeName);
+    assert.ok(f.render(), routeName);
+    f.h.flush();
+    await new Promise(setImmediate);
+    assert.equal(f.preloads(), routeName === 'HomeRoute' ? 1 : 0, routeName);
+    assert.equal(f.calls.length, 0, routeName);
+  }
+});
+
+test('every protected page blocks rendering and redirects without an authenticated session', async () => {
+  for (const routeName of protectedRoutes) {
+    const f = routeFixture(null, routeName);
+    assert.equal(f.render(), null, routeName);
+    f.h.flush();
+    await new Promise(setImmediate);
+    assert.deepEqual(f.calls, ['Login'], routeName);
+  }
+});
+
+test('a route carrying new login tokens waits for token preparation before rendering', async () => {
+  const f = routeFixture('old-access', 'HomeRoute', { accessToken: 'new-access', refreshToken: 'new-refresh' });
+  assert.equal(f.render(), null);
+  f.h.flush();
+  await new Promise(setImmediate);
+  assert.equal(f.render().type, 'HomeScreen');
+  assert.equal(f.preloads(), 1);
 });
 
 function profileFixture(initialCache, getData) {
