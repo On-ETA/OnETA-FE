@@ -44,6 +44,13 @@ function getTransitName(segment) {
 export function getTransitColors(segment) {
   const name = getTransitName(segment);
 
+  // N번 심야버스는 저장·복원 과정에서 busType이 누락될 수 있으므로
+  // 노선 번호만으로도 간선버스 색상을 유지한다.
+  if (/^N\s*\d+/i.test(name.trim())) {
+    const trunk = BUS_TYPE_COLORS.find(({ key }) => key === "b_ga");
+    return { ...trunk, isSubway: false };
+  }
+
   const line = SUBWAY_LINE_COLORS.find(([label]) =>
     label.length === 1 ? new RegExp(`(^|\\D)${label}호선`).test(name) : name.includes(label),
   );
