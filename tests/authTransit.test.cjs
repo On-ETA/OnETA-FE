@@ -297,11 +297,12 @@ test("first-last search unwraps route data and preserves departure metadata", as
               totalDurationMinutes: 32,
               segments: [
                 { transitType: "WALK", durationMinutes: 8 },
-                { transitType: "BUS", transitName: "1550-1", durationMinutes: 8 },
+                { transitType: "BUS", transitName: "1550-1", nightBus: true, durationMinutes: 8 },
               ],
             },
             scheduleType: "FIRST_TRANSIT",
-            estimatedDepartureAt: "2026-10-04T04:52:00+09:00",
+            estimatedDepartureAt: null,
+            status: "NIGHT_ONLY",
           }],
         };
       },
@@ -318,8 +319,10 @@ test("first-last search unwraps route data and preserves departure metadata", as
   assert.equal(candidate.routeId, "ROUTE_4ca59ef0b8b547f2");
   assert.equal(candidate.totalDurationMinutes, 32);
   assert.equal(candidate.segments[1].transitName, "1550-1");
+  assert.equal(candidate.segments[1].nightBus, true);
   assert.equal(candidate.scheduleType, "FIRST_TRANSIT");
-  assert.equal(candidate.estimatedDepartureAt, "2026-10-04T04:52:00+09:00");
+  assert.equal(candidate.status, "NIGHT_ONLY");
+  assert.equal(candidate.estimatedDepartureAt, null);
   assert.equal(candidate.raw.routeId, candidate.routeId);
   assert.equal((await routes.searchFirstLastTransitRoutes(options))[0].routeId, candidate.routeId);
   assert.equal(requests, 1);

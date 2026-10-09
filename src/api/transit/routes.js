@@ -147,6 +147,11 @@ export function normalizeTransitRoute(result) {
   const segments = Array.isArray(route?.segments)
     ? route.segments.map(normalizeSegment)
     : [];
+  const hasEstimatedDepartureAt = Object.prototype.hasOwnProperty.call(
+    result ?? {},
+    "estimatedDepartureAt",
+  );
+  const hasStatus = Object.prototype.hasOwnProperty.call(result ?? {}, "status");
 
   return {
     routeId: route?.routeId,
@@ -157,8 +162,10 @@ export function normalizeTransitRoute(result) {
     totalCost: route?.totalCost,
     transferCount: route?.transferCount ?? 0,
     scheduleType: result?.scheduleType ?? route?.scheduleType,
-    status: result?.status ?? route?.status ?? "AVAILABLE",
-    estimatedDepartureAt: result?.estimatedDepartureAt ?? route?.estimatedDepartureAt,
+    status: hasStatus ? result.status : route?.status ?? "AVAILABLE",
+    estimatedDepartureAt: hasEstimatedDepartureAt
+      ? result.estimatedDepartureAt
+      : route?.estimatedDepartureAt,
     segments,
     raw: route,
   };

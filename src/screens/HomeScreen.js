@@ -358,6 +358,7 @@ export function HomeScreen({
       remainingMinutes: estimatedDepartureTimestamp !== undefined
         ? Math.max(0, Math.ceil((estimatedDepartureTimestamp - Date.now()) / 60000))
         : routeSummary.remainingMinutes,
+      status: route?.status ?? "AVAILABLE",
       scheduleType,
     };
 
@@ -828,6 +829,18 @@ const HomeDashboard = React.memo(function HomeDashboard({
           onRouteDetailPress={onRouteDetailPress}
           onRouteSetupPress={onRouteSetupPress}
           onRouteDeletePress={onRouteDeletePress}
+          onNightOnlyRouteSelect={(route, places) => {
+            blurActiveElement();
+            setScheduleAlarmInitialStep("form");
+            setScheduleAlarmInitialValues({
+              selectedRoute: route,
+              routePlaces: {
+                origin: places.originPlace,
+                destination: places.destinationPlace,
+              },
+            });
+            setIsScheduleAlarmAddVisible(true);
+          }}
           routeSummary={firstLastRouteSummary}
         />
       )}

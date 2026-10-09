@@ -1,5 +1,5 @@
 ﻿import React, { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
 import ArrowRightIcon from "../../../../assets/images/R_w.svg";
@@ -35,6 +35,7 @@ export function FirstLastRouteScreen({
   onRouteDetailPress,
   onRouteDeletePress,
   onRouteSetupPress,
+  onNightOnlyRouteSelect,
   routeSummary,
 }) {
   const [isAlarmModalVisible, setIsAlarmModalVisible] = useState(false);
@@ -56,6 +57,7 @@ export function FirstLastRouteScreen({
     60: false,
   });
   const hasConfiguredRoute = Boolean(routeSummary);
+  const isNightOnlyRoute = routeSummary?.status === "NIGHT_ONLY";
   const hasEstimatedDeparture = Number.isFinite(routeSummary?.estimatedDepartureTimestamp);
   const remainingMinutes = Number.isFinite(routeSummary?.estimatedDepartureTimestamp)
     ? Math.max(
@@ -78,6 +80,32 @@ export function FirstLastRouteScreen({
       ...current,
       [alarmKey]: !current[alarmKey],
     }));
+  };
+
+  const handleAlarmSettingPress = () => {
+    blurActiveElement();
+
+    if (isNightOnlyRoute) {
+      Alert.alert(
+        "심야버스 경로 안내",
+        "이 경로는 심야버스로 이동 가능한 경로예요.\n첫차·막차 알림 대신 원하는 도착 시간을 기준으로 알림을 받아보시겠어요?",
+        [
+          { text: "닫기", style: "cancel" },
+          {
+            text: "내 일정 알림 설정하기",
+            onPress: () => onNightOnlyRouteSelect?.(routeSummary.route, {
+              origin: routeSummary.originPlace,
+              destination: routeSummary.destinationPlace,
+              originPlace: routeSummary.originPlace,
+              destinationPlace: routeSummary.destinationPlace,
+            }),
+          },
+        ],
+      );
+      return;
+    }
+
+    setIsAlarmModalVisible(true);
   };
 
   return (
@@ -208,10 +236,7 @@ export function FirstLastRouteScreen({
           accessibilityLabel="출발 전 알림 설정"
           accessibilityRole="button"
           hitSlop={8}
-          onPress={() => {
-            blurActiveElement();
-            setIsAlarmModalVisible(true);
-          }}
+          onPress={handleAlarmSettingPress}
           style={styles.noticeSettingButton}
         >
           <SettingIcon height={21} width={21} />
