@@ -28,7 +28,7 @@ function loadNaverMapsScript(clientId) {
       script.async = true;
       script.src =
         "https://oapi.map.naver.com/openapi/v3/maps.js" +
-        `?ncpKeyId=${encodeURIComponent(clientId)}`;
+        `?ncpKeyId=${encodeURIComponent(clientId)}&submodules=geocoder`;
 
       script.onload = () => {
         if (globalThis.naver?.maps) {

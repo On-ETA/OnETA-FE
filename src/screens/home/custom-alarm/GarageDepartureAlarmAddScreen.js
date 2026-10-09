@@ -1,3 +1,4 @@
+import { ScreenTransition } from "../../../components/ScreenTransition";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
@@ -253,7 +254,7 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   };
 
   return (
-    <View style={styles.screen}>
+    <ScreenTransition transitionKey={isDirectionStep} direction={isDirectionStep ? "forward" : "backward"} animateOnMount={false}><View style={styles.screen}>
       <Header
         headerStyle={styles.header}
         onBackPress={handleBackPress}
@@ -343,7 +344,7 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
           ) : null}
         </View>
       )}
-    </View>
+    </View></ScreenTransition>
   );
 }
 

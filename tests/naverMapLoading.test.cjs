@@ -9,7 +9,7 @@ function renderer() {
   const slots = [];
   const effects = [];
   let cursor = 0;
-  let firstRender = true;
+
   const react = {
     createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
     useState(initial) {
@@ -23,14 +23,24 @@ function renderer() {
       return slots[index];
     },
     useMemo: callback => callback(),
-    useEffect: callback => { if (firstRender) effects.push(callback); },
+    useEffect(callback, deps) {
+      const index = cursor++;
+      const previous = slots[index];
+      if (!previous || !deps || deps.some((value, i) => !Object.is(value, previous.deps?.[i]))) {
+        slots[index] = { deps, cleanup: previous?.cleanup };
+        effects.push(() => {
+          slots[index].cleanup?.();
+          slots[index].cleanup = callback();
+        });
+      }
+    },
   };
   return {
     react,
     render(component, props) {
       cursor = 0;
       const tree = component(props);
-      firstRender = false;
+
       return tree;
     },
     flushEffects: () => effects.splice(0).forEach(callback => callback()),
@@ -43,16 +53,20 @@ function load(file, mocks, globals = {}) {
     configFile: false, babelrc: false,
     plugins: ['@babel/plugin-transform-modules-commonjs', '@babel/plugin-transform-react-jsx'],
   });
-  vm.runInNewContext(code, { exports, setTimeout, clearTimeout, require: name => mocks[name] ?? {}, ...globals });
+  vm.runInNewContext(code, { exports, setTimeout, clearTimeout, AbortController, require: name => mocks[name] ?? {}, ...globals });
   return exports;
 }
 
-function locationFixture(props = {}, cachedCoordinate = null, lookup) {
+function locationFixture(props = {}, cachedCoordinate = null, lookup, extraMocks = {}) {
   const view = renderer();
   let resolveLocation;
   let rejectLocation;
   const location = new Promise((resolve, reject) => { resolveLocation = resolve; rejectLocation = reject; });
   const timers = [];
+  const timerGlobals = {
+    setTimeout: (callback, delay) => { const timer = { callback, delay }; timers.push(timer); return timer; },
+    clearTimeout: timer => { if (timer) timer.cancelled = true; },
+  };
   const api = load('src/screens/home/custom-alarm/ScheduleAlarmAddScreen.js', {
     react: view.react,
     'react-native': {
@@ -66,12 +80,11 @@ function locationFixture(props = {}, cachedCoordinate = null, lookup) {
     '../../../components/MapLoadingOverlay': { MapLoadingOverlay: 'MapLoadingOverlay' },
     '../../../config/naverMap': { NAVER_MAP_DEFAULT_CENTER: { latitude: 37.5563, longitude: 126.922 } },
     '../../../utils/locationError': load('src/utils/locationError.js', {}),
+    '../../../utils/throttledTask': load('src/utils/throttledTask.js', {}, timerGlobals),
     '../../../components/reverseGeocode': { getCurrentCoordinate: lookup ?? (() => location), getCachedCurrentCoordinate: () => cachedCoordinate },
     '../../../theme': { colors: {}, typography: {}, layout: {} },
-  }, {
-    setTimeout: (callback, delay) => { const timer = { callback, delay }; timers.push(timer); return timer; },
-    clearTimeout: timer => { if (timer) timer.cancelled = true; },
-  });
+    ...extraMocks,
+  }, timerGlobals);
   return { view, resolveLocation, rejectLocation, timers, render: () => view.render(api.ScheduleRouteMapStep, props) };
 }
 
@@ -235,4 +248,103 @@ test('web SDK preload is shared and initializes the map with the latest coordina
   assert.equal(readyCount, 1);
   listeners.tilesloaded();
   assert.equal(readyCount, 1);
+});
+
+
+test('continuous typing and deletion search once per second without resetting the timer; clearing cancels and map movement never searches', async () => {
+  const calls = [];
+  const f = locationFixture({}, { latitude: 37.5, longitude: 127 }, undefined, {
+    '../../../api/address/search': { searchAddresses: async request => { calls.push(request); return []; } },
+  });
+  f.render(); f.view.flushEffects();
+  const type = value => { find(f.render(), 'TextInput').props.onChangeText(value); f.render(); f.view.flushEffects(); };
+  type('Seoul');
+  const first = f.timers.findLast(timer => timer.delay === 1000);
+  assert.ok(first); assert.equal(calls.length, 0);
+  type('Seou');
+  assert.notEqual(first.cancelled, true);
+  const deletion = f.timers.findLast(timer => timer.delay === 1000);
+  assert.equal(deletion, first);
+  await deletion.callback();
+  assert.equal(calls.length, 1); assert.equal(calls[0].keyword, 'Seou');
+  const secondWindow = f.timers.findLast(timer => timer.delay === 1000);
+  find(f.render(), 'NaverMapView').props.onCameraIdle({ latitude: 37.6, longitude: 127.2, zoom: 12 });
+  f.render(); f.view.flushEffects();
+  assert.equal(f.timers.findLast(timer => timer.delay === 1000), secondWindow);
+  assert.equal(calls.length, 1);
+  type('Seoul');
+  type('Seoul Station');
+  assert.equal(f.timers.findLast(timer => timer.delay === 1000), secondWindow);
+  await secondWindow.callback();
+  assert.equal(calls.length, 2); assert.equal(calls[1].keyword, 'Seoul Station');
+  type('Seoul ');
+  const pending = f.timers.findLast(timer => timer.delay === 1000);
+  type('');
+  assert.equal(pending.cancelled, true);
+  await pending.callback();
+  assert.equal(calls.length, 2);
+});
+
+test('placing a pin searches immediately after geocoding and cancels pending keyword and earlier pin requests', async () => {
+  const calls = [];
+  const f = locationFixture({}, { latitude: 37.5, longitude: 127 }, undefined, {
+    '../../../api/address/search': { searchAddresses: async request => { calls.push(request); return []; } },
+    '../../../components/reverseGeocode': {
+      getCachedCurrentCoordinate: () => ({ latitude: 37.5, longitude: 127 }),
+      reverseGeocode: async coordinate => ({ roadAddress: 'Pin address', ...coordinate }),
+    },
+  });
+  f.render(); f.view.flushEffects();
+  find(f.render(), 'TextInput').props.onChangeText('pending');
+  f.render(); f.view.flushEffects();
+  const pending = f.timers.findLast(timer => timer.delay === 1000);
+  await find(f.render(), 'NaverMapView').props.onMapPress({ latitude: 37.6, longitude: 127.1 });
+  assert.equal(calls.length, 1); assert.equal(calls[0].keyword, 'Pin address');
+  await pending.callback(); assert.equal(calls.length, 1);
+  await find(f.render(), 'NaverMapView').props.onMapPress({ latitude: 37.7, longitude: 127.2 });
+  assert.equal(calls.length, 2); assert.equal(calls[0].signal.aborted, true);
+  find(f.render(), 'TextInput').props.onChangeText('new keyword');
+  assert.equal(calls[1].signal.aborted, true);
+});
+
+
+test('an older pin geocode cannot start a search after a newer pin was selected', async () => {
+  const geocodes = [], calls = [];
+  const f = locationFixture({}, { latitude: 37.5, longitude: 127 }, undefined, {
+    '../../../api/address/search': { searchAddresses: async request => { calls.push(request); return []; } },
+    '../../../components/reverseGeocode': {
+      getCachedCurrentCoordinate: () => ({ latitude: 37.5, longitude: 127 }),
+      reverseGeocode: coordinate => new Promise(resolve => geocodes.push({ coordinate, resolve })),
+    },
+  });
+  f.render(); f.view.flushEffects();
+  const older = find(f.render(), 'NaverMapView').props.onMapPress({ latitude: 37.6, longitude: 127.1 });
+  const newer = find(f.render(), 'NaverMapView').props.onMapPress({ latitude: 37.7, longitude: 127.2 });
+  geocodes[1].resolve({ roadAddress: 'New pin' }); await newer;
+  geocodes[0].resolve({ roadAddress: 'Old pin' }); await older;
+  assert.equal(calls.length, 1); assert.equal(calls[0].keyword, 'New pin');
+});
+
+test('web pin geocoding loads the map SDK and uses road addresses with a parcel address fallback', async () => {
+  let preloads = 0, request, nextAddress = { roadAddress: 'Road address', jibunAddress: 'Parcel address' };
+  const web = load('src/components/reverseGeocode.web.js', {
+    '../utils/currentLocationRequest': { createCurrentLocationRequest: () => ({}) },
+    './NaverMapView': { preloadNaverMap: async () => { preloads++; } },
+  }, { naver: { maps: {
+    LatLng: class { constructor(latitude, longitude) { this.latitude = latitude; this.longitude = longitude; } },
+    Service: {
+      Status: { OK: 'OK' }, OrderType: { ROAD_ADDR: 'roadaddr', ADDR: 'addr' },
+      reverseGeocode: (options, callback) => { request = options; callback('OK', { v2: { address: nextAddress } }); },
+    },
+  } } });
+  const road = await web.reverseGeocode({ latitude: 37.5, longitude: 127.1 });
+  assert.equal(preloads, 1); assert.equal(road.roadAddress, 'Road address');
+  assert.equal(request.coords.latitude, 37.5); assert.equal(request.orders, 'roadaddr,addr');
+  nextAddress = { jibunAddress: 'Parcel address' };
+  assert.equal((await web.reverseGeocode({ latitude: 37.5, longitude: 127.1 })).address, 'Parcel address');
+  nextAddress = {};
+  await assert.rejects(web.reverseGeocode({ latitude: 37.5, longitude: 127.1 }));
+  const beforeInvalid = preloads;
+  await assert.rejects(web.reverseGeocode({ latitude: NaN, longitude: 127.1 }));
+  assert.equal(preloads, beforeInvalid);
 });

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState, BackHandler, Platform, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { ScreenTransition } from "../components/ScreenTransition";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAddresses } from "../api/addresses";
@@ -600,7 +601,12 @@ export function HomeScreen({
     <View style={styles.screen}>
       <StatusBar style="dark" backgroundColor={homeBackground} />
       <SafeAreaView edges={["top", "bottom"]} style={styles.phone}>
-        <View style={styles.content}>
+        <ScreenTransition style={styles.content} animateOnMount={false}
+          transitionDepth={firstLastRouteSetupStep === "result" ? 2 : (activeTab === "myPage" || isAddressManagerVisible || isGarageDepartureAddVisible || isScheduleAlarmAddVisible || firstLastRouteSetupStep || editingCustomAlarm || isRouteDetailVisible) ? 1 : 0}
+          transitionKey={[
+          activeTab, isAddressManagerVisible, isGarageDepartureAddVisible,
+          isScheduleAlarmAddVisible, firstLastRouteSetupStep, editingCustomAlarm?.type, isRouteDetailVisible,
+        ].join(":")}>
           {activeTab === "myPage" ? (
             <MyPageScreen
               embedded
@@ -772,7 +778,7 @@ export function HomeScreen({
               />
             )
           ) : null}
-        </View>
+        </ScreenTransition>
       </SafeAreaView>
     </View>
   );
@@ -811,24 +817,30 @@ const HomeDashboard = React.memo(function HomeDashboard({
         onTabPress={onHomeTabPress}
         showMyPageButton
       />
-      {activeHomeTab === "customAlarm" ? (
-        <CustomAlarmScreen
-          refreshKey={customAlarmRefreshKey}
-          onGarageDepartureAddPress={onGarageDepartureAddPress}
-          onGarageAlarmEditPress={onGarageAlarmEditPress}
-          onScheduleAlarmAddPress={onScheduleAlarmAddPress}
-          onScheduleAlarmEditPress={onScheduleAlarmEditPress}
-        />
-      ) : (
-        <FirstLastRouteScreen
-          activeScheduleType={activeFirstLastScheduleType}
-          onScheduleTypeChange={onFirstLastScheduleTypeChange}
-          onRouteDetailPress={onRouteDetailPress}
-          onRouteSetupPress={onRouteSetupPress}
-          onRouteDeletePress={onRouteDeletePress}
-          routeSummary={firstLastRouteSummary}
-        />
-      )}
+      <ScreenTransition
+        transitionKey={activeHomeTab}
+        direction={activeHomeTab === "customAlarm" ? "forward" : "backward"}
+        animateOnMount={false}
+      >
+        {activeHomeTab === "customAlarm" ? (
+          <CustomAlarmScreen
+            refreshKey={customAlarmRefreshKey}
+            onGarageDepartureAddPress={onGarageDepartureAddPress}
+            onGarageAlarmEditPress={onGarageAlarmEditPress}
+            onScheduleAlarmAddPress={onScheduleAlarmAddPress}
+            onScheduleAlarmEditPress={onScheduleAlarmEditPress}
+          />
+        ) : (
+          <FirstLastRouteScreen
+            activeScheduleType={activeFirstLastScheduleType}
+            onScheduleTypeChange={onFirstLastScheduleTypeChange}
+            onRouteDetailPress={onRouteDetailPress}
+            onRouteSetupPress={onRouteSetupPress}
+            onRouteDeletePress={onRouteDeletePress}
+            routeSummary={firstLastRouteSummary}
+          />
+        )}
+      </ScreenTransition>
     </>
   );
 });

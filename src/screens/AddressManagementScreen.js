@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { createThrottledTask } from "../utils/throttledTask";
+import { ScreenTransition } from "../components/ScreenTransition";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -63,7 +65,12 @@ export function AddressManagementScreen({
   onCurrentAddressChange,
   onAddressSelect,
 }) {
-  const [screenMode, setScreenMode] = useState("list");
+  const [screenMode, setScreenModeState] = useState("list");
+  const [transitionDirection, setTransitionDirection] = useState("forward");
+  const setScreenMode = (mode, direction = "forward") => {
+    setTransitionDirection(direction);
+    setScreenModeState(mode);
+  };
   const [addresses, setAddresses] = useState([]);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
   const [addressLoadError, setAddressLoadError] = useState("");
@@ -119,17 +126,17 @@ export function AddressManagementScreen({
 
   const handleBackPress = () => {
     if (screenMode === "detail") {
-      setScreenMode("search");
+      setScreenMode("search", "backward");
       return;
     }
 
     if (screenMode === "search") {
-      setScreenMode(searchPurpose === "edit" ? "edit" : "list");
+      setScreenMode(searchPurpose === "edit" ? "edit" : "list", "backward");
       return;
     }
 
     if (screenMode === "edit") {
-      setScreenMode("list");
+      setScreenMode("list", "backward");
       return;
     }
 
@@ -341,6 +348,7 @@ export function AddressManagementScreen({
     }
   };
 
+  const renderStep = () => {
   if (screenMode === "search") {
     return (
       <AddressSearchScreen
@@ -460,6 +468,8 @@ export function AddressManagementScreen({
       </ScrollView>
     </View>
   );
+  };
+  return <ScreenTransition transitionKey={screenMode} direction={transitionDirection} animateOnMount={false}>{renderStep()}</ScreenTransition>;
 }
 
 function AddressSearchScreen({ onBackPress, onResultPress }) {
@@ -469,9 +479,13 @@ function AddressSearchScreen({ onBackPress, onResultPress }) {
   const [searchError, setSearchError] = useState("");
   const trimmedKeyword = keyword.trim();
   const hasKeyword = trimmedKeyword.length > 0;
+  const searchThrottleRef = useRef(null);
+  if (!searchThrottleRef.current) searchThrottleRef.current = createThrottledTask(1000);
+  useEffect(() => () => searchThrottleRef.current.cancel(), []);
 
   useEffect(() => {
     if (!hasKeyword) {
+      searchThrottleRef.current.cancel();
       setResults([]);
       setSearchError("");
       setIsSearching(false);
@@ -480,7 +494,8 @@ function AddressSearchScreen({ onBackPress, onResultPress }) {
 
     let isActive = true;
     const controller = new AbortController();
-    const debounceId = setTimeout(async () => {
+    searchThrottleRef.current.schedule(async () => {
+      if (controller.signal.aborted) return;
       setIsSearching(true);
       setSearchError("");
 
@@ -503,11 +518,10 @@ function AddressSearchScreen({ onBackPress, onResultPress }) {
           setIsSearching(false);
         }
       }
-    }, 300);
+    });
 
     return () => {
       isActive = false;
-      clearTimeout(debounceId);
       controller.abort();
     };
   }, [hasKeyword, trimmedKeyword]);

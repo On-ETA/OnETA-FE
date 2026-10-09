@@ -1,3 +1,5 @@
+import { createThrottledTask } from "../../../utils/throttledTask";
+import { ScreenTransition } from "../../../components/ScreenTransition";
 ﻿import React, {
   useEffect,
   useMemo,
@@ -528,6 +530,7 @@ export function ScheduleAlarmAddScreen({
     onBackPress?.();
   };
 
+  const renderStep = () => {
   if (step === "route") {
     return (
       <ScheduleRouteMapStep
@@ -806,6 +809,8 @@ export function ScheduleAlarmAddScreen({
       />}
     </View>
   );
+  };
+  return <ScreenTransition transitionKey={step} transitionDepth={{ form: 0, routeSetup: 1, route: 2, addressList: 3, routeResult: 2, alarmFinal: 3 }[step] ?? 0} animateOnMount={false}>{renderStep()}</ScreenTransition>;
 }
 
 function ScheduleRouteSetupStep({
@@ -1187,6 +1192,19 @@ export function ScheduleRouteMapStep({
     mapSelectedCoordinate ??
     userLocation ??
     selectedPlaceCenter;
+  const searchReferenceCenterRef = useRef(searchReferenceCenter);
+  searchReferenceCenterRef.current = searchReferenceCenter;
+  const pinSearchControllerRef = useRef(null);
+  const keywordSearchControllerRef = useRef(null);
+  const keywordSearchThrottleRef = useRef(null);
+  if (!keywordSearchThrottleRef.current) keywordSearchThrottleRef.current = createThrottledTask(1000);
+
+  useEffect(() => () => {
+    mapPressRequestIdRef.current += 1;
+    pinSearchControllerRef.current?.abort();
+    keywordSearchControllerRef.current?.abort();
+    keywordSearchThrottleRef.current.cancel();
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -1386,6 +1404,7 @@ export function ScheduleRouteMapStep({
     if (
       !hasPlaceKeyword
     ) {
+      keywordSearchThrottleRef.current.cancel();
       setPlaceResults([]);
       setPlaceSearchError("");
       setIsSearchingPlaces(
@@ -1400,9 +1419,11 @@ export function ScheduleRouteMapStep({
     const controller =
       new AbortController();
 
-    const debounceId =
-      setTimeout(
+    keywordSearchControllerRef.current = controller;
+
+    keywordSearchThrottleRef.current.schedule(
         async () => {
+          if (controller.signal.aborted) return;
           setIsSearchingPlaces(
             true,
           );
@@ -1419,7 +1440,7 @@ export function ScheduleRouteMapStep({
                   controller.signal,
               });
 
-            if (isActive) {
+            if (isActive && !controller.signal.aborted) {
               const normalizedResults =
                 Array.isArray(
                   nextResults,
@@ -1430,13 +1451,13 @@ export function ScheduleRouteMapStep({
               setPlaceResults(
                 sortPlacesByDistance(
                   normalizedResults,
-                  searchReferenceCenter,
+                  searchReferenceCenterRef.current,
                 ),
               );
             }
           } catch (error) {
             if (
-              isActive &&
+              isActive && !controller.signal.aborted &&
               error?.name !==
                 "AbortError"
             ) {
@@ -1450,35 +1471,31 @@ export function ScheduleRouteMapStep({
               );
             }
           } finally {
-            if (isActive) {
+            if (isActive && !controller.signal.aborted) {
               setIsSearchingPlaces(
                 false,
               );
             }
           }
         },
-        300,
       );
 
     return () => {
       isActive = false;
 
-      clearTimeout(
-        debounceId,
-      );
-
       controller.abort();
     };
   }, [
     hasPlaceKeyword,
-    searchReferenceCenter?.latitude,
-    searchReferenceCenter?.longitude,
     trimmedPlaceKeyword,
+    placeKeyword,
   ]);
 
   const handlePlaceKeywordChange = (
     value,
   ) => {
+    pinSearchControllerRef.current?.abort();
+    keywordSearchControllerRef.current?.abort();
     if (value.trim()) stopAutomaticLocation();
     mapPressRequestIdRef.current +=
       1;
@@ -1498,6 +1515,11 @@ export function ScheduleRouteMapStep({
     latitude,
     longitude,
   }) => {
+    pinSearchControllerRef.current?.abort();
+    keywordSearchControllerRef.current?.abort();
+    keywordSearchThrottleRef.current.cancel();
+    const pinController = new AbortController();
+    pinSearchControllerRef.current = pinController;
     stopAutomaticLocation();
     const resolvedLatitude =
       Number(latitude);
@@ -1547,7 +1569,7 @@ export function ScheduleRouteMapStep({
         );
 
       if (
-        requestId !==
+        pinController.signal.aborted || requestId !==
         mapPressRequestIdRef.current
       ) {
         return;
@@ -1566,6 +1588,7 @@ export function ScheduleRouteMapStep({
           searchResults =
             await searchAddresses({
               keyword: roadAddress,
+              signal: pinController.signal,
             });
         } catch (searchError) {
           searchErrorMessage =
@@ -1575,7 +1598,7 @@ export function ScheduleRouteMapStep({
       }
 
       if (
-        requestId !==
+        pinController.signal.aborted || requestId !==
         mapPressRequestIdRef.current
       ) {
         return;
@@ -1617,7 +1640,7 @@ export function ScheduleRouteMapStep({
       );
     } catch (error) {
       if (
-        requestId !==
+        pinController.signal.aborted || requestId !==
         mapPressRequestIdRef.current
       ) {
         return;
