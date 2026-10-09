@@ -212,6 +212,10 @@ function getRouteDetails(alarm) {
       destinationAddress: parsedRouteDetails.destinationAddress,
       originPlace: parsedRouteDetails.originPlace,
       destinationPlace: parsedRouteDetails.destinationPlace,
+      originX: parsedRouteDetails.originX,
+      originY: parsedRouteDetails.originY,
+      destX: parsedRouteDetails.destX,
+      destY: parsedRouteDetails.destY,
     });
   }
 
