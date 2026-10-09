@@ -134,6 +134,28 @@ function createRoutePlace(place) {
   };
 }
 
+function preserveCoordinatesForSamePlace(previous, next) {
+  const previousPlace = createRoutePlace(previous);
+  const nextPlace = createRoutePlace(next);
+  const previousText = getRoutePlaceText(previousPlace);
+  const nextText = getRoutePlaceText(nextPlace);
+
+  if (
+    previousText &&
+    previousText === nextText &&
+    !Number.isFinite(Number(nextPlace.x)) &&
+    !Number.isFinite(Number(nextPlace.y))
+  ) {
+    return {
+      ...nextPlace,
+      x: previousPlace.x,
+      y: previousPlace.y,
+    };
+  }
+
+  return nextPlace;
+}
+
 function parseInitialArrivalTime(value) {
   if (!value) {
     return DEFAULT_TIME;
@@ -542,7 +564,7 @@ export function ScheduleAlarmAddScreen({
         onPlaceSelect={(type, place) => {
           setRoutePlaces((current) => ({
             ...current,
-            [type]: place,
+            [type]: preserveCoordinatesForSamePlace(current[type], place),
           }));
           setStep("routeSetup");
         }}
@@ -561,8 +583,9 @@ export function ScheduleAlarmAddScreen({
         onAddressSelect={(address) => {
           setRoutePlaces((current) => ({
             ...current,
-            [activePlaceType]:
-              createRoutePlace({
+            [activePlaceType]: preserveCoordinatesForSamePlace(
+              current[activePlaceType],
+              {
                 label:
                   address.name ||
                   address.placeName ||
@@ -577,7 +600,8 @@ export function ScheduleAlarmAddScreen({
                 x: address.x,
                 y: address.y,
                 raw: address,
-              }),
+              },
+            ),
           }));
           setStep("routeSetup");
         }}
@@ -826,9 +850,19 @@ function ScheduleRouteSetupStep({
   const destinationText =
     getRoutePlaceText(places.destination);
 
+  const hasOriginCoordinates =
+    Number.isFinite(Number(places.origin?.x)) &&
+    Number.isFinite(Number(places.origin?.y));
+
+  const hasDestinationCoordinates =
+    Number.isFinite(Number(places.destination?.x)) &&
+    Number.isFinite(Number(places.destination?.y));
+
   const canGoNext =
     Boolean(originText) &&
-    Boolean(destinationText);
+    Boolean(destinationText) &&
+    hasOriginCoordinates &&
+    hasDestinationCoordinates;
 
   return (
     <View style={styles.screen}>
@@ -876,6 +910,12 @@ function ScheduleRouteSetupStep({
           place={places.destination}
           placeholder="도착지를 지정해주세요."
         />
+
+        {originText && destinationText && !canGoNext ? (
+          <Text style={styles.placeSelectDetail}>
+            좌표를 확인할 수 없습니다. 출발지와 도착지를 다시 선택해주세요.
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.footer}>
@@ -2497,6 +2537,20 @@ export function ScheduleRouteResultStep({
       new AbortController();
 
     async function loadTransitRoutes() {
+      const hasOriginCoordinates =
+        Number.isFinite(Number(origin?.x)) &&
+        Number.isFinite(Number(origin?.y));
+      const hasDestinationCoordinates =
+        Number.isFinite(Number(destination?.x)) &&
+        Number.isFinite(Number(destination?.y));
+
+      if (!hasOriginCoordinates || !hasDestinationCoordinates) {
+        setRoutes([]);
+        setIsLoadingRoutes(false);
+        setRouteError("출발지와 도착지를 다시 선택해주세요. 좌표 정보가 필요합니다.");
+        return;
+      }
+
       setIsLoadingRoutes(true);
       setRouteError("");
 
