@@ -69,6 +69,12 @@ export function getTransitColors(segment) {
 }
 
 export function getBusIconKey(segment) {
+  const name = getTransitName(segment).trim();
+
+  if (/^N\s*\d+/i.test(name)) {
+    return "b_ga";
+  }
+
   return getTransitColors(segment).busIconKey ?? "b_o";
 }
 
