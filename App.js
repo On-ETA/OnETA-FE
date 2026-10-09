@@ -38,6 +38,7 @@ import { subscribeAuthRequired } from "./src/api/auth/authEvents";
 import { reissueAuthTokens } from "./src/api/auth/reissue";
 import { exchangeGoogleAuthCode } from "./src/api/google";
 import { PushNotifications } from "./src/notifications/PushNotifications";
+import { NavigationScreenTransition } from "./src/components/ScreenTransition";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
 
 const Stack = createNativeStackNavigator();
@@ -681,8 +682,12 @@ export default function App() {
       >
         <Stack.Navigator
           initialRouteName={initialRouteName}
+          screenLayout={Platform.OS === "web" ? ({ children }) => (
+            <NavigationScreenTransition>{children}</NavigationScreenTransition>
+          ) : undefined}
           screenOptions={{
             headerShown: false,
+            animation: "slide_from_right",
           }}
         >
           <Stack.Screen component={LoginRoute} name={routes.login} />

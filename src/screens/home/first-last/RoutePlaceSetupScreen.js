@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { createThrottledTask } from "../../../utils/throttledTask";
+import { ScreenTransition } from "../../../components/ScreenTransition";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import ArrowRightIcon from "../../../../assets/images/R_g.svg";
@@ -27,17 +29,22 @@ export function RoutePlaceSetupScreen({
     (place) => place?.label && Number.isFinite(place.x) && Number.isFinite(place.y),
   );
   const handleBackPress = () => onBackPress?.(places);
+  const searchThrottleRef = useRef(null);
+  if (!searchThrottleRef.current) searchThrottleRef.current = createThrottledTask(1000);
+  useEffect(() => () => searchThrottleRef.current.cancel(), []);
 
   useEffect(() => {
     setResults([]);
     if (!activeField || !keyword.trim()) {
+      searchThrottleRef.current.cancel();
       setStatus("");
       return;
     }
     const controller = new AbortController();
     let active = true;
     setStatus("검색 중입니다.");
-    const timer = setTimeout(async () => {
+    searchThrottleRef.current.schedule(async () => {
+      if (controller.signal.aborted) return;
       try {
         const found = await searchAddresses({ keyword: keyword.trim(), signal: controller.signal });
         if (!active) return;
@@ -46,10 +53,9 @@ export function RoutePlaceSetupScreen({
       } catch (error) {
         if (active) setStatus(error.message || "주소 검색에 실패했습니다.");
       }
-    }, 300);
+    });
     return () => {
       active = false;
-      clearTimeout(timer);
       controller.abort();
     };
   }, [activeField, keyword]);
@@ -59,6 +65,7 @@ export function RoutePlaceSetupScreen({
     setKeyword("");
   };
 
+  const renderStep = () => {
   if (showAddressManagement) {
     return (
       <AddressManagementScreen
@@ -193,6 +200,8 @@ export function RoutePlaceSetupScreen({
       )}
     </View>
   );
+  };
+  return <ScreenTransition transitionKey={`${showAddressManagement}:${activeField ?? "setup"}`} transitionDepth={showAddressManagement ? 2 : activeField ? 1 : 0} animateOnMount={false}>{renderStep()}</ScreenTransition>;
 }
 
 const styles = StyleSheet.create({
