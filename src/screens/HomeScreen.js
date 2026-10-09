@@ -86,6 +86,11 @@ function createFirstLastRouteSummaryFromNotification(notification) {
     routeName: notification?.routeName,
     arrivalTime: notification?.arrivalTime || summary.arrivalTime,
     estimatedDepartureAt,
+    status:
+      notification?.status ??
+      details?.status ??
+      route?.status ??
+      "AVAILABLE",
     estimatedDepartureTimestamp,
     departureTime:
       formatSeoulTime(estimatedDepartureTimestamp) ?? summary.departureTime,
@@ -121,6 +126,7 @@ function createTransitNotificationPayload(route, summary, scheduleType = TRANSIT
       originY: summary?.originPlace?.y ?? routeDetails?.originY,
       destX: summary?.destinationPlace?.x ?? routeDetails?.destX,
       destY: summary?.destinationPlace?.y ?? routeDetails?.destY,
+      status: summary?.status ?? route?.status ?? routeDetails?.status,
     }),
     scheduleType: summary?.scheduleType ?? route?.scheduleType ?? scheduleType,
   };
