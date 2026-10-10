@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const babel = require('@babel/core');
 const { test } = require('node:test');
 
-function fixture() {
+function fixture(isReady = () => true) {
   let now = 0, nextId = 0;
   const timers = new Map();
   const calls = [];
@@ -21,7 +21,7 @@ function fixture() {
   const scheduler = exports.createThrottledTask(1000);
   return {
     calls, scheduler,
-    input: keyword => scheduler.schedule(() => calls.push({ keyword, at: now })),
+    input: keyword => scheduler.schedule(() => calls.push({ keyword, at: now }), () => isReady(keyword)),
     advance(to) {
       while (true) {
         const next = [...timers].filter(([, timer]) => timer.at <= to).sort((a, b) => a[1].at - b[1].at)[0];
@@ -60,4 +60,40 @@ test('clearing, pin selection, or leaving the screen cancels pending text search
   f.input('new'); f.advance(2999); assert.equal(f.calls.length, 0);
   f.advance(3000); assert.deepEqual(f.calls, [{ keyword: 'new', at: 3000 }]);
   f.input('pending'); f.scheduler.cancel(); f.advance(10000); assert.equal(f.calls.length, 1);
+});
+
+
+function keywordCondition() {
+  const exports = {};
+  const { code } = babel.transformSync(fs.readFileSync(path.join(__dirname, '../src/utils/searchKeyword.js'), 'utf8'), {
+    configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'],
+  });
+  vm.runInNewContext(code, { exports });
+  return exports.isSearchKeywordReady;
+}
+
+test('Korean needs a complete syllable while English and numeric keywords remain eligible', () => {
+  const isReady = keywordCondition();
+  for (const keyword of ['', '   ', '\u3131', '\u314f', '\u3131\u314f', '\u3131\u3134', '\u1100', '\u1161', 'ABC \u3131']) {
+    assert.equal(isReady(keyword), false, keyword);
+  }
+  for (const keyword of ['\uac00', '\uac15', '\uc11c\uc6b8', '\uc11c\uc6b8\u3131', 'ABC \uac00', 'Seoul', '123', '\u1100\u1161']) {
+    assert.equal(isReady(keyword), true, keyword);
+  }
+});
+
+test('incomplete Korean defers each search tick by one second, then searches the latest completed keyword', () => {
+  const f = fixture(keywordCondition());
+  f.input('\u3131'); f.advance(1000); assert.equal(f.calls.length, 0); assert.equal(f.timers(), 1);
+  f.advance(1500); f.input('\u3131\u314f'); f.advance(2000); assert.equal(f.calls.length, 0);
+  f.advance(2500); f.input('\uac00'); f.advance(2999); assert.equal(f.calls.length, 0);
+  f.advance(3000); assert.deepEqual(f.calls, [{ keyword: '\uac00', at: 3000 }]);
+  f.advance(10000); assert.equal(f.calls.length, 1); assert.equal(f.timers(), 0);
+});
+
+test('clearing or leaving the screen cancels a repeatedly deferred Korean search', () => {
+  const f = fixture(keywordCondition()); f.input('\u3131'); f.advance(3000);
+  assert.equal(f.calls.length, 0); assert.equal(f.timers(), 1);
+  f.scheduler.cancel(); f.advance(10000); assert.equal(f.timers(), 0); assert.equal(f.calls.length, 0);
+  f.input('\uac15'); f.advance(11000); assert.deepEqual(f.calls, [{ keyword: '\uac15', at: 11000 }]);
 });

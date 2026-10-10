@@ -1,3 +1,4 @@
+import { isSearchKeywordReady } from "../utils/searchKeyword";
 import { createThrottledTask } from "../utils/throttledTask";
 import { ScreenTransition } from "../components/ScreenTransition";
 import React, { useEffect, useRef, useState } from "react";
@@ -518,7 +519,7 @@ function AddressSearchScreen({ onBackPress, onResultPress }) {
           setIsSearching(false);
         }
       }
-    });
+    }, () => isSearchKeywordReady(trimmedKeyword));
 
     return () => {
       isActive = false;
