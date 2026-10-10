@@ -1,3 +1,4 @@
+import { homeCacheKeys, readHomeCache } from "../api/homeCache";
 import React, { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -16,13 +17,14 @@ import BackIcon from "../../assets/images/L.svg";
 import { colors, layout, typography } from "../theme";
 
 export function AccountInfoScreen({ onBackPress, onConfirmPress }) {
-  const [email, setEmail] = useState("");
-  const [nickname, setNickname] = useState("");
+  const [email, setEmail] = useState(() => readHomeCache(homeCacheKeys.myPage)?.email ?? "");
+  const [nickname, setNickname] = useState(() => readHomeCache(homeCacheKeys.myPage)?.nickname ?? "");
   const [errorMessage, setErrorMessage] = useState("");
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [isLoadingUser, setIsLoadingUser] = useState(() => !readHomeCache(homeCacheKeys.myPage));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    if (readHomeCache(homeCacheKeys.myPage)) return undefined;
     let isActive = true;
     const controller = new AbortController();
 

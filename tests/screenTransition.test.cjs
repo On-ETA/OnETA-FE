@@ -5,16 +5,22 @@ const path = require('node:path');
 const { test } = require('node:test');
 const babel = require('@babel/core');
 
-function fixture({ reduced = false, deferred = false } = {}) {
+function fixture({ reduced = false, deferred = false, platform = "android" } = {}) {
   const componentSlots = [], routeSlots = [];
   let slots = componentSlots;
   const effects = [];
   const starts = [];
+  let preferenceReads = 0;
   let cursor = 0, focused = true, changeMotion, resolveMotion;
   let navigationState = { index: 0, routes: [{ key: "home" }] };
   const motion = deferred ? new Promise(resolve => { resolveMotion = resolve; }) : Promise.resolve(reduced);
   const react = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
+    useState(initial) {
+      const index = cursor++;
+      if (!(index in slots)) slots[index] = { value: typeof initial === 'function' ? initial() : initial };
+      return [slots[index].value, value => { slots[index].value = typeof value === 'function' ? value(slots[index].value) : value; }];
+    },
     useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
     useEffect(callback, deps) {
       const index = cursor++, prior = slots[index];
@@ -29,11 +35,11 @@ function fixture({ reduced = false, deferred = false } = {}) {
     react,
     '@react-navigation/native': { useIsFocused: () => focused, useNavigationState: selector => selector(navigationState) },
     'react-native': {
-      View: 'View', Platform: { OS: 'web' }, StyleSheet: { create: styles => styles },
+      View: 'View', Platform: { OS: platform }, StyleSheet: { create: styles => styles },
       Easing: { cubic: 'cubic', out: value => value },
       Animated: { Value, View: 'AnimatedView', timing: (value, config) => ({ start: () => starts.push({ value, config }), stop: () => { value.setValue(1); } }) },
       AccessibilityInfo: {
-        isReduceMotionEnabled: () => motion,
+        isReduceMotionEnabled: () => { preferenceReads++; return motion; },
         addEventListener: (_, handler) => { changeMotion = handler; return { remove() {} }; },
       },
     },
@@ -45,6 +51,7 @@ function fixture({ reduced = false, deferred = false } = {}) {
   });
   vm.runInNewContext(code, { exports, require: name => mocks[name] });
   return {
+    preferenceReads: () => preferenceReads,
     starts, changeMotion: value => changeMotion(value), resolveMotion: value => resolveMotion(value),
     focus: value => { focused = value; },
     navigation: value => { navigationState = value; },
@@ -151,4 +158,47 @@ test('home header and tab buttons stay outside the animated content on both home
     assert.equal(content.type, 'transition'); assert.equal(content.props.children[0].type, activeHomeTab);
     assert.equal(content.props.direction, activeHomeTab === 'customAlarm' ? 'forward' : 'backward');
   }
+});
+
+
+test('later screen transitions start immediately from the shared accessibility preference without another async lookup', async () => {
+  const f = fixture(); f.render({ transitionKey: 'first' }); await settle();
+  assert.equal(f.preferenceReads(), 1); assert.equal(f.starts.length, 1);
+  f.render({ transitionKey: 'next' });
+  assert.equal(f.starts.length, 2); assert.equal(f.preferenceReads(), 1);
+});
+
+test('web uses CSS animations in both directions without driving Animated frames in JavaScript', async () => {
+  const f = fixture({ platform: 'web' });
+  f.render({ transitionKey: 'home', animateOnMount: false });
+  f.render({ transitionKey: 'next', direction: 'forward', animateOnMount: false }); await settle();
+  const next = f.render({ transitionKey: 'next', direction: 'forward', animateOnMount: false });
+  const frames = next.props.children[0].props.style[2].animationKeyframes;
+  assert.equal(frames.from.transform, 'translateX(24px)'); assert.equal(f.starts.length, 0);
+  f.render({ transitionKey: 'home', direction: 'backward', animateOnMount: false });
+  const back = f.render({ transitionKey: 'home', direction: 'backward', animateOnMount: false });
+  assert.equal(back.props.children[0].props.style[2].animationKeyframes['0%'].transform, 'translateX(-24px)');
+  f.changeMotion(true);
+  const stopped = f.render({ transitionKey: 'home', direction: 'backward', animateOnMount: false });
+  assert.equal(stopped.props.children[0].props.style[2], null);
+});
+
+
+test('the actual web renderer emits valid directional transforms for all CSS transition variants', () => {
+  const rn = require('react-native-web'), React = require('react'), { renderToStaticMarkup } = require('react-dom/server');
+  const source = fs.readFileSync(path.join(__dirname, '../src/components/ScreenTransition.js'), 'utf8');
+  const { code } = babel.transformSync(source, {
+    configFile: false, babelrc: false,
+    plugins: ['@babel/plugin-transform-modules-commonjs', '@babel/plugin-transform-react-jsx'],
+  });
+  const exports = {};
+  vm.runInNewContext(code + '\nexports.stylesForCheck = styles;', {
+    exports, require: name => name === 'react-native' ? rn : name === 'react' ? React : {},
+  });
+  for (const direction of ['forwardA', 'forwardB', 'backwardA', 'backwardB']) {
+    renderToStaticMarkup(React.createElement(rn.View, { style: [exports.stylesForCheck.webAnimation, exports.stylesForCheck[direction]] }));
+  }
+  const css = rn.StyleSheet.getSheet().textContent;
+  assert.ok(css.includes('@keyframes')); assert.ok(css.includes('translateX(-24px)')); assert.ok(css.includes('translateX(24px)'));
+  assert.ok(!css.includes('transform:[object Object]'));
 });

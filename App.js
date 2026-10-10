@@ -38,7 +38,7 @@ import { subscribeAuthRequired } from "./src/api/auth/authEvents";
 import { reissueAuthTokens } from "./src/api/auth/reissue";
 import { exchangeGoogleAuthCode } from "./src/api/google";
 import { PushNotifications } from "./src/notifications/PushNotifications";
-import { NavigationScreenTransition } from "./src/components/ScreenTransition";
+import { initializeScreenTransitions, NavigationScreenTransition } from "./src/components/ScreenTransition";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
 
 const Stack = createNativeStackNavigator();
@@ -619,6 +619,7 @@ function FindPasswordRoute({ navigation }) {
 }
 
 export default function App() {
+  React.useEffect(initializeScreenTransitions, []);
   const [isAuthHydrated, setIsAuthHydrated] = React.useState(false);
   const [initialRouteName, setInitialRouteName] = React.useState(routes.login);
 

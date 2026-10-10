@@ -30,7 +30,7 @@ import {
 import { colors, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 import { FCM_NOTIFICATION_TYPES, subscribeNotifications } from "../../../notifications/events";
-import { homeCacheKeys } from "../../../api/homeCache";
+import { homeCacheKeys, readHomeCache } from "../../../api/homeCache";
 
 // TODO: API 연동 시 아래 더미 데이터를 교체하세요.
 // GET /home/custom-alarms
@@ -114,8 +114,8 @@ export function CustomAlarmScreen({
   onScheduleAlarmAddPress,
   onScheduleAlarmEditPress,
 }) {
-  const [garageAlarms, setGarageAlarms] = useState(initialGarageAlarms);
-  const [scheduleAlarms, setScheduleAlarms] = useState(initialScheduleAlarms);
+  const [garageAlarms, setGarageAlarms] = useState(() => readHomeCache(homeCacheKeys.depotNotifications, initialGarageAlarms));
+  const [scheduleAlarms, setScheduleAlarms] = useState(() => readHomeCache(homeCacheKeys.scheduleNotifications, initialScheduleAlarms));
   const [isLoadingGarageAlarms, setIsLoadingGarageAlarms] = useState(false);
   const [garageAlarmError, setGarageAlarmError] = useState("");
   const [isLoadingScheduleAlarms, setIsLoadingScheduleAlarms] = useState(false);
@@ -159,7 +159,9 @@ export function CustomAlarmScreen({
     const controller = new AbortController();
     garageRequest.current = controller;
     async function loadGarageAlarms() {
-      setIsLoadingGarageAlarms(true);
+      const cached = readHomeCache(homeCacheKeys.depotNotifications);
+      if (Array.isArray(cached)) setGarageAlarms(cached);
+      setIsLoadingGarageAlarms(!Array.isArray(cached));
       setGarageAlarmError("");
       try {
         const alarms = await getMyDepotNotifications({ signal: controller.signal });
@@ -181,7 +183,9 @@ export function CustomAlarmScreen({
     const controller = new AbortController();
     scheduleRequest.current = controller;
     async function loadScheduleAlarms() {
-      setIsLoadingScheduleAlarms(true);
+      const cached = readHomeCache(homeCacheKeys.scheduleNotifications);
+      if (Array.isArray(cached)) setScheduleAlarms(cached);
+      setIsLoadingScheduleAlarms(!Array.isArray(cached));
       setScheduleAlarmError("");
       try {
         const alarms = await getArrivalNotifications({ signal: controller.signal });
