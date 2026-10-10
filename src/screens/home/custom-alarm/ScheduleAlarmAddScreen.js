@@ -1,3 +1,4 @@
+import { isSearchKeywordReady } from "../../../utils/searchKeyword";
 import { createThrottledTask } from "../../../utils/throttledTask";
 import { ScreenTransition } from "../../../components/ScreenTransition";
 ﻿import React, {
@@ -1518,6 +1519,7 @@ export function ScheduleRouteMapStep({
             }
           }
         },
+        () => isSearchKeywordReady(trimmedPlaceKeyword),
       );
 
     return () => {

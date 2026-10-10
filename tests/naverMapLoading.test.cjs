@@ -47,9 +47,9 @@ function renderer() {
   };
 }
 
-function load(file, mocks, globals = {}) {
+function load(file, mocks, globals = {}, exposed = []) {
   const exports = {};
-  const { code } = babel.transformSync(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), {
+  const { code } = babel.transformSync(fs.readFileSync(path.join(__dirname, '..', file), 'utf8') + exposed.map(name => '\nexports.' + name + ' = ' + name + ';').join(''), {
     configFile: false, babelrc: false,
     plugins: ['@babel/plugin-transform-modules-commonjs', '@babel/plugin-transform-react-jsx'],
   });
@@ -81,6 +81,7 @@ function locationFixture(props = {}, cachedCoordinate = null, lookup, extraMocks
     '../../../config/naverMap': { NAVER_MAP_DEFAULT_CENTER: { latitude: 37.5563, longitude: 126.922 } },
     '../../../utils/locationError': load('src/utils/locationError.js', {}),
     '../../../utils/throttledTask': load('src/utils/throttledTask.js', {}, timerGlobals),
+    '../../../utils/searchKeyword': load('src/utils/searchKeyword.js', {}),
     '../../../components/reverseGeocode': { getCurrentCoordinate: lookup ?? (() => location), getCachedCurrentCoordinate: () => cachedCoordinate },
     '../../../theme': { colors: {}, typography: {}, layout: {} },
     ...extraMocks,
@@ -347,4 +348,55 @@ test('web pin geocoding loads the map SDK and uses road addresses with a parcel 
   const beforeInvalid = preloads;
   await assert.rejects(web.reverseGeocode({ latitude: NaN, longitude: 127.1 }));
   assert.equal(preloads, beforeInvalid);
+});
+
+
+test('map keyword search postpones unfinished Korean at each tick and pin selection cancels that waiting search', async () => {
+  const calls = [];
+  const f = locationFixture({}, { latitude: 37.5, longitude: 127 }, undefined, {
+    '../../../api/address/search': { searchAddresses: async request => { calls.push(request); return []; } },
+    '../../../components/reverseGeocode': {
+      getCachedCurrentCoordinate: () => ({ latitude: 37.5, longitude: 127 }),
+      reverseGeocode: async () => ({ roadAddress: '\uc11c\uc6b8' }),
+    },
+  });
+  f.render(); f.view.flushEffects();
+  const type = value => { find(f.render(), 'TextInput').props.onChangeText(value); f.render(); f.view.flushEffects(); };
+  const tick = () => f.timers.findLast(timer => timer.delay === 1000);
+  type('\u3131'); await tick().callback(); assert.equal(calls.length, 0);
+  const waiting = tick(); type('\u3131\u314f'); assert.equal(tick(), waiting);
+  await waiting.callback(); assert.equal(calls.length, 0);
+  type('\uac00'); await tick().callback(); assert.equal(calls.length, 1); assert.equal(calls[0].keyword, '\uac00');
+  type('\u3134'); await tick().callback(); assert.equal(calls.length, 1);
+  const deferred = tick();
+  await find(f.render(), 'NaverMapView').props.onMapPress({ latitude: 37.6, longitude: 127.1 });
+  assert.equal(calls.length, 2); assert.equal(calls[1].keyword, '\uc11c\uc6b8');
+  assert.equal(deferred.cancelled, true); await deferred.callback(); assert.equal(calls.length, 2);
+});
+
+
+test('address management defers incomplete Korean before calling the search API', async () => {
+  const view = renderer(), timers = [], calls = [];
+  const timerGlobals = {
+    setTimeout: (callback, delay) => { const timer = { callback, delay }; timers.push(timer); return timer; },
+    clearTimeout: timer => { if (timer) timer.cancelled = true; },
+  };
+  const api = load('src/screens/AddressManagementScreen.js', {
+    react: view.react,
+    'react-native': {
+      View: 'View', Text: 'Text', TextInput: 'TextInput', Pressable: 'Pressable', ScrollView: 'ScrollView',
+      StyleSheet: { create: value => value }, Platform: { OS: 'web', select: value => value.web ?? value.default },
+    },
+    '../theme': { colors: {}, typography: {}, layout: {} },
+    '../utils/throttledTask': load('src/utils/throttledTask.js', {}, timerGlobals),
+    '../utils/searchKeyword': load('src/utils/searchKeyword.js', {}),
+    '../api/address/search': { searchAddresses: async request => { calls.push(request); return []; } },
+  }, timerGlobals, ['AddressSearchScreen']);
+  const render = () => view.render(api.AddressSearchScreen, {});
+  render(); view.flushEffects();
+  const type = value => { find(render(), 'TextInput').props.onChangeText(value); render(); view.flushEffects(); };
+  const tick = () => timers.findLast(timer => timer.delay === 1000);
+  type('\u3131'); await tick().callback(); assert.equal(calls.length, 0);
+  const waiting = tick(); type('\uac00'); assert.equal(tick(), waiting);
+  await waiting.callback(); assert.equal(calls.length, 1); assert.equal(calls[0].keyword, '\uac00');
 });

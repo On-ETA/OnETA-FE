@@ -6,15 +6,16 @@ export function createThrottledTask(delay = 1000) {
   const flush = () => {
     timer = null;
     const task = pendingTask;
-    pendingTask = null;
     if (!task) return;
     timer = setTimeout(flush, delay);
-    return task();
+    if (!task.isReady()) return;
+    pendingTask = null;
+    return task.run();
   };
 
   return {
-    schedule(task) {
-      pendingTask = task;
+    schedule(task, isReady = () => true) {
+      pendingTask = { run: task, isReady };
       if (timer === null) timer = setTimeout(flush, delay);
     },
     cancel() {

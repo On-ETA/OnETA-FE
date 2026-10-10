@@ -1,3 +1,4 @@
+import { isSearchKeywordReady } from "../../../utils/searchKeyword";
 import { createThrottledTask } from "../../../utils/throttledTask";
 import { ScreenTransition } from "../../../components/ScreenTransition";
 import React, { useEffect, useRef, useState } from "react";
@@ -53,7 +54,7 @@ export function RoutePlaceSetupScreen({
       } catch (error) {
         if (active) setStatus(error.message || "주소 검색에 실패했습니다.");
       }
-    });
+    }, () => isSearchKeywordReady(keyword));
     return () => {
       active = false;
       controller.abort();
