@@ -381,7 +381,15 @@ test('address management defers incomplete Korean before calling the search API'
     setTimeout: (callback, delay) => { const timer = { callback, delay }; timers.push(timer); return timer; },
     clearTimeout: timer => { if (timer) timer.cancelled = true; },
   };
+  const searchMock = { searchAddresses: async request => { calls.push(request); return []; } };
+  const searchHook = load('src/hooks/useAddressSearch.js', {
+    react: view.react,
+    '../api/address/search': searchMock,
+    '../utils/throttledTask': load('src/utils/throttledTask.js', {}, timerGlobals),
+    '../utils/searchKeyword': load('src/utils/searchKeyword.js', {}),
+  });
   const api = load('src/screens/AddressManagementScreen.js', {
+    '../hooks/useAddressSearch': searchHook,
     react: view.react,
     'react-native': {
       View: 'View', Text: 'Text', TextInput: 'TextInput', Pressable: 'Pressable', ScrollView: 'ScrollView',

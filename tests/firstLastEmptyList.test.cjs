@@ -27,6 +27,7 @@ function fixture(scheduleType, result) {
     },
   };
   const mocks = {
+    '../utils/firstLastDisplay': { getPreferredTransitType: () => scheduleType, startFirstLastClock: () => () => {} },
     '../notifications/events': { FCM_NOTIFICATION_TYPES: { transit: 'firstandlast' }, subscribeNotifications: listener => {
       notificationListener = listener;
       return () => { notificationListener = null; };
@@ -42,7 +43,9 @@ function fixture(scheduleType, result) {
       return () => {};
     } },
     '../api/notifications/transit': { TRANSIT_SCHEDULE_TYPES: types, getTransitNotifications: async options => {
-      requests.push(options); if (result instanceof Error) throw result; return result;
+      requests.push(options);
+      if (options.scheduleType !== scheduleType) throw new Error('other list unavailable');
+      if (result instanceof Error) throw result; return result;
     } },
     '../theme': { colors: {}, layout: {} },
     '../utils/firstLastRouteSummary': { createFirstLastRouteSummary: () => ({ segments: [] }), parseEstimatedDepartureAt: () => undefined,
@@ -71,7 +74,7 @@ test('home refreshes the displayed transit summary from cache only for firstandl
   assert.equal(f.requests.length, initialRequests);
   f.notify({ data: { type: 'firstandlast' } });
   await new Promise(setImmediate);
-  assert.equal(f.requests.length, initialRequests + 1);
+  assert.equal(f.requests.length, initialRequests + 2);
   assert.equal(f.requests.at(-1).scheduleType, 'LAST_TRANSIT');
   assert.equal(f.requests.at(-1).forceRefresh, false);
 });
@@ -79,7 +82,7 @@ test('home refreshes the displayed transit summary from cache only for firstandl
 test('empty last-transit response clears the cached last route and screen while preserving the first route', async () => {
   const f = fixture('LAST_TRANSIT', []);
   await runEffects(f);
-  assert.equal(f.requests[0].scheduleType, 'LAST_TRANSIT');
+  assert.ok(f.requests.some(request => request.scheduleType === 'LAST_TRANSIT'));
   const summaries = f.state.find(entry => entry.value && typeof entry.value === 'object' && 'FIRST_TRANSIT' in entry.value).value;
   assert.equal(summaries.LAST_TRANSIT, null);
   assert.equal(f.cache.has('last-route'), false);

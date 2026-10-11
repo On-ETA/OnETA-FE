@@ -1,6 +1,8 @@
 import { getAccessToken } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
+import { geocodeRoadAddress } from "../../components/geocodeRoadAddress";
+import { throwIfGeocodingAborted } from "../../utils/roadAddress";
 
 const ADDRESS_SEARCH_ENDPOINT = "/api/addresses/search";
 
@@ -113,6 +115,7 @@ export function normalizeAddressSearchResult(result, index = 0) {
 
 export async function searchAddresses({
   keyword,
+  fallbackToRoadAddress = false,
   accessToken = getAccessToken(),
   signal,
 } = {}) {
@@ -133,7 +136,12 @@ export async function searchAddresses({
   });
   const results = Array.isArray(response?.data) ? response.data : response;
 
-  return Array.isArray(results)
+  const normalizedResults = Array.isArray(results)
     ? results.map(normalizeAddressSearchResult)
     : [];
+  if (normalizedResults.length > 0 || !fallbackToRoadAddress) return normalizedResults;
+  throwIfGeocodingAborted(signal);
+  const roadAddresses = await geocodeRoadAddress({ keyword: trimmedKeyword, signal });
+  throwIfGeocodingAborted(signal);
+  return roadAddresses.map(normalizeAddressSearchResult);
 }

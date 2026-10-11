@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState, BackHandler, Platform, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { ScreenTransition } from "../components/ScreenTransition";
+import { DeletionProgressModal } from "../components/DeletionProgressModal";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAddresses } from "../api/addresses";
@@ -9,6 +10,7 @@ import { getArrivalNotificationById, updateArrivalNotification } from "../api/no
 import { getArrivalNotificationPatch } from "../utils/arrivalNotificationPatch";
 import { getCurrentCoordinate } from "../components/reverseGeocode";
 import { startTransitRefresh } from "../utils/transitRefresh";
+import { getPreferredTransitType, startFirstLastClock } from "../utils/firstLastDisplay";
 import { FCM_NOTIFICATION_TYPES, subscribeNotifications } from "../notifications/events";
 import {
   homeCacheKeys,
@@ -224,8 +226,16 @@ export function HomeScreen({
   const [activeTab, setActiveTab] = useState(initialTab);
   const [activeHomeTab, setActiveHomeTab] = useState("firstLast");
   const [activeFirstLastScheduleType, setActiveFirstLastScheduleType] =
-    useState(TRANSIT_SCHEDULE_TYPES.first);
+    useState(() => getPreferredTransitType({
+      hasFirst: Boolean(readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.first)),
+      hasLast: Boolean(readCachedFirstLastRouteSummary(TRANSIT_SCHEDULE_TYPES.last)),
+      types: TRANSIT_SCHEDULE_TYPES,
+    }));
+  const [timeBasedScheduleType, setTimeBasedScheduleType] = useState(() =>
+    getPreferredTransitType({ hasFirst: false, hasLast: false, types: TRANSIT_SCHEDULE_TYPES }));
   const [isAddressManagerVisible, setIsAddressManagerVisible] = useState(false);
+  const [isDeletingRoute, setIsDeletingRoute] = useState(false);
+  const deletingRouteRef = useRef(false);
   const [isRouteDetailVisible, setIsRouteDetailVisible] = useState(false);
   const [firstLastRouteSetupStep, setFirstLastRouteSetupStep] = useState(null);
   const [firstLastRoutePlaces, setFirstLastRoutePlaces] = useState({
@@ -251,7 +261,7 @@ export function HomeScreen({
   const loadingFirstLastResetRef = useRef(false);
 
   const loadFirstLastTransitNotifications = useCallback(async ({
-    scheduleType = activeFirstLastScheduleType,
+    scheduleType,
     forceRefresh = false,
     signal,
   } = {}) => {
@@ -274,22 +284,24 @@ export function HomeScreen({
       clearCachedFirstLastRouteSummary(scheduleType);
       setFirstLastRouteSummaries((current) => ({ ...current, [scheduleType]: null }));
     }
-  }, [activeFirstLastScheduleType]);
+  }, []);
 
   useEffect(() => {
     let controller;
     const unsubscribe = subscribeNotifications((message, update) => {
       if (message?.data?.type !== FCM_NOTIFICATION_TYPES.transit) return;
-      const result = update?.results?.find(item => item.scheduleType === activeFirstLastScheduleType);
-      if (update && result?.status !== "fulfilled") return;
       controller?.abort();
       controller = new AbortController();
-      loadFirstLastTransitNotifications({ signal: controller.signal }).catch((error) => {
-        if (error?.name !== "AbortError") console.warn("첫차·막차 알림 갱신 실패:", error?.code ?? error?.message);
-      });
+      for (const scheduleType of [TRANSIT_SCHEDULE_TYPES.first, TRANSIT_SCHEDULE_TYPES.last]) {
+        const result = update?.results?.find(item => item.scheduleType === scheduleType);
+        if (update && result?.status !== "fulfilled") continue;
+        loadFirstLastTransitNotifications({ scheduleType, signal: controller.signal }).catch((error) => {
+          if (error?.name !== "AbortError") console.warn("첫차·막차 알림 갱신 실패:", error?.code ?? error?.message);
+        });
+      }
     });
     return () => { controller?.abort(); unsubscribe(); };
-  }, [activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
+  }, [loadFirstLastTransitNotifications]);
 
   useEffect(() => {
     let isActive = true;
@@ -323,16 +335,38 @@ export function HomeScreen({
     && !isAddressManagerVisible && !isRouteDetailVisible && !firstLastRouteSetupStep
     && !isScheduleAlarmAddVisible && !isGarageDepartureAddVisible && !editingCustomAlarm;
 
+  const hasFirstRoute = Boolean(firstLastRouteSummaries[TRANSIT_SCHEDULE_TYPES.first]);
+  const hasLastRoute = Boolean(firstLastRouteSummaries[TRANSIT_SCHEDULE_TYPES.last]);
+  useEffect(() => {
+    if (!isFirstLastVisible) return undefined;
+    return startFirstLastClock({ appState: AppState, onChange: now => {
+      setTimeBasedScheduleType(getPreferredTransitType({ hasFirst: false, hasLast: false, now, types: TRANSIT_SCHEDULE_TYPES }));
+    } });
+  }, [isFirstLastVisible]);
+  useEffect(() => {
+    if (!isFirstLastVisible) return;
+    setActiveFirstLastScheduleType(hasFirstRoute !== hasLastRoute
+      ? (hasFirstRoute ? TRANSIT_SCHEDULE_TYPES.first : TRANSIT_SCHEDULE_TYPES.last)
+      : timeBasedScheduleType);
+  }, [hasFirstRoute, hasLastRoute, timeBasedScheduleType, isFirstLastVisible]);
+
   useEffect(() => {
     if (!isFirstLastVisible) return undefined;
     return startTransitRefresh({
       appState: AppState,
-      refresh: options => loadFirstLastTransitNotifications({
-        ...options, scheduleType: activeFirstLastScheduleType,
-      }),
+      refresh: async options => {
+        const results = await Promise.allSettled([TRANSIT_SCHEDULE_TYPES.first, TRANSIT_SCHEDULE_TYPES.last].map(
+          scheduleType => loadFirstLastTransitNotifications({ ...options, scheduleType }),
+        ));
+        for (const result of results) {
+          if (result.status === "rejected" && result.reason?.name !== "AbortError") {
+            console.warn("첫차·막차 갱신 실패:", result.reason?.code ?? result.reason?.message);
+          }
+        }
+      },
       onError: error => console.warn("첫차·막차 갱신 실패:", error?.code ?? error?.message),
     });
-  }, [isFirstLastVisible, activeFirstLastScheduleType, loadFirstLastTransitNotifications]);
+  }, [isFirstLastVisible, loadFirstLastTransitNotifications]);
 
   const saveFirstLastRoute = useCallback(async (route, places, existingNotification = firstLastRouteSummary) => {
     const scheduleType = existingNotification?.scheduleType ?? activeFirstLastScheduleType;
@@ -492,7 +526,9 @@ export function HomeScreen({
     const scheduleType = activeFirstLastScheduleType;
     const summary = firstLastRouteSummaries[scheduleType];
 
-    if (!summary?.notificationId) return;
+    if (!summary?.notificationId || deletingRouteRef.current) return;
+    deletingRouteRef.current = true;
+    setIsDeletingRoute(true);
 
     try {
       await deleteTransitNotification({ notificationId: summary.notificationId });
@@ -503,6 +539,9 @@ export function HomeScreen({
       }));
     } catch (error) {
       console.warn("첫차·막차 경로 삭제 실패:", error?.code ?? error?.message);
+    } finally {
+      deletingRouteRef.current = false;
+      setIsDeletingRoute(false);
     }
   }, [activeFirstLastScheduleType, firstLastRouteSummaries]);
 
@@ -608,7 +647,7 @@ export function HomeScreen({
     <View style={styles.screen}>
       <StatusBar style="dark" backgroundColor={homeBackground} />
       <SafeAreaView edges={["top", "bottom"]} style={styles.phone}>
-        <ScreenTransition style={styles.content} animateOnMount={false}
+        <ScreenTransition routeAware style={styles.content} animateOnMount={false}
           transitionDepth={firstLastRouteSetupStep === "result" ? 2 : (activeTab === "myPage" || isAddressManagerVisible || isGarageDepartureAddVisible || isScheduleAlarmAddVisible || firstLastRouteSetupStep || editingCustomAlarm || isRouteDetailVisible) ? 1 : 0}
           transitionKey={[
           activeTab, isAddressManagerVisible, isGarageDepartureAddVisible,
@@ -787,6 +826,7 @@ export function HomeScreen({
           ) : null}
         </ScreenTransition>
       </SafeAreaView>
+      <DeletionProgressModal visible={isDeletingRoute} />
     </View>
   );
 }

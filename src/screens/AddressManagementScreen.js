@@ -1,7 +1,6 @@
-import { isSearchKeywordReady } from "../utils/searchKeyword";
-import { createThrottledTask } from "../utils/throttledTask";
+import { useAddressSearch } from "../hooks/useAddressSearch";
 import { ScreenTransition } from "../components/ScreenTransition";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -24,7 +23,6 @@ import {
   setCurrentAddress,
   updateAddress as updateAddressRequest,
 } from "../api/addresses";
-import { searchAddresses } from "../api/address/search";
 import { Header } from "../components";
 import { colors, typography } from "../theme";
 
@@ -475,57 +473,9 @@ export function AddressManagementScreen({
 
 function AddressSearchScreen({ onBackPress, onResultPress }) {
   const [keyword, setKeyword] = useState("");
-  const [results, setResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState("");
+  const { results, isSearching, error: searchError } = useAddressSearch({ keyword, fallbackToRoadAddress: true });
   const trimmedKeyword = keyword.trim();
   const hasKeyword = trimmedKeyword.length > 0;
-  const searchThrottleRef = useRef(null);
-  if (!searchThrottleRef.current) searchThrottleRef.current = createThrottledTask(1000);
-  useEffect(() => () => searchThrottleRef.current.cancel(), []);
-
-  useEffect(() => {
-    if (!hasKeyword) {
-      searchThrottleRef.current.cancel();
-      setResults([]);
-      setSearchError("");
-      setIsSearching(false);
-      return undefined;
-    }
-
-    let isActive = true;
-    const controller = new AbortController();
-    searchThrottleRef.current.schedule(async () => {
-      if (controller.signal.aborted) return;
-      setIsSearching(true);
-      setSearchError("");
-
-      try {
-        const nextResults = await searchAddresses({
-          keyword: trimmedKeyword,
-          signal: controller.signal,
-        });
-
-        if (isActive) {
-          setResults(nextResults);
-        }
-      } catch (error) {
-        if (isActive && error?.name !== "AbortError") {
-          setResults([]);
-          setSearchError(error?.message ?? "주소 검색에 실패했습니다.");
-        }
-      } finally {
-        if (isActive) {
-          setIsSearching(false);
-        }
-      }
-    }, () => isSearchKeywordReady(trimmedKeyword));
-
-    return () => {
-      isActive = false;
-      controller.abort();
-    };
-  }, [hasKeyword, trimmedKeyword]);
 
   return (
     <View style={styles.screen}>

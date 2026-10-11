@@ -4,13 +4,14 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, layout } from "../theme";
+import { ScreenTransition } from "./ScreenTransition";
 
 export function AppScreen({ children }) {
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" backgroundColor={colors.white} />
       <SafeAreaView edges={["top", "bottom"]} style={styles.phone}>
-        {children}
+        <ScreenTransition routeAware animateOnMount={false}>{children}</ScreenTransition>
       </SafeAreaView>
     </View>
   );

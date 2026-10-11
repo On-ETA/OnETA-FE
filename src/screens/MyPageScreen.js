@@ -445,7 +445,7 @@ export function MyPageScreen({
                   </Text>
                 ) : null}
               </>
-            ) : (
+            ) : withdrawStep === "complete" ? (
               <>
                 <Text style={styles.modalTitle}>회원 탈퇴가 완료되었습니다.</Text>
                 <Text style={styles.modalDescription}>
@@ -463,7 +463,7 @@ export function MyPageScreen({
                   </Text>
                 </Pressable>
               </>
-            )}
+            ) : null}
           </View>
         </View>
       </Modal>

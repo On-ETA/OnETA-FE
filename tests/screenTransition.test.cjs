@@ -5,16 +5,25 @@ const path = require('node:path');
 const { test } = require('node:test');
 const babel = require('@babel/core');
 
-function fixture({ reduced = false, deferred = false } = {}) {
+function fixture({ reduced = false, deferred = false, platform = "android" } = {}) {
   const componentSlots = [], routeSlots = [];
   let slots = componentSlots;
   const effects = [];
   const starts = [];
+  let preferenceReads = 0;
   let cursor = 0, focused = true, changeMotion, resolveMotion;
   let navigationState = { index: 0, routes: [{ key: "home" }] };
+  let routeContext = null;
   const motion = deferred ? new Promise(resolve => { resolveMotion = resolve; }) : Promise.resolve(reduced);
   const react = {
+    createContext: value => ({ Provider: 'RouteProvider', value }),
+    useContext: () => routeContext,
     createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
+    useState(initial) {
+      const index = cursor++;
+      if (!(index in slots)) slots[index] = { value: typeof initial === 'function' ? initial() : initial };
+      return [slots[index].value, value => { slots[index].value = typeof value === 'function' ? value(slots[index].value) : value; }];
+    },
     useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
     useEffect(callback, deps) {
       const index = cursor++, prior = slots[index];
@@ -29,11 +38,11 @@ function fixture({ reduced = false, deferred = false } = {}) {
     react,
     '@react-navigation/native': { useIsFocused: () => focused, useNavigationState: selector => selector(navigationState) },
     'react-native': {
-      View: 'View', Platform: { OS: 'web' }, StyleSheet: { create: styles => styles },
+      View: 'View', Platform: { OS: platform }, StyleSheet: { create: styles => styles },
       Easing: { cubic: 'cubic', out: value => value },
       Animated: { Value, View: 'AnimatedView', timing: (value, config) => ({ start: () => starts.push({ value, config }), stop: () => { value.setValue(1); } }) },
       AccessibilityInfo: {
-        isReduceMotionEnabled: () => motion,
+        isReduceMotionEnabled: () => { preferenceReads++; return motion; },
         addEventListener: (_, handler) => { changeMotion = handler; return { remove() {} }; },
       },
     },
@@ -45,6 +54,7 @@ function fixture({ reduced = false, deferred = false } = {}) {
   });
   vm.runInNewContext(code, { exports, require: name => mocks[name] });
   return {
+    preferenceReads: () => preferenceReads,
     starts, changeMotion: value => changeMotion(value), resolveMotion: value => resolveMotion(value),
     focus: value => { focused = value; },
     navigation: value => { navigationState = value; },
@@ -54,11 +64,13 @@ function fixture({ reduced = false, deferred = false } = {}) {
       effects.splice(0).forEach(effect => effect());
       return tree;
     },
-    renderRoute() {
+    renderRoute(contentProps = {}) {
       slots = routeSlots; cursor = 0;
-      const props = exports.NavigationScreenTransition({ children: 'page' }).props;
+      const provider = exports.NavigationScreenTransition({ children: 'page' });
+      assert.equal(provider.type, 'RouteProvider');
+      routeContext = provider.props.value;
       slots = componentSlots;
-      return this.render(props);
+      return this.render({ children: 'page', routeAware: true, ...contentProps });
     },
     unmount() { slots.forEach(slot => slot?.cleanup?.()); },
   };
@@ -151,4 +163,133 @@ test('home header and tab buttons stay outside the animated content on both home
     assert.equal(content.type, 'transition'); assert.equal(content.props.children[0].type, activeHomeTab);
     assert.equal(content.props.direction, activeHomeTab === 'customAlarm' ? 'forward' : 'backward');
   }
+});
+
+
+test('later screen transitions start immediately from the shared accessibility preference without another async lookup', async () => {
+  const f = fixture(); f.render({ transitionKey: 'first' }); await settle();
+  assert.equal(f.preferenceReads(), 1); assert.equal(f.starts.length, 1);
+  f.render({ transitionKey: 'next' });
+  assert.equal(f.starts.length, 2); assert.equal(f.preferenceReads(), 1);
+});
+
+test('web uses CSS animations in both directions without driving Animated frames in JavaScript', async () => {
+  const f = fixture({ platform: 'web' });
+  f.render({ transitionKey: 'home', animateOnMount: false });
+  f.render({ transitionKey: 'next', direction: 'forward', animateOnMount: false }); await settle();
+  const next = f.render({ transitionKey: 'next', direction: 'forward', animateOnMount: false });
+  const frames = next.props.children[0].props.style[2].animationKeyframes;
+  assert.equal(frames.from.transform, 'translateX(24px)'); assert.equal(f.starts.length, 0);
+  f.render({ transitionKey: 'home', direction: 'backward', animateOnMount: false });
+  const back = f.render({ transitionKey: 'home', direction: 'backward', animateOnMount: false });
+  assert.equal(back.props.children[0].props.style[2].animationKeyframes['0%'].transform, 'translateX(-24px)');
+  f.changeMotion(true);
+  const stopped = f.render({ transitionKey: 'home', direction: 'backward', animateOnMount: false });
+  assert.equal(stopped.props.children[0].props.style[2], null);
+});
+
+
+test('the actual web renderer emits valid directional transforms for all CSS transition variants', () => {
+  const rn = require('react-native-web'), React = require('react'), { renderToStaticMarkup } = require('react-dom/server');
+  const source = fs.readFileSync(path.join(__dirname, '../src/components/ScreenTransition.js'), 'utf8');
+  const { code } = babel.transformSync(source, {
+    configFile: false, babelrc: false,
+    plugins: ['@babel/plugin-transform-modules-commonjs', '@babel/plugin-transform-react-jsx'],
+  });
+  const exports = {};
+  vm.runInNewContext(code + '\nexports.stylesForCheck = styles;', {
+    exports, require: name => name === 'react-native' ? rn : name === 'react' ? React : {},
+  });
+  for (const direction of ['forwardA', 'forwardB', 'backwardA', 'backwardB']) {
+    renderToStaticMarkup(React.createElement(rn.View, { style: [exports.stylesForCheck.webAnimation, exports.stylesForCheck[direction]] }));
+  }
+  const css = rn.StyleSheet.getSheet().textContent;
+  assert.ok(css.includes('@keyframes')); assert.ok(css.includes('translateX(-24px)')); assert.ok(css.includes('translateX(24px)'));
+  assert.ok(!css.includes('transform:[object Object]'));
+});
+
+
+test('native page entry and return use the same 180ms duration as entering address management', async () => {
+  const address = fixture({ platform: 'android' });
+  address.render({ transitionKey: 'home', transitionDepth: 0, animateOnMount: false });
+  address.render({ transitionKey: 'addresses', transitionDepth: 1, animateOnMount: false }); await settle();
+  const expected = address.starts[0].config;
+  assert.equal(expected.duration, 180); assert.equal(expected.useNativeDriver, true);
+  for (const platform of ['android', 'ios']) {
+    const route = fixture({ platform }); route.renderRoute(); await settle();
+    assert.equal(route.starts[0].config.duration, expected.duration);
+    route.navigation({ index: 1, routes: [{ key: 'home' }, { key: 'myPage' }] });
+    route.focus(false); route.renderRoute();
+    route.navigation({ index: 0, routes: [{ key: 'home' }] });
+    route.focus(true); route.renderRoute();
+    assert.equal(route.starts[1].config.duration, expected.duration);
+    assert.equal(route.starts[1].config.useNativeDriver, true);
+  }
+});
+
+
+test('the common screen keeps its background, status bar and safe area outside the moving content', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/components/AppScreen.js'), 'utf8');
+  const { code } = babel.transformSync(source, {
+    configFile: false, babelrc: false,
+    plugins: ['@babel/plugin-transform-modules-commonjs', '@babel/plugin-transform-react-jsx'],
+  });
+  const exports = {};
+  const mocks = {
+    react: { createElement: (type, props, ...children) => ({ type, props: { ...props, children } }) },
+    'react-native': { View: 'frame', Platform: { select: options => options.web }, StyleSheet: { create: styles => styles } },
+    'expo-status-bar': { StatusBar: 'status' },
+    'react-native-safe-area-context': { SafeAreaView: 'safeArea' },
+    '../theme': { colors: { white: 'white', gray03: 'gray' }, layout: { mobileFrameWidth: 440 } },
+    './ScreenTransition': { ScreenTransition: 'transition' },
+  };
+  vm.runInNewContext(code, { exports, require: name => mocks[name] });
+  const tree = exports.AppScreen({ children: 'page' });
+  assert.equal(tree.type, 'frame');
+  assert.equal(tree.props.children[0].type, 'status');
+  const safeArea = tree.props.children[1];
+  assert.equal(safeArea.type, 'safeArea');
+  const content = safeArea.props.children[0];
+  assert.equal(content.type, 'transition');
+  assert.equal(content.props.routeAware, true);
+  assert.equal(content.props.children[0], 'page');
+});
+
+test('home uses its existing inner transition for both route entry and address management', () => {
+  const ast = babel.parseSync(fs.readFileSync(path.join(__dirname, '../src/screens/HomeScreen.js'), 'utf8'), {
+    configFile: false, babelrc: false, parserOpts: { plugins: ['jsx'] },
+  });
+  let found = false;
+  function visit(node, parent) {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'JSXElement' && node.openingElement.name.name === 'ScreenTransition' &&
+        node.openingElement.attributes.some(attribute => attribute.name?.name === 'routeAware')) {
+      assert.equal(parent.openingElement.name.name, 'SafeAreaView');
+      found = true;
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'children' && node.type === 'JSXElement') {
+        for (const child of value) visit(child, node);
+      } else if (Array.isArray(value)) {
+        for (const child of value) visit(child, parent);
+      } else if (value && typeof value === 'object') visit(value, parent);
+    }
+  }
+  visit(ast); assert.equal(found, true);
+});
+
+test('route return and internal address back steps retain their own directions without double animations', async () => {
+  const f = fixture();
+  const home = { transitionKey: 'home', transitionDepth: 0, animateOnMount: false };
+  f.renderRoute(home); await settle(); assert.equal(f.starts.length, 1);
+  const address = { ...home, transitionKey: 'addresses', transitionDepth: 1 };
+  assert.ok(horizontalStart(f.renderRoute(address)) > 0);
+  assert.ok(horizontalStart(f.renderRoute(home)) < 0);
+  assert.equal(f.starts.length, 3);
+  f.navigation({ index: 1 }); f.focus(false); f.renderRoute(home);
+  f.navigation({ index: 0 }); f.focus(true);
+  assert.ok(horizontalStart(f.renderRoute(home)) < 0);
+  assert.equal(f.starts.length, 4);
+  assert.ok(horizontalStart(f.renderRoute(address)) > 0);
+  assert.equal(f.starts.length, 5);
 });

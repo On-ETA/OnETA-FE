@@ -1950,7 +1950,6 @@ export function ScheduleRouteMapStep({
           }}
           onError={() => setIsMapLoading(false)}
         />
-        {isMapLoading && <MapLoadingOverlay />}
       </View>
 
       <View
@@ -2399,6 +2398,7 @@ export function ScheduleRouteMapStep({
           styles.mapAddressListFooter
           }
         >
+          {isMapLoading && <MapLoadingOverlay />}
           {isMapReady && (currentLocationError || isLoadingCurrentLocation) ? (
             <Text accessibilityLiveRegion="polite" style={styles.currentLocationStatus}>
               {currentLocationError
@@ -4707,12 +4707,11 @@ const styles =
 
     currentLocationStatus: {
       ...typography.caption01M,
-      color: colors.gray08,
-      backgroundColor: "rgba(255,255,255,0.94)",
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      marginBottom: 8,
-      borderRadius: 8,
+      color: colors.point,
+      fontStyle: "normal",
+      lineHeight: 19.2,
+      letterSpacing: -0.12,
+      marginBottom: 7,
       textAlign: "center",
     },
 

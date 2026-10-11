@@ -39,6 +39,7 @@ function routeFixture(token = 'access', routeName = 'MyPageRoute', params = {}) 
   const calls = [];
   const navigation = { navigate: name => calls.push(name), canGoBack: () => true, goBack: () => calls.push('back'), reset: state => calls.push(state.routes[0].name) };
   vm.runInNewContext(code, { exports, React: h.react, useIsFocused: () => true,
+    AppScreen: 'AppScreen',
     MyPageScreen: 'MyPageScreen', HomeScreen: 'HomeScreen', CustomAlarmScreen: 'CustomAlarmScreen',
     InquiryScreen: 'InquiryScreen', NoticesScreen: 'NoticesScreen', NoticeDetailScreen: 'NoticeDetailScreen',
     NotificationsScreen: 'NotificationsScreen', AccountInfoScreen: 'AccountInfoScreen', ChangePasswordScreen: 'ChangePasswordScreen',
@@ -79,7 +80,12 @@ const protectedRoutes = ['HomeRoute', 'CustomAlarmRoute', 'MyPageRoute', 'Inquir
 test('every protected page renders on the first frame with an existing session; only home preloads', async () => {
   for (const routeName of protectedRoutes) {
     const f = routeFixture('access', routeName);
-    assert.ok(f.render(), routeName);
+    const screen = f.render();
+    assert.ok(screen, routeName);
+    if (routeName === 'CustomAlarmRoute') {
+      assert.equal(screen.type, 'AppScreen');
+      assert.equal(screen.children[0].type, 'CustomAlarmScreen');
+    }
     f.h.flush();
     await new Promise(setImmediate);
     assert.equal(f.preloads(), routeName === 'HomeRoute' ? 1 : 0, routeName);
@@ -106,7 +112,7 @@ test('a route carrying new login tokens waits for token preparation before rende
   assert.equal(f.preloads(), 1);
 });
 
-function profileFixture(initialCache, getData) {
+function profileFixture(initialCache, getData, deleteUser = async () => {}) {
   const h = hooks();
   let cached = initialCache;
   const exports = {};
@@ -114,10 +120,12 @@ function profileFixture(initialCache, getData) {
     configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs', '@babel/plugin-transform-react-jsx'],
   });
   const mocks = { react: h.react,
-    'react-native': { View: 'View', Text: 'Text', ScrollView: 'ScrollView', Pressable: 'Pressable', StyleSheet: { create: value => value } },
+    'react-native': { Modal: 'Modal', View: 'View', Text: 'Text', ScrollView: 'ScrollView', Pressable: 'Pressable', StyleSheet: { create: value => value } },
     '../../package.json': { version: '1.0.0' }, '../theme': { colors: {}, typography: new Proxy({}, { get: () => ({}) }) },
     '../api/homeCache': { homeCacheKeys: { myPage: 'myPage' }, readHomeCache: () => cached },
     '../api/mypage': { getMyPage: getData ?? (async () => cached) },
+    '../api/user': { deleteUser },
+    '../utils/accessibility': { blurActiveElement() {} },
   };
   vm.runInNewContext(code, { exports, AbortController, require: name => mocks[name] ?? {} });
   return { h, setCache: value => { cached = value; }, render: (props = {}) => h.render(exports.MyPageScreen, props) };
@@ -153,4 +161,62 @@ test('profile keeps cached values if fetching fails and never displays sample us
   const empty = content(profileFixture(null).render());
   assert.ok(!empty.includes('홍길동'));
   assert.ok(!empty.includes('abcdg@gmail.com'));
+});
+
+
+function findNode(tree, predicate) {
+  if (!tree || typeof tree !== 'object') return undefined;
+  if (!Array.isArray(tree) && predicate(tree)) return tree;
+  for (const child of Array.isArray(tree) ? tree : tree.children ?? []) {
+    const found = findNode(child, predicate);
+    if (found) return found;
+  }
+}
+
+const withdrawLabel = '\uD68C\uC6D0 \uD0C8\uD1F4';
+const cancelLabel = '\uCDE8\uC18C';
+const completeLabel = '\uD68C\uC6D0 \uD0C8\uD1F4\uAC00 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.';
+function pressText(tree, label) {
+  const button = findNode(tree, node => node.type === 'Pressable' && content(node) === label);
+  assert.ok(button, label);
+  return button.props.onPress();
+}
+
+test('cancelling withdrawal hides the modal without completion content, deleting the account or navigating', () => {
+  let deletes = 0, completed = 0;
+  const f = profileFixture({}, undefined, async () => { deletes++; });
+  const props = { onWithdrawComplete: () => { completed++; } };
+  let tree = f.render(props);
+  assert.ok(!content(tree).includes(completeLabel));
+  pressText(tree, withdrawLabel);
+  tree = f.render(props);
+  const modal = findNode(tree, node => node.type === 'Modal' && node.props.visible);
+  assert.ok(modal);
+  pressText(modal, cancelLabel);
+  tree = f.render(props);
+  assert.ok(!findNode(tree, node => node.type === 'Modal' && node.props.visible));
+  assert.ok(!content(tree).includes(completeLabel));
+  assert.equal(deletes, 0);
+  assert.equal(completed, 0);
+  pressText(tree, withdrawLabel);
+  tree = f.render(props);
+  findNode(tree, node => node.type === 'Modal' && node.props.visible).props.onRequestClose();
+  tree = f.render(props);
+  assert.ok(!content(tree).includes(completeLabel));
+  assert.equal(deletes, 0);
+});
+
+test('withdrawal completion appears only after a successful delete response', async () => {
+  let resolveDelete, deletes = 0;
+  const f = profileFixture({}, undefined, () => {
+    deletes++;
+    return new Promise(resolve => { resolveDelete = resolve; });
+  });
+  pressText(f.render(), withdrawLabel);
+  const pending = pressText(f.render(), '\uD0C8\uD1F4');
+  assert.equal(deletes, 1);
+  assert.ok(!content(f.render()).includes(completeLabel));
+  resolveDelete(); await pending;
+  const tree = f.render();
+  assert.ok(content(findNode(tree, node => node.type === 'Modal' && node.props.visible)).includes(completeLabel));
 });
