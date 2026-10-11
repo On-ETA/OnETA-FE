@@ -2750,12 +2750,15 @@ export function ScheduleRouteResultStep({
         ) : (
           routes.map((selectedRoute, routeIndex) => {
             const displayDuration = selectedRoute.totalDurationMinutes ?? 0;
+            const isNightOnlyRoute = selectedRoute.status === "NIGHT_ONLY"
+              || selectedRoute.route?.status === "NIGHT_ONLY"
+              || selectedRoute.segments?.some(segment => segment.nightBus);
             const estimatedDepartureTime = formatSeoulTime(
               parseEstimatedDepartureAt(selectedRoute.estimatedDepartureAt),
             );
             return (
           <View key={selectedRoute.id ?? `route-${routeIndex}`} style={styles.routeResultCard}>
-            {routeIndex === 0 || displayDuration === minimumDuration ? (
+            {routeIndex === 0 || displayDuration === minimumDuration || isNightOnlyRoute ? (
               <View style={styles.optionBadges}>
                 {routeIndex === 0 ? (
                   <View style={styles.optionBadge}>
@@ -2765,6 +2768,11 @@ export function ScheduleRouteResultStep({
                 {displayDuration === minimumDuration ? (
                   <View style={styles.optionBadge}>
                     <Text style={styles.optionBadgeText}>최소 시간</Text>
+                  </View>
+                ) : null}
+                {isNightOnlyRoute ? (
+                  <View style={styles.optionBadge}>
+                    <Text style={styles.optionBadgeText}>심야 전용</Text>
                   </View>
                 ) : null}
               </View>
