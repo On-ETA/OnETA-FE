@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Platform, StyleSheet, View } from "react-native";
 import { useIsFocused, useNavigationState } from "@react-navigation/native";
 
 let reducedMotionPreference;
 let preferencePromise;
+const RouteTransitionContext = createContext(null);
 
 function preloadPreference() {
   if (!preferencePromise) {
@@ -23,7 +24,10 @@ export function initializeScreenTransitions() {
   return () => subscription.remove();
 }
 
-export function ScreenTransition({ children, transitionKey, active = true, animateOnMount = true, direction, transitionDepth = 0, style }) {
+export function ScreenTransition({ children, transitionKey, active = true, animateOnMount = true, direction, transitionDepth = 0, style, routeAware = false }) {
+  const routeTransition = useContext(RouteTransitionContext);
+  const route = routeAware ? routeTransition : null;
+  const previousRoute = useRef(null);
   const progressRef = useRef(null);
   if (!progressRef.current) progressRef.current = new Animated.Value(1);
   const progress = progressRef.current;
@@ -32,15 +36,22 @@ export function ScreenTransition({ children, transitionKey, active = true, anima
   const inferredDirection = useRef("forward");
   const webRun = useRef(0);
   const [webAnimation, setWebAnimation] = useState(null);
+  // Route focus and internal steps share one content transition, avoiding nested slides.
+  if (route && (!previousRoute.current || previousRoute.current.active !== route.active || previousRoute.current.index !== route.index)) {
+    inferredDirection.current = route.direction;
+    previousRoute.current = route;
+  }
   if (previousTransition.current.key !== transitionKey) {
     inferredDirection.current = transitionDepth < previousTransition.current.depth ? "backward" : "forward";
     previousTransition.current = { key: transitionKey, depth: transitionDepth };
   }
   const resolvedDirection = direction ?? inferredDirection.current;
+  const isActive = route ? route.active && active : active;
+  const animateEntry = route ? true : animateOnMount;
   const startOffset = resolvedDirection === "backward" ? -24 : 24;
 
   useEffect(() => {
-    const shouldAnimate = active && (mounted.current || animateOnMount);
+    const shouldAnimate = isActive && (mounted.current || animateEntry);
     mounted.current = true;
     let cancelled = false;
     let animation;
@@ -70,7 +81,7 @@ export function ScreenTransition({ children, transitionKey, active = true, anima
       else preloadPreference().then(start);
     }
     return () => { cancelled = true; animation?.stop(); subscription.remove(); };
-  }, [active, transitionKey, animateOnMount, resolvedDirection, progress]);
+  }, [isActive, transitionKey, animateEntry, resolvedDirection, progress]);
 
   return (
     <View style={[styles.frame, style]}>
@@ -95,7 +106,11 @@ export function NavigationScreenTransition({ children }) {
     direction.current = index < previousIndex.current ? "backward" : "forward";
     previousIndex.current = index;
   }
-  return <ScreenTransition active={active} direction={direction.current}>{children}</ScreenTransition>;
+  return (
+    <RouteTransitionContext.Provider value={{ active, index, direction: direction.current }}>
+      {children}
+    </RouteTransitionContext.Provider>
+  );
 }
 
 function webFrames(offset, alternate = false) {

@@ -1,13 +1,11 @@
-import { isSearchKeywordReady } from "../../../utils/searchKeyword";
-import { createThrottledTask } from "../../../utils/throttledTask";
+import { useAddressSearch } from "../../../hooks/useAddressSearch";
 import { ScreenTransition } from "../../../components/ScreenTransition";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import ArrowRightIcon from "../../../../assets/images/R_g.svg";
 import SearchIcon from "../../../../assets/images/search.svg";
 import ClearIcon from "../../../../assets/images/x.svg";
-import { searchAddresses } from "../../../api/address/search";
 import { Header } from "../../../components";
 import { colors } from "../../../theme";
 import { AddressManagementScreen } from "../../AddressManagementScreen";
@@ -22,44 +20,14 @@ export function RoutePlaceSetupScreen({
   const [places, setPlaces] = useState(initialPlaces);
   const [activeField, setActiveField] = useState(null);
   const [keyword, setKeyword] = useState("");
-  const [results, setResults] = useState([]);
-  const [status, setStatus] = useState("");
   const [validation, setValidation] = useState("");
   const [showAddressManagement, setShowAddressManagement] = useState(false);
+  const { results, isSearching, error } = useAddressSearch({ keyword, enabled: Boolean(activeField) && !showAddressManagement });
+  const status = isSearching ? "검색 중입니다." : error || (activeField && keyword.trim() && results.length === 0 ? "검색 결과가 없습니다." : "");
   const canContinue = [places.origin, places.destination].every(
     (place) => place?.label && Number.isFinite(place.x) && Number.isFinite(place.y),
   );
   const handleBackPress = () => onBackPress?.(places);
-  const searchThrottleRef = useRef(null);
-  if (!searchThrottleRef.current) searchThrottleRef.current = createThrottledTask(1000);
-  useEffect(() => () => searchThrottleRef.current.cancel(), []);
-
-  useEffect(() => {
-    setResults([]);
-    if (!activeField || !keyword.trim()) {
-      searchThrottleRef.current.cancel();
-      setStatus("");
-      return;
-    }
-    const controller = new AbortController();
-    let active = true;
-    setStatus("검색 중입니다.");
-    searchThrottleRef.current.schedule(async () => {
-      if (controller.signal.aborted) return;
-      try {
-        const found = await searchAddresses({ keyword: keyword.trim(), signal: controller.signal });
-        if (!active) return;
-        setResults(found);
-        setStatus(found.length ? "" : "검색 결과가 없습니다.");
-      } catch (error) {
-        if (active) setStatus(error.message || "주소 검색에 실패했습니다.");
-      }
-    }, () => isSearchKeywordReady(keyword));
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [activeField, keyword]);
 
   const closeSearch = () => {
     setActiveField(null);

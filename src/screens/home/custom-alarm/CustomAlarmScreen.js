@@ -31,6 +31,7 @@ import { colors, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
 import { FCM_NOTIFICATION_TYPES, subscribeNotifications } from "../../../notifications/events";
 import { homeCacheKeys, readHomeCache } from "../../../api/homeCache";
+import { DeletionProgressModal } from "../../../components/DeletionProgressModal";
 
 // TODO: API 연동 시 아래 더미 데이터를 교체하세요.
 // GET /home/custom-alarms
@@ -121,6 +122,7 @@ export function CustomAlarmScreen({
   const [isLoadingScheduleAlarms, setIsLoadingScheduleAlarms] = useState(false);
   const [scheduleAlarmError, setScheduleAlarmError] = useState("");
   const [isDeletingAlarms, setIsDeletingAlarms] = useState(false);
+  const deletingAlarmsRef = useRef(false);
   const [updatingScheduleAlarmIds, setUpdatingScheduleAlarmIds] = useState([]);
   const [updatingGarageAlarmIds, setUpdatingGarageAlarmIds] = useState([]);
   const garageRequest = useRef(null);
@@ -317,7 +319,7 @@ export function CustomAlarmScreen({
   };
 
   const confirmDelete = async () => {
-    if (isDeletingAlarms) {
+    if (deletingAlarmsRef.current) {
       return;
     }
 
@@ -344,6 +346,7 @@ export function CustomAlarmScreen({
       return;
     }
 
+    deletingAlarmsRef.current = true;
     setIsDeletingAlarms(true);
     setGarageAlarms((current) =>
       current.filter((alarm) => !deleteTargetIds.includes(getGarageAlarmUiId(alarm))),
@@ -379,6 +382,7 @@ export function CustomAlarmScreen({
         error?.message ?? "알림 삭제에 실패했습니다.",
       );
     } finally {
+      deletingAlarmsRef.current = false;
       setIsDeletingAlarms(false);
     }
   };
@@ -504,6 +508,7 @@ export function CustomAlarmScreen({
         deleting={isDeletingAlarms}
         visible={isDeleteModalVisible}
       />
+      <DeletionProgressModal visible={isDeletingAlarms} />
     </View>
   );
 }

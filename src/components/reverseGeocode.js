@@ -56,7 +56,7 @@ function loadNaverGeocoderScript() {
   return naverGeocoderScriptPromise;
 }
 
-async function ensureForegroundLocationPermission() {
+export async function ensureForegroundLocationPermission() {
   if (Platform.OS === "web") {
     throw new Error(
       "",

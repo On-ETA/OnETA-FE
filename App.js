@@ -39,6 +39,7 @@ import { reissueAuthTokens } from "./src/api/auth/reissue";
 import { exchangeGoogleAuthCode } from "./src/api/google";
 import { PushNotifications } from "./src/notifications/PushNotifications";
 import { initializeScreenTransitions, NavigationScreenTransition } from "./src/components/ScreenTransition";
+import { AppScreen } from "./src/components/AppScreen";
 import { notificationNavigationRef, flushNotificationNavigation } from "./src/notifications/navigation";
 
 const Stack = createNativeStackNavigator();
@@ -462,7 +463,7 @@ function CustomAlarmRoute({ navigation, route }) {
   }
 
   return (
-    <CustomAlarmScreen />
+    <AppScreen><CustomAlarmScreen /></AppScreen>
   );
 }
 
@@ -683,12 +684,12 @@ export default function App() {
       >
         <Stack.Navigator
           initialRouteName={initialRouteName}
-          screenLayout={Platform.OS === "web" ? ({ children }) => (
+          screenLayout={({ children }) => (
             <NavigationScreenTransition>{children}</NavigationScreenTransition>
-          ) : undefined}
+          )}
           screenOptions={{
             headerShown: false,
-            animation: "slide_from_right",
+            animation: "none",
           }}
         >
           <Stack.Screen component={LoginRoute} name={routes.login} />
