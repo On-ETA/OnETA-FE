@@ -641,6 +641,14 @@ export function ScheduleAlarmAddScreen({
         onBackPress={
           handleBackPress
         }
+        onNightOnlyRouteSelect={(route, places) => {
+          setSelectedRoute(route);
+          setRoutePlaces({
+            origin: places.originPlace,
+            destination: places.destinationPlace,
+          });
+          setStep("alarmFinal");
+        }}
         onRouteSelect={async (
           route,
           places,
@@ -2489,27 +2497,15 @@ export function ScheduleRouteResultStep({
 
   const [selectionError, setSelectionError] = useState("");
   const [isSelectingRoute, setIsSelectingRoute] = useState(false);
+  const [isNightOnlyNoticeVisible, setIsNightOnlyNoticeVisible] = useState(false);
+  const [nightOnlyRoute, setNightOnlyRoute] = useState(null);
 
   const handleRouteSelect = async (selectedRoute) => {
     if (isSelectingRoute) return;
 
     if (selectedRoute?.status === "NIGHT_ONLY") {
-      Alert.alert(
-        "심야버스 경로 안내",
-        "이 경로는 심야버스로 이동 가능한 경로예요.\n첫차·막차 알림 대신 원하는 도착 시간을 기준으로 알림을 받아보시겠어요?",
-        [
-          { text: "다른 경로 보기", style: "cancel" },
-          {
-            text: "내 일정 알림 설정하기",
-            onPress: () => onNightOnlyRouteSelect?.(selectedRoute, {
-              origin: getRoutePlaceText(origin),
-              destination: getRoutePlaceText(destination),
-              originPlace: origin,
-              destinationPlace: destination,
-            }),
-          },
-        ],
-      );
+      setNightOnlyRoute(selectedRoute);
+      setIsNightOnlyNoticeVisible(true);
       return;
     }
 
@@ -2834,6 +2830,49 @@ export function ScheduleRouteResultStep({
           })
         )}
       </ScrollView>
+
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setIsNightOnlyNoticeVisible(false)}
+        transparent
+        visible={isNightOnlyNoticeVisible}
+      >
+        <View style={styles.nightOnlyNoticeOverlay}>
+          <View style={styles.nightOnlyNoticeCard}>
+            <Text style={styles.nightOnlyNoticeTitle}>심야버스 경로 안내</Text>
+            <Text style={styles.nightOnlyNoticeMessage}>
+              이 경로는 심야버스로 이동 가능한 경로예요.{"\n"}
+              첫차·막차 알림 대신 원하는 도착 시간을 기준으로 알림을 받아보시겠어요?
+            </Text>
+            <View style={styles.nightOnlyNoticeActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setIsNightOnlyNoticeVisible(false);
+                  // Keep the exact API route object and continue inside the
+                  // existing schedule-alarm flow with it selected.
+                  onNightOnlyRouteSelect?.(nightOnlyRoute, {
+                    origin: getRoutePlaceText(origin),
+                    destination: getRoutePlaceText(destination),
+                    originPlace: origin,
+                    destinationPlace: destination,
+                  });
+                }}
+                style={styles.nightOnlyPrimaryButton}
+              >
+                <Text style={styles.nightOnlyPrimaryButtonText}>내 일정 알림 설정하기</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setIsNightOnlyNoticeVisible(false)}
+                style={styles.nightOnlySecondaryButton}
+              >
+                <Text style={styles.nightOnlySecondaryButtonText}>닫기</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -4949,6 +4988,77 @@ const styles =
       lineHeight: 19.2,
       letterSpacing: -0.12,
       color: colors.gray07,
+    },
+
+    nightOnlyNoticeOverlay: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 24,
+      backgroundColor: "rgba(52, 56, 59, 0.28)",
+    },
+
+    nightOnlyNoticeCard: {
+      width: "100%",
+      maxWidth: 360,
+      padding: 24,
+      borderRadius: 16,
+      backgroundColor: colors.white,
+      elevation: 3,
+    },
+
+    nightOnlyNoticeTitle: {
+      fontFamily: "SUIT",
+      fontSize: 18,
+      fontWeight: "700",
+      lineHeight: 25,
+      color: colors.gray08,
+    },
+
+    nightOnlyNoticeMessage: {
+      marginTop: 12,
+      fontFamily: "SUIT",
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.gray07,
+    },
+
+    nightOnlyNoticeActions: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 24,
+    },
+
+    nightOnlySecondaryButton: {
+      flex: 1,
+      minHeight: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 10,
+      backgroundColor: colors.gray02,
+    },
+
+    nightOnlySecondaryButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.gray07,
+    },
+
+    nightOnlyPrimaryButton: {
+      flex: 1.6,
+      minHeight: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 10,
+      backgroundColor: colors.main,
+    },
+
+    nightOnlyPrimaryButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.white,
     },
 
     routeResultContent: {
