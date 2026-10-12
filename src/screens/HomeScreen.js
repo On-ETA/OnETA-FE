@@ -574,9 +574,7 @@ export function HomeScreen({
         }
 
         if (isAddressManagerVisible) {
-          blurActiveElement();
-          setIsAddressManagerVisible(false);
-          return true;
+          return false;
         }
 
         if (isGarageDepartureAddVisible) {
@@ -586,11 +584,7 @@ export function HomeScreen({
         }
 
         if (isScheduleAlarmAddVisible) {
-          blurActiveElement();
-          setIsScheduleAlarmAddVisible(false);
-          setScheduleAlarmInitialStep("form");
-          setScheduleAlarmInitialValues(null);
-          return true;
+          return false;
         }
 
         if (firstLastRouteSetupStep === "result") {
@@ -665,6 +659,7 @@ export function HomeScreen({
           ) : activeTab === "home" ? (
             isAddressManagerVisible ? (
               <AddressManagementScreen
+                backHandlingEnabled={backHandlingEnabled && isFocused}
                 onAuthRequired={onLogoutComplete}
                 onBackPress={() => {
                   blurActiveElement();
@@ -681,6 +676,7 @@ export function HomeScreen({
               />
             ) : isScheduleAlarmAddVisible ? (
               <ScheduleAlarmAddScreen
+                backHandlingEnabled={backHandlingEnabled && isFocused}
                 initialStep={scheduleAlarmInitialStep}
                 initialValues={scheduleAlarmInitialValues}
                 scheduleType={
