@@ -744,7 +744,7 @@ export function HomeScreen({
                 onNightOnlyRouteSelect={(route, places) => {
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
-                  setScheduleAlarmInitialStep("form");
+                  setScheduleAlarmInitialStep("alarmFinal");
                   setScheduleAlarmInitialValues({
                     selectedRoute: route,
                     routePlaces: {
@@ -884,22 +884,22 @@ const HomeDashboard = React.memo(function HomeDashboard({
             onRouteDetailPress={onRouteDetailPress}
             onRouteSetupPress={onRouteSetupPress}
             onRouteDeletePress={onRouteDeletePress}
+            onNightOnlyRouteSelect={(route, places) => {
+              blurActiveElement();
+              setScheduleAlarmInitialStep("alarmFinal");
+              setScheduleAlarmInitialValues({
+                selectedRoute: route,
+                routePlaces: {
+                  origin: places.originPlace,
+                  destination: places.destinationPlace,
+                },
+              });
+              setIsScheduleAlarmAddVisible(true);
+            }}
             routeSummary={firstLastRouteSummary}
           />
         )}
       </ScreenTransition>
-          onNightOnlyRouteSelect={(route, places) => {
-            blurActiveElement();
-            setScheduleAlarmInitialStep("form");
-            setScheduleAlarmInitialValues({
-              selectedRoute: route,
-              routePlaces: {
-                origin: places.originPlace,
-                destination: places.destinationPlace,
-              },
-            });
-            setIsScheduleAlarmAddVisible(true);
-          }}
     </>
   );
 });
