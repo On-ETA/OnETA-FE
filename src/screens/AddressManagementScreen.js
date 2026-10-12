@@ -1,4 +1,5 @@
 import { useAddressSearch } from "../hooks/useAddressSearch";
+import { useAndroidBackPress } from "../hooks/useAndroidBackPress";
 import { ScreenTransition } from "../components/ScreenTransition";
 import React, { useEffect, useState } from "react";
 import {
@@ -59,6 +60,7 @@ function getCurrentAddressLabel(addresses) {
 }
 
 export function AddressManagementScreen({
+  backHandlingEnabled = true,
   onAuthRequired,
   onBackPress,
   onCurrentAddressChange,
@@ -141,6 +143,11 @@ export function AddressManagementScreen({
 
     onBackPress?.();
   };
+
+  useAndroidBackPress(() => {
+    handleBackPress();
+    return true;
+  }, backHandlingEnabled);
 
   const registerAddress = async (alias) => {
     if (

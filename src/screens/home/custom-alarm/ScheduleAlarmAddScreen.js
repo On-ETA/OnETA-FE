@@ -1,6 +1,7 @@
 import { isSearchKeywordReady } from "../../../utils/searchKeyword";
 import { createThrottledTask } from "../../../utils/throttledTask";
 import { ScreenTransition } from "../../../components/ScreenTransition";
+import { useAndroidBackPress } from "../../../hooks/useAndroidBackPress";
 ﻿import React, {
   useEffect,
   useMemo,
@@ -464,6 +465,7 @@ function getArrivalRegistrationErrorContent(error) {
 }
 
 export function ScheduleAlarmAddScreen({
+  backHandlingEnabled = true,
   initialStep = "form",
   initialValues,
   mapTitle = "알림 추가",
@@ -553,6 +555,13 @@ export function ScheduleAlarmAddScreen({
     onBackPress?.();
   };
 
+  useAndroidBackPress(() => {
+    // The address screen owns its list/search/detail history.
+    if (step === "addressList") return false;
+    handleBackPress();
+    return true;
+  }, backHandlingEnabled);
+
   const renderStep = () => {
   if (step === "route") {
     return (
@@ -580,6 +589,7 @@ export function ScheduleAlarmAddScreen({
   if (step === "addressList") {
     return (
       <AddressManagementScreen
+        backHandlingEnabled={backHandlingEnabled}
         onBackPress={handleBackPress}
         onAddressSelect={(address) => {
           setRoutePlaces((current) => ({
