@@ -9,6 +9,7 @@ import {
 
 const TRANSIT_ROUTES_SEARCH_ENDPOINT = "/api/transit/routes/search";
 const FIRST_LAST_ROUTES_SEARCH_ENDPOINT = "/api/transit/routes/first-last/search";
+const ROUTE_SEARCH_TIMEOUT_MS = 5 * 60 * 1000;
 const TRANSIT_ROUTE_CACHE_TTL_MS = 5 * 60 * 1000;
 const FIRST_LAST_ROUTE_CACHE_TTL_MS = 60 * 1000;
 
@@ -217,6 +218,7 @@ async function searchRoutes(endpoint, cacheTtlMs, {
   const response = await requestTransitRouteJson({
     path: requestPath,
     method: "GET",
+    timeoutMs: ROUTE_SEARCH_TIMEOUT_MS,
     accessToken,
     signal,
     errorMessage: "대중교통 경로 검색에 실패했습니다.",

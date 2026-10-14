@@ -246,7 +246,8 @@ test("normal and first-last route searches send scheduleType to separate endpoin
     "../auth/tokens": { getAccessToken: () => "access" },
     "../auth/reissue": { reissueAuthTokens: async () => ({ accessToken: "next" }) },
     "../client": {
-      requestJson: async ({ path }) => {
+      requestJson: async ({ path, timeoutMs }) => {
+        assert.equal(timeoutMs, 5 * 60 * 1000);
         paths.push(path);
         return { data: [{ routeId: paths.length, segments: [] }] };
       },

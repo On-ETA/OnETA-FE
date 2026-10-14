@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -26,6 +26,10 @@ import {
 } from "../theme";
 
 const TERMS = [
+  {
+    id: "age",
+    title: "만 14세 이상입니까? (필수)",
+  },
   {
     id: "service",
     title: "서비스 이용약관 동의 (필수)",
@@ -85,6 +89,7 @@ export function TermsAgreementScreen({
 }) {
     const [checkedMap, setCheckedMap] =
     useState({
+      age: false,
       service: false,
       privacy: false,
       notifications: false,
@@ -98,6 +103,7 @@ export function TermsAgreementScreen({
 
   const [isSubmitting, setIsSubmitting] =
     useState(false);
+  const submittingRef = useRef(false);
 
   const allChecked = useMemo(
     () =>
@@ -108,6 +114,7 @@ export function TermsAgreementScreen({
   );
 
   const toggleCheck = (id) => {
+    if (submittingRef.current) return;
     setCheckedMap((prev) => ({
       ...prev,
       [id]: !prev[id],
@@ -122,6 +129,7 @@ export function TermsAgreementScreen({
   };
 
   const toggleAll = () => {
+    if (submittingRef.current) return;
     const nextChecked = !allChecked;
 
     setCheckedMap(
@@ -136,6 +144,7 @@ export function TermsAgreementScreen({
   };
 
   const handleConfirmPress = async () => {
+    if (submittingRef.current) return;
     if (!allChecked) {
       Alert.alert(
         "회원가입",
@@ -164,6 +173,7 @@ export function TermsAgreementScreen({
       return;
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -196,6 +206,9 @@ export function TermsAgreementScreen({
             checkedMap.notifications,
         });
 
+      if (response?.code && response.code !== "SUCCESS") {
+        throw new Error(response.message || "약관 동의 처리에 실패했습니다. 다시 시도해 주세요.");
+      }
       onConfirmPress?.(response);
     } catch (error) {
       Alert.alert(
@@ -203,6 +216,7 @@ export function TermsAgreementScreen({
         getConsentErrorMessage(error),
       );
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -256,6 +270,7 @@ export function TermsAgreementScreen({
                     >
                       <Pressable
                         accessibilityRole="checkbox"
+                        disabled={isSubmitting}
                         accessibilityState={{
                           checked,
                         }}
@@ -283,7 +298,7 @@ export function TermsAgreementScreen({
                         </Text>
                       </Pressable>
 
-                      <Pressable
+                      {term.description ? <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`${term.title} ${
                           expanded
@@ -309,7 +324,7 @@ export function TermsAgreementScreen({
                             width={16}
                           />
                         </View>
-                      </Pressable>
+                      </Pressable> : null}
                     </View>
 
                     {expanded && (
@@ -342,6 +357,7 @@ export function TermsAgreementScreen({
 
             <Pressable
               accessibilityRole="checkbox"
+              disabled={isSubmitting}
               accessibilityState={{
                 checked: allChecked,
               }}

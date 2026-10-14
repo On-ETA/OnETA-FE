@@ -728,6 +728,13 @@ export function HomeScreen({
                 initialDestination={firstLastRoutePlaces.destination}
                 initialOrigin={firstLastRoutePlaces.origin}
                 scheduleType={activeFirstLastScheduleType}
+                onFindAnotherRoute={() => {
+                  blurActiveElement();
+                  setFirstLastRouteSetupStep(null);
+                  setScheduleAlarmInitialStep("routeSetup");
+                  setScheduleAlarmInitialValues({ routePlaces: firstLastRoutePlaces });
+                  setIsScheduleAlarmAddVisible(true);
+                }}
                 onBackPress={() => {
                   blurActiveElement();
                   setFirstLastRouteSetupStep("map");
