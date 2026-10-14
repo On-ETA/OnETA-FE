@@ -137,6 +137,28 @@ function createRoutePlace(place) {
   };
 }
 
+function preserveCoordinatesForSamePlace(previous, next) {
+  const previousPlace = createRoutePlace(previous);
+  const nextPlace = createRoutePlace(next);
+  const previousText = getRoutePlaceText(previousPlace);
+  const nextText = getRoutePlaceText(nextPlace);
+
+  if (
+    previousText &&
+    previousText === nextText &&
+    !Number.isFinite(Number(nextPlace.x)) &&
+    !Number.isFinite(Number(nextPlace.y))
+  ) {
+    return {
+      ...nextPlace,
+      x: previousPlace.x,
+      y: previousPlace.y,
+    };
+  }
+
+  return nextPlace;
+}
+
 function parseInitialArrivalTime(value) {
   if (!value) {
     return DEFAULT_TIME;
@@ -553,7 +575,7 @@ export function ScheduleAlarmAddScreen({
         onPlaceSelect={(type, place) => {
           setRoutePlaces((current) => ({
             ...current,
-            [type]: place,
+            [type]: preserveCoordinatesForSamePlace(current[type], place),
           }));
           setStep("routeSetup");
         }}
@@ -573,8 +595,9 @@ export function ScheduleAlarmAddScreen({
         onAddressSelect={(address) => {
           setRoutePlaces((current) => ({
             ...current,
-            [activePlaceType]:
-              createRoutePlace({
+            [activePlaceType]: preserveCoordinatesForSamePlace(
+              current[activePlaceType],
+              {
                 label:
                   address.name ||
                   address.placeName ||
@@ -589,7 +612,8 @@ export function ScheduleAlarmAddScreen({
                 x: address.x,
                 y: address.y,
                 raw: address,
-              }),
+              },
+            ),
           }));
           setStep("routeSetup");
         }}
@@ -628,6 +652,14 @@ export function ScheduleAlarmAddScreen({
         onBackPress={
           handleBackPress
         }
+        onNightOnlyRouteSelect={(route, places) => {
+          setSelectedRoute(route);
+          setRoutePlaces({
+            origin: places.originPlace,
+            destination: places.destinationPlace,
+          });
+          setStep("alarmFinal");
+        }}
         onRouteSelect={async (
           route,
           places,
@@ -838,9 +870,19 @@ function ScheduleRouteSetupStep({
   const destinationText =
     getRoutePlaceText(places.destination);
 
+  const hasOriginCoordinates =
+    Number.isFinite(Number(places.origin?.x)) &&
+    Number.isFinite(Number(places.origin?.y));
+
+  const hasDestinationCoordinates =
+    Number.isFinite(Number(places.destination?.x)) &&
+    Number.isFinite(Number(places.destination?.y));
+
   const canGoNext =
     Boolean(originText) &&
-    Boolean(destinationText);
+    Boolean(destinationText) &&
+    hasOriginCoordinates &&
+    hasDestinationCoordinates;
 
   return (
     <View style={styles.screen}>
@@ -888,6 +930,12 @@ function ScheduleRouteSetupStep({
           place={places.destination}
           placeholder="도착지를 지정해주세요."
         />
+
+        {originText && destinationText && !canGoNext ? (
+          <Text style={styles.placeSelectDetail}>
+            좌표를 확인할 수 없습니다. 출발지와 도착지를 다시 선택해주세요.
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.footer}>
@@ -2449,27 +2497,15 @@ export function ScheduleRouteResultStep({
 
   const [selectionError, setSelectionError] = useState("");
   const [isSelectingRoute, setIsSelectingRoute] = useState(false);
+  const [isNightOnlyNoticeVisible, setIsNightOnlyNoticeVisible] = useState(false);
+  const [nightOnlyRoute, setNightOnlyRoute] = useState(null);
 
   const handleRouteSelect = async (selectedRoute) => {
     if (isSelectingRoute) return;
 
     if (selectedRoute?.status === "NIGHT_ONLY") {
-      Alert.alert(
-        "심야버스 경로 안내",
-        "이 경로는 심야버스로 이동 가능한 경로예요.\n첫차·막차 알림 대신 원하는 도착 시간을 기준으로 알림을 받아보시겠어요?",
-        [
-          { text: "다른 경로 보기", style: "cancel" },
-          {
-            text: "내 일정 알림 설정하기",
-            onPress: () => onNightOnlyRouteSelect?.(selectedRoute, {
-              origin: getRoutePlaceText(origin),
-              destination: getRoutePlaceText(destination),
-              originPlace: origin,
-              destinationPlace: destination,
-            }),
-          },
-        ],
-      );
+      setNightOnlyRoute(selectedRoute);
+      setIsNightOnlyNoticeVisible(true);
       return;
     }
 
@@ -2499,7 +2535,20 @@ export function ScheduleRouteResultStep({
       new AbortController();
 
     async function loadTransitRoutes() {
-      routeRequestRef.current = controller;
+      const hasOriginCoordinates =
+        Number.isFinite(Number(origin?.x)) &&
+        Number.isFinite(Number(origin?.y));
+      const hasDestinationCoordinates =
+        Number.isFinite(Number(destination?.x)) &&
+        Number.isFinite(Number(destination?.y));
+
+      if (!hasOriginCoordinates || !hasDestinationCoordinates) {
+        setRoutes([]);
+        setIsLoadingRoutes(false);
+        setRouteError("출발지와 도착지를 다시 선택해주세요. 좌표 정보가 필요합니다.");
+        return;
+      }
+
       setIsLoadingRoutes(true);
       setRouteError("");
 
@@ -2696,12 +2745,15 @@ export function ScheduleRouteResultStep({
         ) : (
           routes.map((selectedRoute, routeIndex) => {
             const displayDuration = selectedRoute.totalDurationMinutes ?? 0;
+            const isNightOnlyRoute = selectedRoute.status === "NIGHT_ONLY"
+              || selectedRoute.route?.status === "NIGHT_ONLY"
+              || selectedRoute.segments?.some(segment => segment.nightBus);
             const estimatedDepartureTime = formatSeoulTime(
               parseEstimatedDepartureAt(selectedRoute.estimatedDepartureAt),
             );
             return (
           <View key={selectedRoute.id ?? `route-${routeIndex}`} style={styles.routeResultCard}>
-            {routeIndex === 0 || displayDuration === minimumDuration ? (
+            {routeIndex === 0 || displayDuration === minimumDuration || isNightOnlyRoute ? (
               <View style={styles.optionBadges}>
                 {routeIndex === 0 ? (
                   <View style={styles.optionBadge}>
@@ -2711,6 +2763,11 @@ export function ScheduleRouteResultStep({
                 {displayDuration === minimumDuration ? (
                   <View style={styles.optionBadge}>
                     <Text style={styles.optionBadgeText}>최소 시간</Text>
+                  </View>
+                ) : null}
+                {isNightOnlyRoute ? (
+                  <View style={styles.optionBadge}>
+                    <Text style={styles.optionBadgeText}>심야 전용</Text>
                   </View>
                 ) : null}
               </View>
@@ -2776,6 +2833,49 @@ export function ScheduleRouteResultStep({
           })
         )}
       </ScrollView>
+
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setIsNightOnlyNoticeVisible(false)}
+        transparent
+        visible={isNightOnlyNoticeVisible}
+      >
+        <View style={styles.nightOnlyNoticeOverlay}>
+          <View style={styles.nightOnlyNoticeCard}>
+            <Text style={styles.nightOnlyNoticeTitle}>심야버스 경로 안내</Text>
+            <Text style={styles.nightOnlyNoticeMessage}>
+              이 경로는 심야버스로 이동 가능한 경로예요.{"\n"}
+              첫차·막차 알림 대신 원하는 도착 시간을 기준으로 알림을 받아보시겠어요?
+            </Text>
+            <View style={styles.nightOnlyNoticeActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setIsNightOnlyNoticeVisible(false);
+                  // Keep the exact API route object and continue inside the
+                  // existing schedule-alarm flow with it selected.
+                  onNightOnlyRouteSelect?.(nightOnlyRoute, {
+                    origin: getRoutePlaceText(origin),
+                    destination: getRoutePlaceText(destination),
+                    originPlace: origin,
+                    destinationPlace: destination,
+                  });
+                }}
+                style={styles.nightOnlyPrimaryButton}
+              >
+                <Text style={styles.nightOnlyPrimaryButtonText}>내 일정 알림 설정하기</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setIsNightOnlyNoticeVisible(false)}
+                style={styles.nightOnlySecondaryButton}
+              >
+                <Text style={styles.nightOnlySecondaryButtonText}>닫기</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -4891,6 +4991,77 @@ const styles =
       lineHeight: 19.2,
       letterSpacing: -0.12,
       color: colors.gray07,
+    },
+
+    nightOnlyNoticeOverlay: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 24,
+      backgroundColor: "rgba(52, 56, 59, 0.28)",
+    },
+
+    nightOnlyNoticeCard: {
+      width: "100%",
+      maxWidth: 360,
+      padding: 24,
+      borderRadius: 16,
+      backgroundColor: colors.white,
+      elevation: 3,
+    },
+
+    nightOnlyNoticeTitle: {
+      fontFamily: "SUIT",
+      fontSize: 18,
+      fontWeight: "700",
+      lineHeight: 25,
+      color: colors.gray08,
+    },
+
+    nightOnlyNoticeMessage: {
+      marginTop: 12,
+      fontFamily: "SUIT",
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.gray07,
+    },
+
+    nightOnlyNoticeActions: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 24,
+    },
+
+    nightOnlySecondaryButton: {
+      flex: 1,
+      minHeight: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 10,
+      backgroundColor: colors.gray02,
+    },
+
+    nightOnlySecondaryButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.gray07,
+    },
+
+    nightOnlyPrimaryButton: {
+      flex: 1.6,
+      minHeight: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 10,
+      backgroundColor: colors.main,
+    },
+
+    nightOnlyPrimaryButtonText: {
+      fontFamily: "SUIT",
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.white,
     },
 
     routeResultContent: {

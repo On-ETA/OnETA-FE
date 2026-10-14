@@ -11,6 +11,7 @@ import Svg, { Circle, Path } from "react-native-svg";
 
 import BackIcon from "../../../../assets/images/L.svg";
 import WalkAsset from "../../../../assets/images/man.svg";
+import SmallBusAsset from "../../../../assets/images/smallbus.svg";
 import BGaIcon from "../../../../assets/bus/b_ga.svg";
 import BJiIcon from "../../../../assets/bus/b_ji.svg";
 import BGwIcon from "../../../../assets/bus/b_gw.svg";
@@ -310,7 +311,7 @@ function TimelineSummary({ items }) {
                   transitColors.isSubway ? (
                     <SubwayIcon width={7} height={8} />
                   ) : (
-                    <DetailTransitIcon segment={item} size={12} />
+                    <SmallBusAsset width={7} height={8} />
                   )
                 ) : (
                   <WalkAsset width={6} height={10} />
