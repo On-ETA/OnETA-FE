@@ -2,6 +2,7 @@ import { isSearchKeywordReady } from "../../../utils/searchKeyword";
 import { createThrottledTask } from "../../../utils/throttledTask";
 import { ScreenTransition } from "../../../components/ScreenTransition";
 import { useAndroidBackPress } from "../../../hooks/useAndroidBackPress";
+import { RouteSearchLoadingScreen } from "../../../components/RouteSearchLoadingScreen";
 ﻿import React, {
   useEffect,
   useMemo,
@@ -2402,6 +2403,7 @@ export function ScheduleRouteResultStep({
   initialDestination,
   initialOrigin,
   onBackPress,
+  onFindAnotherRoute = onBackPress,
   onNightOnlyRouteSelect,
   onRouteSelect,
   scheduleType = "NORMAL",
@@ -2433,24 +2435,12 @@ export function ScheduleRouteResultStep({
   const [
     isLoadingRoutes,
     setIsLoadingRoutes,
-  ] = useState(false);
-
-  const [loadingDots, setLoadingDots] = useState("");
-
-  useEffect(() => {
-    if (!isLoadingRoutes) {
-      setLoadingDots("");
-      return undefined;
-    }
-
-    let dotCount = 0;
-    const timer = setInterval(() => {
-      dotCount = (dotCount + 1) % 4;
-      setLoadingDots(".".repeat(dotCount));
-    }, 400);
-
-    return () => clearInterval(timer);
-  }, [isLoadingRoutes]);
+  ] = useState(true);
+  const routeRequestRef = useRef(null);
+  const handleFindAnotherRoute = () => {
+    routeRequestRef.current?.abort();
+    onFindAnotherRoute?.();
+  };
 
   const [
     routeError,
@@ -2509,6 +2499,7 @@ export function ScheduleRouteResultStep({
       new AbortController();
 
     async function loadTransitRoutes() {
+      routeRequestRef.current = controller;
       setIsLoadingRoutes(true);
       setRouteError("");
 
@@ -2535,7 +2526,7 @@ export function ScheduleRouteResultStep({
           signal: controller.signal,
         });
 
-        if (isActive) {
+        if (isActive && !controller.signal.aborted) {
           setRoutes(
             Array.isArray(
               nextRoutes,
@@ -2546,7 +2537,7 @@ export function ScheduleRouteResultStep({
         }
       } catch (error) {
         if (
-          isActive &&
+          isActive && !controller.signal.aborted &&
           error?.name !==
             "AbortError"
         ) {
@@ -2558,7 +2549,7 @@ export function ScheduleRouteResultStep({
           );
         }
       } finally {
-        if (isActive) {
+        if (isActive && !controller.signal.aborted) {
           setIsLoadingRoutes(
             false,
           );
@@ -2571,6 +2562,7 @@ export function ScheduleRouteResultStep({
     return () => {
       isActive = false;
       controller.abort();
+      if (routeRequestRef.current === controller) routeRequestRef.current = null;
     };
   }, [
     destination,
@@ -2597,6 +2589,10 @@ export function ScheduleRouteResultStep({
       ),
     );
   };
+
+  if (isLoadingRoutes) {
+    return <RouteSearchLoadingScreen onFindAnotherRoute={handleFindAnotherRoute} />;
+  }
 
   return (
     <View
@@ -2681,17 +2677,7 @@ export function ScheduleRouteResultStep({
       ) : null}
 
       <ScrollView style={styles.routeResultContent} contentContainerStyle={styles.routeResultList}>
-        {isLoadingRoutes ? (
-          <View
-            style={
-              styles.routeStatusBox
-            }
-          >
-            <Text style={styles.routeStatusText}>
-              경로 검색중입니다{loadingDots}
-            </Text>
-          </View>
-        ) : routeError ||
+        {routeError ||
           routes.length === 0 ? (
           <View
             style={
