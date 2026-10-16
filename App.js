@@ -3,6 +3,7 @@ import { NavigationContainer, useIsFocused } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { BackHandler, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   AccountInfoScreen,
@@ -17,13 +18,16 @@ import {
   NoticeDetailScreen,
   NoticesScreen,
   NotificationsScreen,
+  OnboardingScreen,
+  OnboardingIntroScreen,
+  WelcomeScreen,
   PrivacyPolicyScreen,
   SignupCompleteScreen,
   SignupScreen,
   TermsAgreementScreen,
   TermsOfServiceScreen,
 } from "./src/screens";
-import { linking } from "./linking";
+import { createAppLinking } from "./linking";
 import { routes } from "./src/navigation/routes";
 import {
   extractAuthTokens,
@@ -271,6 +275,15 @@ function getGoogleSignupConflictMessage(params = {}) {
   return "";
 }
 
+function WelcomeRoute({ navigation }) {
+  return (
+    <WelcomeScreen
+      onSignupPress={() => navigateTo(navigation, routes.signup)}
+      onLoginPress={() => navigateTo(navigation, routes.login)}
+    />
+  );
+}
+
 function LoginRoute({ navigation, route }) {
   return (
     <LoginScreen
@@ -288,7 +301,7 @@ function LoginRoute({ navigation, route }) {
 function SignupRoute({ navigation }) {
   return (
     <SignupScreen
-      onBackPress={() => goBackOrReset(navigation, routes.login)}
+      onBackPress={() => goBackOrReset(navigation, routes.welcome)}
       onNextPress={({ email, password, signupTokens, tempId }) =>
         navigateTo(navigation, routes.termsAgreement, {
           email,
@@ -622,9 +635,35 @@ function FindPasswordRoute({ navigation }) {
 export default function App() {
   React.useEffect(initializeScreenTransitions, []);
   const [isAuthHydrated, setIsAuthHydrated] = React.useState(false);
-  const [initialRouteName, setInitialRouteName] = React.useState(routes.login);
+  const [isSplashComplete, setIsSplashComplete] = React.useState(false);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = React.useState(null);
+  const [skipStartupScreens, setSkipStartupScreens] = React.useState(false);
+  const [onboardingStep, setOnboardingStep] = React.useState(0);
+  const [initialRouteName, setInitialRouteName] = React.useState(routes.welcome);
+  const startupRouteName = initialRouteName === routes.home
+    ? routes.home
+    : skipStartupScreens ? routes.login : routes.welcome;
+  const appLinking = React.useMemo(() => createAppLinking(startupRouteName), [startupRouteName]);
 
   useAndroidBackBehavior();
+
+  React.useEffect(() => {
+    let isActive = true;
+    AsyncStorage.getItem("oneta.onboardingComplete")
+      .then(value => {
+        if (isActive) {
+          setSkipStartupScreens(value === "true");
+          setHasSeenOnboarding(value === "true");
+        }
+      })
+      .catch(() => { if (isActive) setHasSeenOnboarding(false); });
+    return () => { isActive = false; };
+  }, []);
+
+  React.useEffect(() => {
+    const timeout = setTimeout(() => setIsSplashComplete(true), 1500);
+    return () => clearTimeout(timeout);
+  }, []);
 
   React.useEffect(() => {
     let isActive = true;
@@ -651,11 +690,11 @@ export default function App() {
           return;
         }
 
-        setInitialRouteName(accessToken ? routes.home : routes.login);
+        setInitialRouteName(accessToken ? routes.home : routes.welcome);
       })
       .catch(() => {
         if (isActive) {
-          setInitialRouteName(routes.login);
+          setInitialRouteName(routes.welcome);
         }
       })
       .finally(() => {
@@ -669,21 +708,49 @@ export default function App() {
     };
   }, []);
 
-  if (!isAuthHydrated) {
+  // Read the saved preference before painting so returning users never see a logo flash.
+  if (hasSeenOnboarding === null || (skipStartupScreens && !isAuthHydrated)) {
     return null;
+  }
+
+  if (!skipStartupScreens && (!isAuthHydrated || !isSplashComplete)) {
+    return (
+      <SafeAreaProvider>
+        <OnboardingScreen />
+      </SafeAreaProvider>
+    );
+  }
+
+  if (!hasSeenOnboarding && initialRouteName === routes.welcome) {
+    return (
+      <SafeAreaProvider>
+        <OnboardingIntroScreen
+          step={onboardingStep}
+          onBackPress={() => setOnboardingStep(Math.max(0, onboardingStep - 1))}
+          onNextPress={() => {
+            if (onboardingStep < 2) {
+              setOnboardingStep(onboardingStep + 1);
+              return;
+            }
+            setHasSeenOnboarding(true);
+            AsyncStorage.setItem("oneta.onboardingComplete", "true").catch(() => null);
+          }}
+        />
+      </SafeAreaProvider>
+    );
   }
 
   return (
     <SafeAreaProvider>
       <GlobalScrollbarStyle />
       <NavigationContainer
-        linking={linking}
+        linking={appLinking}
         ref={notificationNavigationRef}
         onReady={flushNotificationNavigation}
         onStateChange={flushNotificationNavigation}
       >
         <Stack.Navigator
-          initialRouteName={initialRouteName}
+          initialRouteName={startupRouteName}
           screenLayout={({ children }) => (
             <NavigationScreenTransition>{children}</NavigationScreenTransition>
           )}
@@ -692,6 +759,7 @@ export default function App() {
             animation: "none",
           }}
         >
+          <Stack.Screen component={WelcomeRoute} name={routes.welcome} />
           <Stack.Screen component={LoginRoute} name={routes.login} />
           <Stack.Screen component={OAuthCallbackRoute} name={routes.oauthCallback} />
           <Stack.Screen component={SignupRoute} name={routes.signup} />

@@ -1,10 +1,12 @@
 import { routes } from "./src/navigation/routes";
+import { getStateFromPath } from "@react-navigation/native";
 
 export const linking = {
   prefixes: ["oneta://", "exp+oneta://"],
   config: {
     screens: {
-      [routes.login]: "",
+      [routes.welcome]: "welcome",
+      [routes.login]: "login",
       [routes.oauthCallback]: "oauth/callback",
       [routes.signup]: "signup",
       [routes.termsAgreement]: "signup/consent",
@@ -25,3 +27,16 @@ export const linking = {
     },
   },
 };
+
+export function createAppLinking(initialRouteName) {
+  return {
+    ...linking,
+    getStateFromPath(path, options) {
+      const pathname = path.split(/[?#]/, 1)[0].replace(/^\/+|\/+$/g, "");
+      if (!pathname || (pathname === "welcome" && initialRouteName !== routes.welcome)) {
+        return { routes: [{ name: initialRouteName }] };
+      }
+      return getStateFromPath(path, options);
+    },
+  };
+}

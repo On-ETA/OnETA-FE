@@ -24,7 +24,7 @@ export function initializeScreenTransitions() {
   return () => subscription.remove();
 }
 
-export function ScreenTransition({ children, transitionKey, active = true, animateOnMount = true, direction, transitionDepth = 0, style, routeAware = false }) {
+export function ScreenTransition({ children, transitionKey, active = true, animateOnMount = true, direction, transitionDepth = 0, style, routeAware = false, duration = 180 }) {
   const routeTransition = useContext(RouteTransitionContext);
   const route = routeAware ? routeTransition : null;
   const previousRoute = useRef(null);
@@ -72,7 +72,7 @@ export function ScreenTransition({ children, transitionKey, active = true, anima
       }
       progress.setValue(0);
       animation = Animated.timing(progress, {
-        toValue: 1, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: true,
       });
       animation.start();
     };
@@ -81,12 +81,12 @@ export function ScreenTransition({ children, transitionKey, active = true, anima
       else preloadPreference().then(start);
     }
     return () => { cancelled = true; animation?.stop(); subscription.remove(); };
-  }, [isActive, transitionKey, animateEntry, resolvedDirection, progress]);
+  }, [isActive, transitionKey, animateEntry, resolvedDirection, progress, duration]);
 
   return (
     <View style={[styles.frame, style]}>
       {Platform.OS === "web" ? (
-        <View style={[styles.content, styles.webAnimation, webAnimation]}>{children}</View>
+        <View style={[styles.content, styles.webAnimation, webAnimation, { animationDuration: `${duration}ms` }]}>{children}</View>
       ) : (
         <Animated.View style={[styles.content, {
           opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }),
