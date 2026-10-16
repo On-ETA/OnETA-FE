@@ -189,6 +189,25 @@ test('web uses CSS animations in both directions without driving Animated frames
 });
 
 
+test('onboarding duration applies in both directions on native and web', async () => {
+  for (const platform of ['android', 'ios', 'web']) {
+    const f = fixture({ platform });
+    f.render({ transitionKey: 0, transitionDepth: 0, duration: 234 });
+    await settle();
+    for (const step of [1, 0]) {
+      const props = { transitionKey: step, transitionDepth: step, duration: 234 };
+      f.render(props); await settle();
+      const tree = f.render(props);
+      if (platform === 'web') {
+        assert.equal(tree.props.children[0].props.style[3].animationDuration, '234ms');
+      } else {
+        assert.equal(f.starts.at(-1).config.duration, 234);
+      }
+    }
+    f.unmount();
+  }
+});
+
 test('the actual web renderer emits valid directional transforms for all CSS transition variants', () => {
   const rn = require('react-native-web'), React = require('react'), { renderToStaticMarkup } = require('react-dom/server');
   const source = fs.readFileSync(path.join(__dirname, '../src/components/ScreenTransition.js'), 'utf8');

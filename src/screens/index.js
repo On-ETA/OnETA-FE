@@ -12,6 +12,7 @@ export { NoticeDetailScreen } from "./NoticeDetailScreen";
 export { MyPageScreen } from "./MyPageScreen";
 export { NoticesScreen } from "./NoticesScreen";
 export { NotificationsScreen } from "./NotificationsScreen";
+export { OnboardingScreen, OnboardingIntroScreen, WelcomeScreen } from "./onboarding";
 export { PrivacyPolicyScreen } from "./PrivacyPolicyScreen";
 export { SignupScreen } from "./SignupScreen";
 export { SignupCompleteScreen } from "./SignupCompleteScreen";

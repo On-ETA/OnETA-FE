@@ -1,4 +1,5 @@
 export const routes = {
+  welcome: "Welcome",
   login: "Login",
   oauthCallback: "OAuthCallback",
   signup: "Signup",
