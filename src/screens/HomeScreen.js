@@ -93,6 +93,11 @@ function createFirstLastRouteSummaryFromNotification(notification) {
     routeName: notification?.routeName,
     arrivalTime: notification?.arrivalTime || summary.arrivalTime,
     estimatedDepartureAt,
+    status:
+      notification?.status ??
+      details?.status ??
+      route?.status ??
+      "AVAILABLE",
     estimatedDepartureTimestamp,
     departureTime:
       formatSeoulTime(estimatedDepartureTimestamp) ?? summary.departureTime,
@@ -128,6 +133,7 @@ function createTransitNotificationPayload(route, summary, scheduleType = TRANSIT
       originY: summary?.originPlace?.y ?? routeDetails?.originY,
       destX: summary?.destinationPlace?.x ?? routeDetails?.destX,
       destY: summary?.destinationPlace?.y ?? routeDetails?.destY,
+      status: summary?.status ?? route?.status ?? routeDetails?.status,
     }),
     scheduleType: summary?.scheduleType ?? route?.scheduleType ?? scheduleType,
   };
@@ -388,6 +394,7 @@ export function HomeScreen({
       remainingMinutes: estimatedDepartureTimestamp !== undefined
         ? Math.max(0, Math.ceil((estimatedDepartureTimestamp - Date.now()) / 60000))
         : routeSummary.remainingMinutes,
+      status: route?.status ?? "AVAILABLE",
       scheduleType,
     };
 
@@ -740,7 +747,7 @@ export function HomeScreen({
                 onNightOnlyRouteSelect={(route, places) => {
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
-                  setScheduleAlarmInitialStep("form");
+                  setScheduleAlarmInitialStep("alarmFinal");
                   setScheduleAlarmInitialValues({
                     selectedRoute: route,
                     routePlaces: {
@@ -880,6 +887,18 @@ const HomeDashboard = React.memo(function HomeDashboard({
             onRouteDetailPress={onRouteDetailPress}
             onRouteSetupPress={onRouteSetupPress}
             onRouteDeletePress={onRouteDeletePress}
+            onNightOnlyRouteSelect={(route, places) => {
+              blurActiveElement();
+              setScheduleAlarmInitialStep("alarmFinal");
+              setScheduleAlarmInitialValues({
+                selectedRoute: route,
+                routePlaces: {
+                  origin: places.originPlace,
+                  destination: places.destinationPlace,
+                },
+              });
+              setIsScheduleAlarmAddVisible(true);
+            }}
             routeSummary={firstLastRouteSummary}
           />
         )}

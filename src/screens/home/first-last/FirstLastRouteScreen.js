@@ -36,9 +36,11 @@ export function FirstLastRouteScreen({
   onRouteDetailPress,
   onRouteDeletePress,
   onRouteSetupPress,
+  onNightOnlyRouteSelect,
   routeSummary,
 }) {
   const [isAlarmModalVisible, setIsAlarmModalVisible] = useState(false);
+  const [isNightOnlyNoticeVisible, setIsNightOnlyNoticeVisible] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
   React.useEffect(() => {
@@ -65,6 +67,13 @@ export function FirstLastRouteScreen({
     60: false,
   });
   const hasConfiguredRoute = Boolean(routeSummary);
+  // Cached first/last summaries may keep the API status on the nested route
+  // object, while freshly selected routes keep it on the summary itself.
+  const isNightOnlyRoute = [
+    routeSummary?.status,
+    routeSummary?.route?.status,
+    routeSummary?.route?.raw?.status,
+  ].includes("NIGHT_ONLY") || routeSummary?.segments?.some(segment => segment.nightBus);
   const hasEstimatedDeparture = Number.isFinite(routeSummary?.estimatedDepartureTimestamp);
   const remainingMinutes = getCorrectedRemainingMinutes(routeSummary, currentTime);
   const enabledAlarmLabels = PRE_DEPARTURE_ALARMS
@@ -77,11 +86,24 @@ export function FirstLastRouteScreen({
     setIsAlarmModalVisible(false);
   };
 
+  const closeNightOnlyNotice = () => setIsNightOnlyNoticeVisible(false);
+
   const toggleAlarm = (alarmKey) => {
     setAlarmSettings((current) => ({
       ...current,
       [alarmKey]: !current[alarmKey],
     }));
+  };
+
+  const handleAlarmSettingPress = () => {
+    blurActiveElement();
+
+    if (isNightOnlyRoute) {
+      setIsNightOnlyNoticeVisible(true);
+      return;
+    }
+
+    setIsAlarmModalVisible(true);
   };
 
   return (
@@ -213,10 +235,7 @@ export function FirstLastRouteScreen({
           accessibilityLabel="출발 전 알림 설정"
           accessibilityRole="button"
           hitSlop={8}
-          onPress={() => {
-            blurActiveElement();
-            setIsAlarmModalVisible(true);
-          }}
+          onPress={handleAlarmSettingPress}
           style={styles.noticeSettingButton}
         >
           <SettingIcon height={21} width={21} />
@@ -273,6 +292,49 @@ export function FirstLastRouteScreen({
                   </View>
                 );
               })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        onRequestClose={closeNightOnlyNotice}
+        transparent
+        visible={isNightOnlyNoticeVisible}
+      >
+        <View style={styles.nightOnlyNoticeOverlay}>
+          <View style={styles.nightOnlyNoticeCard}>
+            <Text style={styles.nightOnlyNoticeTitle}>심야버스 경로 안내</Text>
+            <Text style={styles.nightOnlyNoticeMessage}>
+              이 경로는 심야버스로 이동 가능한 경로예요.{"\n"}
+              첫차·막차 알림 대신 원하는 도착 시간을 기준으로 알림을 받아보시겠어요?
+            </Text>
+            <View style={styles.nightOnlyNoticeActions}>
+              <Pressable
+                accessibilityLabel="내 일정 알림 설정하기"
+                accessibilityRole="button"
+                onPress={() => {
+                  closeNightOnlyNotice();
+                  onNightOnlyRouteSelect?.(routeSummary.route, {
+                    origin: routeSummary.originPlace,
+                    destination: routeSummary.destinationPlace,
+                    originPlace: routeSummary.originPlace,
+                    destinationPlace: routeSummary.destinationPlace,
+                  });
+                }}
+                style={styles.nightOnlyPrimaryButton}
+              >
+                <Text style={styles.nightOnlyPrimaryButtonText}>내 일정 알림 설정하기</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="심야버스 안내 닫기"
+                accessibilityRole="button"
+                onPress={closeNightOnlyNotice}
+                style={styles.nightOnlySecondaryButton}
+              >
+                <Text style={styles.nightOnlySecondaryButtonText}>닫기</Text>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -801,6 +863,72 @@ const styles = StyleSheet.create({
   },
   alarmList: {
     gap: 21,
+  },
+  nightOnlyNoticeOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    backgroundColor: "rgba(52, 56, 59, 0.28)",
+  },
+  nightOnlyNoticeCard: {
+    width: "100%",
+    maxWidth: 360,
+    padding: 24,
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    shadowColor: "#B9C8D0",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 3,
+  },
+  nightOnlyNoticeTitle: {
+    fontFamily: "SUIT",
+    fontSize: 18,
+    fontWeight: "700",
+    lineHeight: 25,
+    color: colors.gray08,
+  },
+  nightOnlyNoticeMessage: {
+    marginTop: 12,
+    fontFamily: "SUIT",
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.gray07,
+  },
+  nightOnlyNoticeActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 24,
+  },
+  nightOnlySecondaryButton: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    backgroundColor: colors.gray02,
+  },
+  nightOnlySecondaryButtonText: {
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.gray07,
+  },
+  nightOnlyPrimaryButton: {
+    flex: 1.6,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    backgroundColor: colors.main,
+  },
+  nightOnlyPrimaryButtonText: {
+    fontFamily: "SUIT",
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.white,
   },
   alarmRow: {
     minHeight: 35,
