@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -12,6 +13,8 @@ import CheckboxFillIcon from "../../assets/images/Checkbox_fill.svg";
 import CheckboxIcon from "../../assets/images/Checkbox.svg";
 import DownIcon from "../../assets/images/Down.svg";
 import UpIcon from "../../assets/images/Up.svg";
+
+import { PRIVACY_POLICY_TEXT, TERMS_OF_SERVICE_TEXT } from "../constants/legal";
 
 import { agreeToSignupTerms } from "../api/auth/consent";
 import {
@@ -33,14 +36,12 @@ const TERMS = [
   {
     id: "service",
     title: "서비스 이용약관 동의 (필수)",
-    description:
-      "온에타 서비스는 회원에게 경기 정보, 기록 관리, 커뮤니티 기능 등 다양한 서비스를 제공합니다. 회원은 서비스를 이용할 때 관련 법령과 본 약관을 준수해야 하며, 타인의 권리를 침해하거나 서비스 운영을 방해하는 행위를 해서는 안 됩니다. 회사는 안정적인 서비스 제공을 위해 필요한 경우 서비스 내용을 변경하거나 점검할 수 있습니다.",
+    description: TERMS_OF_SERVICE_TEXT,
   },
   {
     id: "privacy",
     title: "개인정보 수집 및 이용 동의 (필수)",
-    description:
-      "회원가입 및 서비스 제공을 위해 이메일, 비밀번호 및 선택적으로 입력한 닉네임 등 필요한 개인정보를 수집 및 이용합니다. 수집된 정보는 본인 확인, 계정 관리, 서비스 이용 안내 목적으로 사용되며, 관련 법령에 따른 보관 기간 이후 안전하게 파기됩니다.",
+    description: PRIVACY_POLICY_TEXT,
   },
   {
     id: "notifications",
@@ -238,7 +239,11 @@ export function TermsAgreementScreen({
           onBackPress={onBackPress}
         />
 
-        <View style={styles.container}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator
+        >
           <View>
             <Text style={styles.title}>
               약관에 동의해 주세요
@@ -410,7 +415,7 @@ export function TermsAgreementScreen({
                 : "완료"}
             </PrimaryButton>
           </View>
-        </View>
+        </ScrollView>
       </View>
     </AppScreen>
   );
@@ -450,8 +455,12 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
   },
 
-  container: {
+  scrollView: {
     flex: 1,
+  },
+
+  container: {
+    flexGrow: 1,
     paddingHorizontal:
       layout.screenMargin,
     paddingTop: 24,
