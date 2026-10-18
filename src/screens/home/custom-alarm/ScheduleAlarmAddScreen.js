@@ -405,29 +405,35 @@ function pickReminderOffsets(
 
 function createScheduleRouteDetails(route, routePlaces) {
   const routePayload = route?.raw ?? route;
+  const origin = routePlaces?.origin;
+  const destination = routePlaces?.destination;
 
   return {
     route: routePayload,
     origin:
       getRoutePlaceText(
-        routePlaces?.origin,
+        origin,
       ),
     destination:
       getRoutePlaceText(
-        routePlaces?.destination,
+        destination,
       ),
     originAddress:
       getRoutePlaceAddress(
-        routePlaces?.origin,
+        origin,
       ),
     destinationAddress:
       getRoutePlaceAddress(
-        routePlaces?.destination,
+        destination,
       ),
-    originPlace:
-      routePlaces?.origin,
-    destinationPlace:
-      routePlaces?.destination,
+    // The schedule API validates these coordinates at the top level of
+    // routeDetails. Keep the place objects as well for existing consumers.
+    originX: origin?.x,
+    originY: origin?.y,
+    destX: destination?.x,
+    destY: destination?.y,
+    originPlace: origin,
+    destinationPlace: destination,
   };
 }
 
@@ -3113,7 +3119,9 @@ function ScheduleAlarmFinalStep({
       try {
         const values = {
           routeName: selectedRouteName,
-          scheduleType,
+          // This form always creates a regular schedule alarm, even when
+          // it was opened from a first/last-transit route suggestion.
+          scheduleType: "NORMAL",
           targetArrivalTime,
           reminderOffsetMinutes: selectedReminderOffsets,
           repeatDays: selectedDays.map(mapDayToApiValue).filter(Boolean),
