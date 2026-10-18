@@ -62,10 +62,6 @@ export function NoticeDetailScreen({ notice = FALLBACK_NOTICE, onBackPress }) {
 
           <View style={styles.metaRow}>
             <Text style={styles.metaText}>{noticeDetail.dateText}</Text>
-            <Text style={styles.metaDivider}>|</Text>
-            <Text style={styles.metaText}>조회수 {noticeDetail.viewCount}</Text>
-            <Text style={styles.metaDivider}>|</Text>
-            <Text style={styles.metaText}>{noticeDetail.author}</Text>
           </View>
 
           <Text style={styles.body}>{noticeDetail.content}</Text>

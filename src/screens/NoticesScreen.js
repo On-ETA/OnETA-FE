@@ -89,10 +89,6 @@ export function NoticesScreen({
                 <Text style={styles.cardTitle}>{notice.title}</Text>
                 <View style={styles.metaRow}>
                   <Text style={styles.metaText}>{notice.dateText}</Text>
-                  <Text style={styles.metaDivider}>|</Text>
-                  <Text style={styles.metaText}>조회수 {notice.viewCount}</Text>
-                  <Text style={styles.metaDivider}>|</Text>
-                  <Text style={styles.metaText}>{notice.author}</Text>
                 </View>
               </Pressable>
             ))
