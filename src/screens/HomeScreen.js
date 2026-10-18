@@ -747,7 +747,9 @@ export function HomeScreen({
                 onNightOnlyRouteSelect={(route, places) => {
                   blurActiveElement();
                   setFirstLastRouteSetupStep(null);
-                  setScheduleAlarmInitialStep("alarmFinal");
+                  // Open the alarm form first so the user can enter the
+                  // route name and desired arrival time before the details.
+                  setScheduleAlarmInitialStep("form");
                   setScheduleAlarmInitialValues({
                     selectedRoute: route,
                     routePlaces: {
@@ -821,6 +823,18 @@ export function HomeScreen({
                 onRouteSetupPress={handleRouteSetupPress}
                 onRouteDeletePress={handleRouteDeletePress}
                 firstLastRouteSummary={firstLastRouteSummary}
+                onNightOnlyRouteSelect={(route, places) => {
+                  blurActiveElement();
+                  setScheduleAlarmInitialStep("form");
+                  setScheduleAlarmInitialValues({
+                    selectedRoute: route,
+                    routePlaces: {
+                      origin: places.originPlace,
+                      destination: places.destinationPlace,
+                    },
+                  });
+                  setIsScheduleAlarmAddVisible(true);
+                }}
                 onScheduleAlarmAddPress={handleScheduleAlarmAddPress}
                 onGarageAlarmEditPress={handleGarageAlarmEditPress}
                 onScheduleAlarmEditPress={handleScheduleAlarmEditPress}
@@ -852,6 +866,7 @@ const HomeDashboard = React.memo(function HomeDashboard({
   onRouteDeletePress,
   onRouteDetailPress,
   onRouteSetupPress,
+  onNightOnlyRouteSelect,
   onScheduleAlarmAddPress,
   onScheduleAlarmEditPress,
 }) {
@@ -887,18 +902,7 @@ const HomeDashboard = React.memo(function HomeDashboard({
             onRouteDetailPress={onRouteDetailPress}
             onRouteSetupPress={onRouteSetupPress}
             onRouteDeletePress={onRouteDeletePress}
-            onNightOnlyRouteSelect={(route, places) => {
-              blurActiveElement();
-              setScheduleAlarmInitialStep("alarmFinal");
-              setScheduleAlarmInitialValues({
-                selectedRoute: route,
-                routePlaces: {
-                  origin: places.originPlace,
-                  destination: places.destinationPlace,
-                },
-              });
-              setIsScheduleAlarmAddVisible(true);
-            }}
+            onNightOnlyRouteSelect={onNightOnlyRouteSelect}
             routeSummary={firstLastRouteSummary}
           />
         )}

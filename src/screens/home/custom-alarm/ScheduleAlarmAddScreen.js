@@ -505,6 +505,9 @@ export function ScheduleAlarmAddScreen({
   const [selectedRoute, setSelectedRoute] = useState(
     () => initialValues?.selectedRoute ?? null,
   );
+  const [isNightOnlyAlarm, setIsNightOnlyAlarm] = useState(
+    () => Boolean(initialValues?.selectedRoute),
+  );
 
   const [
     routePlaces,
@@ -519,13 +522,18 @@ export function ScheduleAlarmAddScreen({
   const formattedTime =
     `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
 
+  // A night-bus route is selected before this screen opens. Keep that route
+  // as the source for the next screen even if the route object is normalized
+  // asynchronously after the form has mounted.
+  const hasPreselectedRoute = Boolean(initialValues?.selectedRoute);
+
   const handleNextPress = () => {
-    setStep(selectedRoute ? "alarmFinal" : "routeSetup");
+    setStep(selectedRoute || hasPreselectedRoute ? "alarmFinal" : "routeSetup");
   };
 
   const handleBackPress = () => {
     if (step === "alarmFinal") {
-      setStep("routeResult");
+      setStep(isNightOnlyAlarm ? "form" : "routeResult");
       return;
     }
 
@@ -659,12 +667,13 @@ export function ScheduleAlarmAddScreen({
           handleBackPress
         }
         onNightOnlyRouteSelect={(route, places) => {
+          setIsNightOnlyAlarm(true);
           setSelectedRoute(route);
           setRoutePlaces({
             origin: places.originPlace,
             destination: places.destinationPlace,
           });
-          setStep("alarmFinal");
+          setStep("form");
         }}
         onRouteSelect={async (
           route,
@@ -700,9 +709,7 @@ export function ScheduleAlarmAddScreen({
         onBackPress={
           handleBackPress
         }
-        onPrevPress={() =>
-          setStep("routeResult")
-        }
+        onPrevPress={handleBackPress}
         onSavePress={
           onSaveComplete ??
           onBackPress
@@ -711,7 +718,7 @@ export function ScheduleAlarmAddScreen({
           setStep("form")
         }
         route={
-          selectedRoute
+          selectedRoute ?? initialValues?.selectedRoute
         }
         routePlaces={
           routePlaces
