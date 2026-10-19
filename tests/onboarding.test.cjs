@@ -127,6 +127,17 @@ test("unmounting startup cancels its display timer", () => {
   assert.equal(app.timers.size, 0);
 });
 
+test("startup waits for session restoration before deciding whether to show the first logo", async () => {
+  const app = startup({ completed: false });
+  app.render(); app.flush();
+  await new Promise(setImmediate);
+  assert.equal(app.render(), null);
+  app.resolveAuth({ accessToken: null });
+  await new Promise(setImmediate);
+  assert.ok(find(app.render(), "OnboardingScreen"));
+  app.unmount();
+});
+
 test("first launch advances through all three introductions and only then remembers completion", async () => {
   const app = startup({ completed: false });
   app.render(); app.flush();
@@ -159,13 +170,16 @@ test("first launch advances through all three introductions and only then rememb
   app.unmount();
 });
 
-test("an existing authenticated session goes straight to home after the splash", async () => {
+test("an existing authenticated session without a completion flag skips the logo and remembers completion", async () => {
   const app = startup({ completed: false });
   app.render(); app.flush();
   app.resolveAuth({ accessToken: "saved-session" });
   await new Promise(setImmediate);
-  app.finishDelay();
-  assert.equal(find(app.render(), "Navigator").props.initialRouteName, "Home");
+  const tree = app.render();
+  assert.equal(find(tree, "OnboardingScreen"), undefined);
+  assert.equal(find(tree, "OnboardingIntroScreen"), undefined);
+  assert.equal(find(tree, "Navigator").props.initialRouteName, "Home");
+  assert.deepEqual(app.writes, [["oneta.onboardingComplete", "true"]]);
   app.unmount();
 });
 

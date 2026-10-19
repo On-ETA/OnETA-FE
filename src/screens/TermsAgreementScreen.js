@@ -41,15 +41,7 @@ const TERMS = [
   {
     id: "privacy",
     title: "개인정보 수집 및 이용 동의 (필수)",
-    description: PRIVACY_POLICY_TEXT
-      .replace(
-        "- 생년월일\\r\\n\\r\\n생년월일은 이용자가 만 14세 이상인지 확인하기 위한 목적으로만 이용하며, 연령 확인이 완료된 후 별도로 저장하지 않습니다.",
-        "- 만 14세 이상 여부\\r\\n\\r\\n회원가입 시 이용자의 확인을 통해 만 14세 이상 여부를 확인하며, 만 14세 미만은 회원가입이 제한됩니다.",
-      )
-      .replace(
-        "**2026년 9월 23일**",
-        "**2026년 10월 15일**",
-      ),
+    description: PRIVACY_POLICY_TEXT,
   },
   {
     id: "notifications",

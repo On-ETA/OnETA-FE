@@ -637,9 +637,10 @@ export default function App() {
   const [isAuthHydrated, setIsAuthHydrated] = React.useState(false);
   const [isSplashComplete, setIsSplashComplete] = React.useState(false);
   const [hasSeenOnboarding, setHasSeenOnboarding] = React.useState(null);
-  const [skipStartupScreens, setSkipStartupScreens] = React.useState(false);
+  const [savedStartupComplete, setSavedStartupComplete] = React.useState(false);
   const [onboardingStep, setOnboardingStep] = React.useState(0);
   const [initialRouteName, setInitialRouteName] = React.useState(routes.welcome);
+  const skipStartupScreens = savedStartupComplete || initialRouteName === routes.home;
   const startupRouteName = initialRouteName === routes.home
     ? routes.home
     : skipStartupScreens ? routes.login : routes.welcome;
@@ -652,7 +653,7 @@ export default function App() {
     AsyncStorage.getItem("oneta.onboardingComplete")
       .then(value => {
         if (isActive) {
-          setSkipStartupScreens(value === "true");
+          setSavedStartupComplete(value === "true");
           setHasSeenOnboarding(value === "true");
         }
       })
@@ -691,6 +692,9 @@ export default function App() {
         }
 
         setInitialRouteName(accessToken ? routes.home : routes.welcome);
+        if (accessToken) {
+          AsyncStorage.setItem("oneta.onboardingComplete", "true").catch(() => null);
+        }
       })
       .catch(() => {
         if (isActive) {
@@ -709,11 +713,11 @@ export default function App() {
   }, []);
 
   // Read the saved preference before painting so returning users never see a logo flash.
-  if (hasSeenOnboarding === null || (skipStartupScreens && !isAuthHydrated)) {
+  if (hasSeenOnboarding === null || !isAuthHydrated) {
     return null;
   }
 
-  if (!skipStartupScreens && (!isAuthHydrated || !isSplashComplete)) {
+  if (!skipStartupScreens && !isSplashComplete) {
     return (
       <SafeAreaProvider>
         <OnboardingScreen />
