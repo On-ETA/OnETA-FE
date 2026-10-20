@@ -12,12 +12,12 @@ function loadLinking() {
   const exports = {};
   vm.runInNewContext(code, { exports, require: name => name === "@react-navigation/native"
     ? { getStateFromPath: (path, options) => ({ path, options }) }
-    : { routes: { welcome: "Welcome", login: "Login", home: "Home", signup: "Signup", oauthCallback: "OAuthCallback" } },
+    : { routes: { welcome: "Welcome", login: "Login", home: "Home", signup: "Signup", oauthCallback: "OAuthCallback", privacyPolicy: "PrivacyPolicy" } },
   });
   return exports;
 }
 
-function startup({ completed = true } = {}) {
+function startup({ completed = true, pathname } = {}) {
   const slots = [], effects = [], timers = new Map();
   const writes = [];
   let cursor = 0, resolveAuth, rejectAuth;
@@ -54,7 +54,7 @@ function startup({ completed = true } = {}) {
       getItem: () => Promise.resolve(completed ? "true" : null),
       setItem: (key, value) => { writes.push([key, value]); return Promise.resolve(); },
     },
-    "./src/navigation/routes": { routes: { welcome: "Welcome", login: "Login", signup: "Signup", home: "Home" } },
+    "./src/navigation/routes": { routes: { welcome: "Welcome", login: "Login", signup: "Signup", home: "Home", privacyPolicy: "PrivacyPolicy" } },
     "./src/api/auth/tokens": { hydrateAuthTokens: () => hydration },
     "./src/components/ScreenTransition": { initializeScreenTransitions() {} },
     "./src/utils/accessibility": { blurActiveElement() {} },
@@ -67,6 +67,7 @@ function startup({ completed = true } = {}) {
   const exports = {};
   vm.runInNewContext(code, {
     exports,
+    ...(pathname ? { window: { location: { pathname } } } : {}),
     require: name => mocks[name] ?? {},
     setTimeout(callback, delay) { const timer = { callback, delay }; timers.set(timer, timer); return timer; },
     clearTimeout: timer => timers.delete(timer),
@@ -217,6 +218,31 @@ test("root URLs follow the startup destination while explicit authentication lin
       const state = linking.getStateFromPath(path, options);
       assert.equal(state.path, path);
       assert.equal(state.options, options);
+    }
+  }
+});
+
+test("public privacy links bypass authentication and onboarding on first visit", async () => {
+  for (const pathname of ["/privacy", "/privacy/", "/home/mypage/privacy"]) {
+    const app = startup({ completed: false, pathname });
+    const tree = app.render();
+    assert.equal(find(tree, "Navigator").props.initialRouteName, "PrivacyPolicy");
+    assert.equal(find(tree, "OnboardingScreen"), undefined);
+    assert.equal(find(tree, "OnboardingIntroScreen"), undefined);
+    app.flush();
+    app.resolveAuth({ accessToken: null });
+    await new Promise(setImmediate);
+    assert.equal(find(app.render(), "Navigator").props.initialRouteName, "PrivacyPolicy");
+    app.unmount();
+  }
+});
+
+test("privacy URLs resolve to the public screen regardless of the startup destination", () => {
+  for (const destination of ["Login", "Home", "Welcome"]) {
+    const linking = loadLinking().createAppLinking(destination);
+    assert.equal(linking.config.screens.PrivacyPolicy, "privacy");
+    for (const path of ["/privacy", "/privacy/?source=store#policy", "/home/mypage/privacy"]) {
+      assert.equal(linking.getStateFromPath(path).routes[0].name, "PrivacyPolicy");
     }
   }
 });

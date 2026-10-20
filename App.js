@@ -27,7 +27,7 @@ import {
   TermsAgreementScreen,
   TermsOfServiceScreen,
 } from "./src/screens";
-import { createAppLinking } from "./linking";
+import { createAppLinking, getPublicRouteFromPath } from "./linking";
 import { routes } from "./src/navigation/routes";
 import {
   extractAuthTokens,
@@ -559,7 +559,7 @@ function NoticeDetailRoute({ navigation, route }) {
 function PrivacyPolicyRoute({ navigation }) {
   return (
     <PrivacyPolicyScreen
-      onBackPress={() => goBackOrReset(navigation, routes.myPage)}
+      onBackPress={() => goBackOrReset(navigation, getAccessToken() ? routes.myPage : routes.login)}
     />
   );
 }
@@ -641,9 +641,14 @@ export default function App() {
   const [onboardingStep, setOnboardingStep] = React.useState(0);
   const [initialRouteName, setInitialRouteName] = React.useState(routes.welcome);
   const skipStartupScreens = savedStartupComplete || initialRouteName === routes.home;
-  const startupRouteName = initialRouteName === routes.home
+  const publicStartupRoute = React.useMemo(() => (
+    Platform.OS === "web" && typeof window !== "undefined"
+      ? getPublicRouteFromPath(window.location.pathname)
+      : null
+  ), []);
+  const startupRouteName = publicStartupRoute || (initialRouteName === routes.home
     ? routes.home
-    : skipStartupScreens ? routes.login : routes.welcome;
+    : skipStartupScreens ? routes.login : routes.welcome);
   const appLinking = React.useMemo(() => createAppLinking(startupRouteName), [startupRouteName]);
 
   useAndroidBackBehavior();
@@ -713,11 +718,11 @@ export default function App() {
   }, []);
 
   // Read the saved preference before painting so returning users never see a logo flash.
-  if (hasSeenOnboarding === null || !isAuthHydrated) {
+  if (!publicStartupRoute && (hasSeenOnboarding === null || !isAuthHydrated)) {
     return null;
   }
 
-  if (!skipStartupScreens && !isSplashComplete) {
+  if (!publicStartupRoute && !skipStartupScreens && !isSplashComplete) {
     return (
       <SafeAreaProvider>
         <OnboardingScreen />
@@ -725,7 +730,7 @@ export default function App() {
     );
   }
 
-  if (!hasSeenOnboarding && initialRouteName === routes.welcome) {
+  if (!publicStartupRoute && !hasSeenOnboarding && initialRouteName === routes.welcome) {
     return (
       <SafeAreaProvider>
         <OnboardingIntroScreen

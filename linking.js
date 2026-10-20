@@ -22,16 +22,27 @@ export const linking = {
       [routes.noticeDetail]: "home/mypage/notices/detail",
       [routes.faqs]: "home/mypage/faqs",
       [routes.notifications]: "home/mypage/notifications",
-      [routes.privacyPolicy]: "home/mypage/privacy",
+      [routes.privacyPolicy]: "privacy",
       [routes.termsOfService]: "home/mypage/terms",
     },
   },
 };
 
+export function getPublicRouteFromPath(path) {
+  const pathname = path.split(/[?#]/, 1)[0].replace(/^\/+|\/+$/g, "");
+  return pathname === "privacy" || pathname === "home/mypage/privacy"
+    ? routes.privacyPolicy
+    : null;
+}
+
 export function createAppLinking(initialRouteName) {
   return {
     ...linking,
     getStateFromPath(path, options) {
+      const publicRoute = getPublicRouteFromPath(path);
+      if (publicRoute) {
+        return { routes: [{ name: publicRoute }] };
+      }
       const pathname = path.split(/[?#]/, 1)[0].replace(/^\/+|\/+$/g, "");
       if (!pathname || (pathname === "welcome" && initialRouteName !== routes.welcome)) {
         return { routes: [{ name: initialRouteName }] };
