@@ -12,12 +12,12 @@ function loadLinking() {
   const exports = {};
   vm.runInNewContext(code, { exports, require: name => name === "@react-navigation/native"
     ? { getStateFromPath: (path, options) => ({ path, options }) }
-    : { routes: { welcome: "Welcome", login: "Login", home: "Home", signup: "Signup", oauthCallback: "OAuthCallback", privacyPolicy: "PrivacyPolicy" } },
+    : { routes: { welcome: "Welcome", login: "Login", home: "Home", signup: "Signup", oauthCallback: "OAuthCallback", privacyPolicy: "PrivacyPolicy", deleteAccount: "DeleteAccount" } },
   });
   return exports;
 }
 
-function startup({ completed = true, pathname } = {}) {
+function startup({ completed = true, pathname, accessToken = null, googleReturnRoute = null, googleData = {} } = {}) {
   const slots = [], effects = [], timers = new Map();
   const writes = [];
   let cursor = 0, resolveAuth, rejectAuth;
@@ -27,10 +27,11 @@ function startup({ completed = true, pathname } = {}) {
   });
   const react = {
     useMemo: callback => callback(),
+    useRef: initial => slots[cursor++] ??= { current: initial },
     createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
     useState(initial) {
       const index = cursor++;
-      if (!(index in slots)) slots[index] = { value: initial };
+      if (!(index in slots)) slots[index] = { value: typeof initial === "function" ? initial() : initial };
       return [slots[index].value, value => { slots[index].value = value; }];
     },
     useEffect(effect) {
@@ -49,13 +50,19 @@ function startup({ completed = true, pathname } = {}) {
     },
     "react-native": { Platform: { OS: "web" } },
     "react-native-safe-area-context": { SafeAreaProvider: "SafeAreaProvider" },
-    "./src/screens": { OnboardingScreen: "OnboardingScreen", OnboardingIntroScreen: "OnboardingIntroScreen", WelcomeScreen: "WelcomeScreen" },
+    "./src/screens": { OnboardingScreen: "OnboardingScreen", OnboardingIntroScreen: "OnboardingIntroScreen", WelcomeScreen: "WelcomeScreen", LoginScreen: "LoginScreen" },
     "@react-native-async-storage/async-storage": {
       getItem: () => Promise.resolve(completed ? "true" : null),
       setItem: (key, value) => { writes.push([key, value]); return Promise.resolve(); },
     },
-    "./src/navigation/routes": { routes: { welcome: "Welcome", login: "Login", signup: "Signup", home: "Home", privacyPolicy: "PrivacyPolicy" } },
-    "./src/api/auth/tokens": { hydrateAuthTokens: () => hydration },
+    "./src/navigation/routes": { routes: { welcome: "Welcome", login: "Login", signup: "Signup", home: "Home", privacyPolicy: "PrivacyPolicy", deleteAccount: "DeleteAccount", oauthCallback: "OAuthCallback" } },
+    "./src/api/auth/tokens": { hydrateAuthTokens: () => hydration, getAccessToken: () => accessToken, clearAuthTokens: async () => { accessToken = null; writes.push(["clearAuthTokens"]); }, extractAuthTokens: response => response.data, setAuthTokens: async () => {} },
+    "./src/api/google": { exchangeGoogleAuthCode: async () => ({ data: googleData }) },
+    "./src/navigation/authReturn": { consumeAuthReturnRoute: async () => googleReturnRoute },
+    "./src/api/homePreload": { cancelHomePreload: async () => {} },
+    "./src/api/homeCache": { clearHomeCacheAsync: async () => {} },
+    "./src/api/auth/authEvents": { subscribeAuthRequired: () => () => {} },
+    "./src/screens/DeleteAccountScreen": { DeleteAccountScreen: "DeleteAccountScreen" },
     "./src/components/ScreenTransition": { initializeScreenTransitions() {} },
     "./src/utils/accessibility": { blurActiveElement() {} },
     "./linking": loadLinking(),
@@ -74,6 +81,7 @@ function startup({ completed = true, pathname } = {}) {
   });
   return {
     render() { cursor = 0; return exports.default(); },
+    renderRoute(Component, props) { cursor = 100; return Component(props); },
     flush() { effects.splice(0).forEach(effect => effect()); },
     finishDelay() {
       for (const [key, timer] of timers) {
@@ -246,6 +254,81 @@ test("privacy URLs resolve to the public screen regardless of the startup destin
     }
   }
 });
+
+test("delete-account skips onboarding and login goes directly to confirmation without deleting", async () => {
+  const app = startup({ completed: false, pathname: "/delete-account" });
+  assert.equal(app.render(), null);
+  app.flush();
+  app.resolveAuth({ accessToken: null });
+  await new Promise(setImmediate);
+  const tree = app.render();
+  assert.equal(find(tree, "Navigator").props.initialRouteName, "DeleteAccount");
+  assert.equal(find(tree, "OnboardingScreen"), undefined);
+  assert.equal(find(tree, "OnboardingIntroScreen"), undefined);
+  const screen = findAll(tree, "Screen").find(node => node.props.name === "DeleteAccount");
+  const props = { navigation: {}, route: { params: {} } };
+  const login = app.renderRoute(screen.props.component, props);
+  assert.equal(login.type, "LoginScreen");
+  assert.equal(login.props.authReturnRoute, "DeleteAccount");
+  assert.equal(login.props.preloadAfterLogin, false);
+  assert.equal(login.props.showRemember, false);
+  assert.equal(login.props.showSignup, false);
+  assert.equal(login.props.initialRemember, false);
+  login.props.onLoginPress();
+  const confirmation = app.renderRoute(screen.props.component, props);
+  assert.equal(confirmation.type, "DeleteAccountScreen");
+  app.unmount();
+});
+
+test("signed-in deletion visitors see confirmation immediately", async () => {
+  const app = startup({ completed: false, pathname: "/delete-account", accessToken: "saved" });
+  app.render(); app.flush(); app.resolveAuth({ accessToken: "saved" });
+  await new Promise(setImmediate);
+  const tree = app.render();
+  const screen = findAll(tree, "Screen").find(node => node.props.name === "DeleteAccount");
+  assert.equal(app.renderRoute(screen.props.component, { navigation: {}, route: {} }).type, "DeleteAccountScreen");
+  app.unmount();
+});
+
+test("leaving deletion clears tokens and returns to delete-account login instead of home", async () => {
+  for (const action of ["onCancelPress", "onCompletePress"]) {
+    const app = startup({ completed: false, pathname: "/delete-account", accessToken: "saved" });
+    app.render(); app.flush(); app.resolveAuth({ accessToken: "saved" });
+    await new Promise(setImmediate);
+    const tree = app.render();
+    const screen = findAll(tree, "Screen").find(node => node.props.name === "DeleteAccount");
+    const resets = [];
+    const props = { navigation: { reset: value => resets.push(value) }, route: {} };
+    const confirmation = app.renderRoute(screen.props.component, props);
+    await confirmation.props[action]();
+    assert.ok(app.writes.some(value => value[0] === "clearAuthTokens"));
+    assert.equal(resets.at(-1).routes[0].name, "DeleteAccount");
+    assert.equal(app.renderRoute(screen.props.component, props).type, "LoginScreen");
+    app.unmount();
+  }
+});
+
+test("Google callback returns to deletion confirmation and keeps query parameters", async () => {
+  const app = startup({ completed: false, pathname: "/oauth/callback", googleReturnRoute: "DeleteAccount",
+    googleData: { accessToken: "saved", refreshToken: "refresh" } });
+  app.render(); app.flush(); app.resolveAuth({ accessToken: null });
+  await new Promise(setImmediate);
+  const tree = app.render();
+  assert.equal(find(tree, "Navigator").props.initialRouteName, "OAuthCallback");
+  const linking = find(tree, "NavigationContainer").props.linking;
+  assert.equal(linking.getStateFromPath("/oauth/callback?code=one-time").path, "/oauth/callback?code=one-time");
+  const screen = findAll(tree, "Screen").find(node => node.props.name === "OAuthCallback");
+  const resets = [];
+  app.renderRoute(screen.props.component, { navigation: { reset: value => resets.push(value) }, route: { params: { code: "one-time" } } });
+  app.flush(); await new Promise(setImmediate);
+  assert.equal(resets.at(-1).routes[0].name, "DeleteAccount");
+  app.unmount();
+});
+
+function findAll(tree, type) {
+  if (!tree || typeof tree !== "object") return [];
+  return [...(tree.type === type ? [tree] : []), ...(tree.children ?? []).flatMap(child => findAll(child, type))];
+}
 
 test("all introduction pages use the shared transition, matching progress and working controls", () => {
   let backHandler;

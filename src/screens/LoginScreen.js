@@ -25,11 +25,17 @@ import {
 import OnetaLogo from "../../assets/images/logo_t.svg";
 import HiddenIcon from "../../assets/images/icon_password_hidden.svg";
 import VisibleIcon from "../../assets/images/icon_visible.svg";
+import { rememberAuthReturnRoute } from "../navigation/authReturn";
 import { colors, layout, typography } from "../theme";
 
 const OAUTH_AUTH_ERROR_COOKIE = "oauth2_auth_error";
 
 export function LoginScreen({
+  authReturnRoute,
+  purposeText,
+  preloadAfterLogin = true,
+  showRemember = true,
+  showSignup = true,
   initialEmail = "",
   initialError = "",
   initialPassword = "",
@@ -147,8 +153,8 @@ export function LoginScreen({
 
       await cancelHomePreload();
       await clearHomeCacheAsync();
-      await setAuthTokens(authTokens, { persist: remember });
-      preloadHomeCache().catch(() => null);
+      await setAuthTokens(authTokens, { persist: showRemember && remember });
+      if (preloadAfterLogin) preloadHomeCache().catch(() => null);
       onLoginPress?.();
     } catch (error) {
       setLoginError(getLoginErrorMessage(error));
@@ -161,6 +167,7 @@ export function LoginScreen({
     setIsGoogleLoading(true);
 
     try {
+      await rememberAuthReturnRoute(authReturnRoute);
       await startGoogleAuth();
     } catch {
       Alert.alert("구글 로그인", "구글 로그인을 시작하지 못했습니다. 다시 시도해 주세요.");
@@ -187,6 +194,8 @@ export function LoginScreen({
             height={responsiveLayout.logo.height}
             style={[styles.logo, responsiveLayout.logo]}
           />
+
+        {purposeText ? <Text style={styles.purposeText}>{purposeText}</Text> : null}
 
         <View style={[styles.form, responsiveLayout.form]}>
           <FormTextInput
@@ -233,8 +242,8 @@ export function LoginScreen({
           </PrimaryButton>
         </View>
 
-        <View style={[styles.options, responsiveLayout.options]}>
-          <Pressable
+        <View style={[styles.options, responsiveLayout.options, !showRemember && { justifyContent: "flex-end" }]}>
+          {showRemember && <Pressable
             accessibilityRole="checkbox"
             accessibilityState={{ checked: remember }}
             onPress={() => setRemember((value) => !value)}
@@ -242,9 +251,10 @@ export function LoginScreen({
           >
             <View style={[styles.check, remember && styles.checkOn]} />
             <Text style={styles.optionText}>로그인 유지</Text>
-          </Pressable>
+          </Pressable>}
 
           <View style={styles.links}>
+            {showSignup && <>
             <Pressable
               accessibilityRole="button"
               hitSlop={12}
@@ -254,6 +264,7 @@ export function LoginScreen({
               <Text style={styles.optionText}>회원가입</Text>
             </Pressable>
             <View style={styles.divider} />
+            </>}
             <Pressable
               accessibilityRole="button"
               hitSlop={12}
@@ -363,6 +374,12 @@ function PasswordInput({
 }
 
 const styles = StyleSheet.create({
+  purposeText: {
+    ...typography.body02M,
+    color: colors.gray08,
+    textAlign: "center",
+    marginBottom: 24,
+  },
   scroller: {
     flex: 1,
   },

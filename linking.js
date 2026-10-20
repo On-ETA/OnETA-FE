@@ -23,6 +23,7 @@ export const linking = {
       [routes.faqs]: "home/mypage/faqs",
       [routes.notifications]: "home/mypage/notifications",
       [routes.privacyPolicy]: "privacy",
+      [routes.deleteAccount]: "delete-account",
       [routes.termsOfService]: "home/mypage/terms",
     },
   },
@@ -30,6 +31,8 @@ export const linking = {
 
 export function getPublicRouteFromPath(path) {
   const pathname = path.split(/[?#]/, 1)[0].replace(/^\/+|\/+$/g, "");
+  if (pathname === "delete-account") return routes.deleteAccount;
+  if (pathname === "oauth/callback") return routes.oauthCallback;
   return pathname === "privacy" || pathname === "home/mypage/privacy"
     ? routes.privacyPolicy
     : null;
@@ -40,7 +43,7 @@ export function createAppLinking(initialRouteName) {
     ...linking,
     getStateFromPath(path, options) {
       const publicRoute = getPublicRouteFromPath(path);
-      if (publicRoute) {
+      if (publicRoute && publicRoute !== routes.oauthCallback) {
         return { routes: [{ name: publicRoute }] };
       }
       const pathname = path.split(/[?#]/, 1)[0].replace(/^\/+|\/+$/g, "");

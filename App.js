@@ -29,7 +29,10 @@ import {
 } from "./src/screens";
 import { createAppLinking, getPublicRouteFromPath } from "./linking";
 import { routes } from "./src/navigation/routes";
+import { consumeAuthReturnRoute } from "./src/navigation/authReturn";
+import { DeleteAccountScreen } from "./src/screens/DeleteAccountScreen";
 import {
+  clearAuthTokens,
   extractAuthTokens,
   getAccessToken,
   hydrateAuthTokens,
@@ -414,6 +417,8 @@ function OAuthCallbackRoute({ navigation, route }) {
     const params = route.params ?? {};
 
     async function finishGoogleAuth() {
+      const returnRoute = await consumeAuthReturnRoute().catch(() => null);
+      const loginRoute = returnRoute === routes.deleteAccount ? routes.deleteAccount : routes.login;
       const callbackError =
         params.error_description ??
         params.errorMessage ??
@@ -422,12 +427,12 @@ function OAuthCallbackRoute({ navigation, route }) {
         getGoogleSignupConflictMessage(params);
 
       if (callbackError) {
-        resetTo(navigation, routes.login, { loginError: callbackError });
+        resetTo(navigation, loginRoute, { loginError: callbackError });
         return;
       }
 
       if (!params.code) {
-        resetTo(navigation, routes.login, {
+        resetTo(navigation, loginRoute, {
           loginError: "Google 로그인 응답을 확인할 수 없습니다. 다시 시도해 주세요.",
         });
         return;
@@ -438,6 +443,10 @@ function OAuthCallbackRoute({ navigation, route }) {
 
         const data = response?.data ?? {};
         if (data.tempId !== undefined && data.tempId !== null) {
+          if (returnRoute === routes.deleteAccount) {
+            resetTo(navigation, routes.deleteAccount, { loginError: "가입된 Google 계정을 찾을 수 없습니다. 기존 계정으로 로그인해 주세요." });
+            return;
+          }
           resetTo(navigation, routes.termsAgreement, {
             tempId: data.tempId,
             signupProvider: "google",
@@ -453,9 +462,9 @@ function OAuthCallbackRoute({ navigation, route }) {
         await cancelHomePreload();
         await setAuthTokens(authTokens, { persist: true });
         await clearHomeCacheAsync();
-        resetTo(navigation, routes.home);
+        resetTo(navigation, returnRoute || routes.home);
       } catch (error) {
-        resetTo(navigation, routes.login, {
+        resetTo(navigation, loginRoute, {
           loginError: error?.message || "Google 로그인에 실패했습니다. 다시 시도해 주세요.",
         });
       }
@@ -552,6 +561,42 @@ function NoticeDetailRoute({ navigation, route }) {
     <NoticeDetailScreen
       notice={route.params?.notice}
       onBackPress={() => goBackOrReset(navigation, routes.notices)}
+    />
+  );
+}
+
+function DeleteAccountRoute({ navigation, route }) {
+  const [authenticated, setAuthenticated] = React.useState(() => Boolean(getAccessToken()));
+  React.useEffect(() => subscribeAuthRequired(() => setAuthenticated(false)), []);
+
+  const returnToDeletionLogin = async () => {
+    await cancelHomePreload();
+    await clearAuthTokens();
+    await clearHomeCacheAsync();
+    setAuthenticated(false);
+    resetTo(navigation, routes.deleteAccount);
+  };
+
+  if (!authenticated) {
+    return (
+      <LoginScreen
+        purposeText="계정 삭제를 위해 로그인해 주세요. 로그인 후 삭제 확인 화면으로 이동합니다."
+        initialError={route.params?.loginError}
+        authReturnRoute={routes.deleteAccount}
+        preloadAfterLogin={false}
+        showRemember={false}
+        showSignup={false}
+        initialRemember={false}
+        onLoginPress={() => setAuthenticated(true)}
+        onFindPasswordPress={() => navigateTo(navigation, routes.findPassword)}
+      />
+    );
+  }
+
+  return (
+    <DeleteAccountScreen
+      onCancelPress={returnToDeletionLogin}
+      onCompletePress={returnToDeletionLogin}
     />
   );
 }
@@ -718,7 +763,7 @@ export default function App() {
   }, []);
 
   // Read the saved preference before painting so returning users never see a logo flash.
-  if (!publicStartupRoute && (hasSeenOnboarding === null || !isAuthHydrated)) {
+  if (publicStartupRoute !== routes.privacyPolicy && (hasSeenOnboarding === null || !isAuthHydrated)) {
     return null;
   }
 
@@ -770,6 +815,7 @@ export default function App() {
         >
           <Stack.Screen component={WelcomeRoute} name={routes.welcome} />
           <Stack.Screen component={LoginRoute} name={routes.login} />
+          <Stack.Screen component={DeleteAccountRoute} name={routes.deleteAccount} />
           <Stack.Screen component={OAuthCallbackRoute} name={routes.oauthCallback} />
           <Stack.Screen component={SignupRoute} name={routes.signup} />
           <Stack.Screen
