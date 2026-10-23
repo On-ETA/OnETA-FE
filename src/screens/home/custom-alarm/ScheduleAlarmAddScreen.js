@@ -1650,9 +1650,13 @@ export function ScheduleRouteMapStep({
       }
 
       const roadAddress =
-        geocoded.roadAddress ||
-        geocoded.address ||
-        "";
+        (geocoded.roadAddress ||
+          geocoded.address ||
+          "").trim();
+
+      if (!roadAddress) {
+        throw new Error("선택한 위치의 주소 정보가 없습니다.");
+      }
 
       let searchResults = [];
       let searchErrorMessage = "";
@@ -1681,7 +1685,14 @@ export function ScheduleRouteMapStep({
       const normalizedResults =
         Array.isArray(searchResults)
           ? sortPlacesByDistance(
-              searchResults,
+              // Keyword search can return unrelated places, even for a full address.
+              searchResults.filter((result) =>
+                [result.address, result.roadAddress, result.raw?.roadAddress, result.raw?.jibunAddress]
+                  .some((address) =>
+                    typeof address === "string" &&
+                    address.replace(/\s+/g, "") === roadAddress.replace(/\s+/g, ""),
+                  ),
+              ),
               coordinate,
             )
           : [];
@@ -1720,7 +1731,7 @@ export function ScheduleRouteMapStep({
         return;
       }
 
-      const fallbackResult = {
+      setMapSelectedResults([{
         id: `map-${resolvedLatitude}-${resolvedLongitude}`,
         name: "선택한 위치",
         address: `${resolvedLatitude.toFixed(6)}, ${resolvedLongitude.toFixed(6)}`,
@@ -1729,16 +1740,8 @@ export function ScheduleRouteMapStep({
         y: resolvedLatitude,
         latitude: resolvedLatitude,
         longitude: resolvedLongitude,
-        raw: {
-          latitude: resolvedLatitude,
-          longitude: resolvedLongitude,
-        },
-      };
-
-      setMapSelectedResults([
-        fallbackResult,
-      ]);
-
+        raw: coordinate,
+      }]);
       setMapSelectionError("");
     } finally {
       if (

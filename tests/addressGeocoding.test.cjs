@@ -117,3 +117,45 @@ test('native rejects a nearby road with the wrong building number', async () => 
   });
   assert.equal((await api.geocodeRoadAddress({ keyword: address })).length, 0);
 });
+
+test('native reverse geocoding rejects missing and administrative-only addresses, while retaining road and parcel addresses', async () => {
+  let results = [];
+  const api = load('src/components/reverseGeocode.js', {
+    'react-native': { Platform: { OS: 'android' } },
+    'expo-location': {
+      getForegroundPermissionsAsync: async () => ({ status: 'granted' }),
+      reverseGeocodeAsync: async () => results,
+    },
+    '../utils/currentLocationRequest': { createCurrentLocationRequest: () => ({}) },
+  });
+  const coordinate = { latitude: 37.5666, longitude: 126.9784 };
+  for (const empty of [[], [{ region: '서울특별시', city: '중구', name: '중구' }]]) {
+    results = empty;
+    await assert.rejects(api.reverseGeocode(coordinate), /주소/);
+  }
+  results = [{ region: '서울특별시', city: '중구', street, streetNumber: '110' }];
+  assert.equal((await api.reverseGeocode(coordinate)).address, address);
+  results = [{ region: '서울특별시', city: '중구', district: '태평로1가', name: '31' }];
+  assert.equal((await api.reverseGeocode(coordinate)).address, '서울특별시 중구 태평로1가 31');
+});
+
+test('web reverse geocoding rejects empty address responses and keeps parcel-only addresses', async () => {
+  let response;
+  let status = 'OK';
+  const api = load('src/components/reverseGeocode.web.js', {
+    './NaverMapView': { preloadNaverMap: async () => {} },
+    '../utils/currentLocationRequest': { createCurrentLocationRequest: () => ({}) },
+  }, { naver: { maps: {
+    LatLng: class {},
+    Service: { Status: { OK: 'OK' }, reverseGeocode: (_, callback) => callback(status, response) },
+  } } });
+  const coordinate = { latitude: 37.5666, longitude: 126.9784 };
+  for (const empty of [undefined, { v2: { address: {} } }]) {
+    response = empty;
+    await assert.rejects(api.reverseGeocode(coordinate), /주소/);
+  }
+  response = { v2: { address: { jibunAddress: '서울특별시 중구 태평로1가 31' } } };
+  assert.equal((await api.reverseGeocode(coordinate)).address, response.v2.address.jibunAddress);
+  status = 'ERROR';
+  await assert.rejects(api.reverseGeocode(coordinate), /주소/);
+});

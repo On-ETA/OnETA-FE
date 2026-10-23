@@ -155,6 +155,15 @@ function buildRoadAddress(result) {
     return "";
   }
 
+  // Administrative areas alone do not identify the address of the pin.
+  if (
+    !result.street &&
+    !result.streetNumber &&
+    !/\d/.test(`${result.name ?? ""} ${result.formattedAddress ?? ""}`)
+  ) {
+    return "";
+  }
+
   if (result.street) {
     const address = cleanAddress(
       removeDuplicateParts([
@@ -197,15 +206,7 @@ function buildNaverRoadAddress(address) {
   return cleanAddress(
     address?.roadAddress ||
       address?.jibunAddress ||
-      removeDuplicateParts([
-        address?.sido,
-        address?.sigugun,
-        address?.dongmyun,
-        address?.ri,
-        address?.roadName,
-        address?.buildingNumber,
-        address?.landNumber,
-      ]).join(" "),
+      "",
   );
 }
 

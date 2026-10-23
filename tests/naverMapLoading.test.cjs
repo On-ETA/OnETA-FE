@@ -104,6 +104,87 @@ function textContent(tree) {
   return (Array.isArray(tree) ? tree : tree.children ?? []).map(textContent).join('');
 }
 
+function findButton(tree, label) {
+  if (!tree || typeof tree !== 'object') return undefined;
+  if (tree.type === 'Pressable' && textContent(tree) === label) return tree;
+  for (const child of (Array.isArray(tree) ? tree : tree.children ?? [])) {
+    const match = findButton(child, label);
+    if (match) return match;
+  }
+}
+
+test('a pin without an address clears earlier results and remains selectable using only its coordinates', async () => {
+  let response = { roadAddress: 'Valid pin address' };
+  let searchCalls = 0;
+  const f = locationFixture({}, { latitude: 37.5, longitude: 127 }, undefined, {
+    '../../../components/reverseGeocode': {
+      getCachedCurrentCoordinate: () => ({ latitude: 37.5, longitude: 127 }),
+      reverseGeocode: async () => {
+        if (response instanceof Error) throw response;
+        return response;
+      },
+    },
+    '../../../api/address/search': { searchAddresses: async () => { searchCalls++; return []; } },
+  });
+  const pin = () => find(f.render(), 'NaverMapView').props.onMapPress({ latitude: 37.7, longitude: 126.8 });
+  await pin();
+  assert.ok(textContent(f.render()).includes('Valid pin address'));
+  assert.equal(findButton(f.render(), '출발지로 지정').props.disabled, false);
+  for (const failure of [new Error('선택한 위치의 주소 정보가 없습니다.'), { roadAddress: '   ' }]) {
+    response = failure;
+    await pin();
+    const failed = f.render();
+    assert.ok(!textContent(failed).includes('Valid pin address'));
+    assert.ok(textContent(failed).includes('37.700000, 126.800000'));
+    assert.equal(findButton(failed, '출발지로 지정').props.disabled, false);
+    assert.equal(find(failed, 'NaverMapView').props.markers[0].latitude, 37.7);
+  }
+  assert.equal(searchCalls, 1);
+  response = { roadAddress: 'Recovered pin address' };
+  await pin();
+  assert.equal(findButton(f.render(), '출발지로 지정').props.disabled, false);
+  assert.ok(textContent(f.render()).includes('Recovered pin address'));
+  assert.ok(!textContent(f.render()).includes('주소 정보가 없습니다'));
+});
+
+test('pin address search excludes unrelated places and falls back to the resolved address', async () => {
+  let results = [{ name: 'Unrelated place', address: 'Other address', x: 128, y: 38 }];
+  const f = locationFixture({}, { latitude: 37.5, longitude: 127 }, undefined, {
+    '../../../components/reverseGeocode': {
+      getCachedCurrentCoordinate: () => ({ latitude: 37.5, longitude: 127 }),
+      reverseGeocode: async () => ({ roadAddress: 'Pin address' }),
+    },
+    '../../../api/address/search': { searchAddresses: async () => results },
+  });
+  const pin = () => find(f.render(), 'NaverMapView').props.onMapPress({ latitude: 37.7, longitude: 126.8 });
+  await pin();
+  assert.ok(!textContent(f.render()).includes('Unrelated place'));
+  assert.ok(textContent(f.render()).includes('Pin address'));
+  assert.equal(findButton(f.render(), '출발지로 지정').props.disabled, false);
+  results.push({ name: 'Matching place', address: 'Pin  address', x: 126.8, y: 37.7 });
+  await pin();
+  assert.ok(textContent(f.render()).includes('Matching place'));
+  assert.ok(!textContent(f.render()).includes('Unrelated place'));
+});
+
+test('confirming a pin after address lookup failure forwards the exact pin coordinates', async () => {
+  let selected;
+  const f = locationFixture({ selectionMode: true, onPlaceSelect: (type, place) => { selected = place; } },
+    { latitude: 37.5, longitude: 127 }, undefined, {
+      '../../../components/reverseGeocode': {
+        getCachedCurrentCoordinate: () => ({ latitude: 37.5, longitude: 127 }),
+        reverseGeocode: async () => { throw new Error('No address'); },
+      },
+    });
+  await find(f.render(), 'NaverMapView').props.onMapPress({ latitude: 37.71234567, longitude: 126.81234567 });
+  const button = findButton(f.render(), '출발지로 지정');
+  assert.equal(button.props.disabled, false);
+  button.props.onPress();
+  assert.equal(selected.x, 126.81234567);
+  assert.equal(selected.y, 37.71234567);
+  assert.equal(selected.name, '선택한 위치');
+});
+
 test('map renders before location resolves, then moves to the current location', async () => {
   const f = locationFixture();
   assert.ok(find(f.render(), 'NaverMapView'));
