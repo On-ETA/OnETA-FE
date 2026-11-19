@@ -8,6 +8,10 @@ const excluded = (relativePath, separator = "/") => config.resolver.blockList.so
   pattern.test(`${root}/${relativePath}`.replaceAll("/", separator)),
 );
 
+test("Metro can combine all exclusion patterns with matching regular-expression flags", () => {
+  assert.equal(new Set(config.resolver.blockList.map(pattern => pattern.flags)).size, 1);
+});
+
 test("Metro skips generated output and native build trees during Windows file watching", () => {
   for (const directory of [
     ".git", "android/.gradle", "android/build", "android/app/build",
@@ -35,4 +39,15 @@ test("Metro retains app sources, Expo virtual files, assets and dependency JavaS
   }
   assert.ok(config.resolver.sourceExts.includes("svg"));
   assert.equal(config.resolver.assetExts.includes("svg"), false);
+});
+
+test("Metro blocks local signing credentials, environment files and development-only trees", () => {
+  for (const file of [
+    "credentials.json", "credentials/android/keystore.jks", ".env", ".env.production",
+    "assets/release.keystore", "assets/signing.p12", "assets/AuthKey.p8",
+    "tests/fixture.json", "src/api/test/fcm.js", "docs/notes.md", ".aws/credentials", ".idea/workspace.xml",
+  ]) {
+    assert.ok(excluded(file), file);
+    assert.ok(excluded(file, "\\"), file);
+  }
 });

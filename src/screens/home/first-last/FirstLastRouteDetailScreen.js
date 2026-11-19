@@ -10,6 +10,7 @@ import {
 import Svg, { Circle, Path } from "react-native-svg";
 
 import BackIcon from "../../../../assets/images/L.svg";
+import { DelayedLoading } from "../../../components/DelayedLoading";
 import WalkAsset from "../../../../assets/images/man.svg";
 import SmallBusAsset from "../../../../assets/images/smallbus.svg";
 import BGaIcon from "../../../../assets/bus/b_ga.svg";
@@ -187,7 +188,7 @@ export function FirstLastRouteDetailScreen({
       </View>
 
       {isLoading ? (
-        <LoadingView />
+        <DelayedLoading><LoadingView /></DelayedLoading>
       ) : errorMessage ? (
         <ErrorView
           message={errorMessage}

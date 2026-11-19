@@ -3,6 +3,7 @@ import { createThrottledTask } from "../../../utils/throttledTask";
 import { ScreenTransition } from "../../../components/ScreenTransition";
 import { useAndroidBackPress } from "../../../hooks/useAndroidBackPress";
 import { RouteSearchLoadingScreen } from "../../../components/RouteSearchLoadingScreen";
+import { DelayedLoading } from "../../../components/DelayedLoading";
 ﻿import React, {
   useEffect,
   useMemo,
@@ -2551,6 +2552,7 @@ export function ScheduleRouteResultStep({
       new AbortController();
 
     async function loadTransitRoutes() {
+      routeRequestRef.current = controller;
       const hasOriginCoordinates =
         Number.isFinite(Number(origin?.x)) &&
         Number.isFinite(Number(origin?.y));
@@ -2656,7 +2658,11 @@ export function ScheduleRouteResultStep({
   };
 
   if (isLoadingRoutes) {
-    return <RouteSearchLoadingScreen onFindAnotherRoute={handleFindAnotherRoute} />;
+    return (
+      <DelayedLoading fallback={<View style={styles.resultScreen} />}>
+        <RouteSearchLoadingScreen onFindAnotherRoute={handleFindAnotherRoute} />
+      </DelayedLoading>
+    );
   }
 
   return (

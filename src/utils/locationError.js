@@ -8,5 +8,8 @@ export function getLocationErrorMessage(error) {
   if (error?.code === 2 || error?.code === "E_LOCATION_SERVICES_DISABLED") {
     return "현재 위치를 확인할 수 없습니다. 위치 서비스를 확인해주세요.";
   }
+  if (/cannot be cast|Call to function|NullPointerException|expo\.modules\./i.test(error?.message ?? "")) {
+    return "위치 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.";
+  }
   return error?.message || "현재 위치를 확인할 수 없습니다.";
 }

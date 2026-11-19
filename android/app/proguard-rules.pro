@@ -12,3 +12,9 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+
+# Expo SDK 54 Record conversion reads @Field.key through Kotlin reflection.
+# Preserve the annotation and marker interface when R8 optimizes release builds.
+# https://github.com/expo/expo/blob/main/packages/expo-modules-core/android/proguard-rules.pro
+-keep interface expo.modules.kotlin.records.Record
+-keep @interface expo.modules.kotlin.records.Field { *; }

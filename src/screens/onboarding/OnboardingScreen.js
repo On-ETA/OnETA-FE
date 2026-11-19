@@ -11,8 +11,8 @@ import { colors, layout } from "../../theme";
 export function OnboardingScreen() {
   return (
     <View style={styles.screen}>
-      <StatusBar style="dark" backgroundColor="#29D575" />
-      <SafeAreaView edges={["bottom"]} style={styles.phone}>
+      <StatusBar style="dark" />
+      <SafeAreaView edges={["right", "bottom", "left"]} style={styles.phone}>
         <View style={styles.content}>
           <Svg
             width="100%"

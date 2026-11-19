@@ -45,14 +45,15 @@ export function OnboardingIntroScreen({ step = 0, onNextPress, onBackPress }) {
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="dark" backgroundColor={colors.white} />
-      <SafeAreaView edges={["top", "bottom"]} style={styles.phone}>
+      <StatusBar style="dark" />
+      <SafeAreaView edges={["top", "right", "bottom", "left"]} style={styles.phone}>
         <ScreenTransition transitionKey={step} transitionDepth={step} duration={234}>
           <ScrollView
             key={step}
             bounces={false}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={[styles.content, { minHeight: height - insets.top - insets.bottom }]}
+            style={styles.scroll}
+            contentContainerStyle={styles.content}
           >
             <View style={[styles.heading, { paddingTop: Math.min(88, Math.max(32, height * 0.105 - insets.top)) }]}>
               <View style={styles.progress} accessible accessibilityLabel={`온보딩 3단계 중 ${step + 1}단계`}>
@@ -64,6 +65,8 @@ export function OnboardingIntroScreen({ step = 0, onNextPress, onBackPress }) {
             <View style={styles.preview} accessible accessibilityRole="image" accessibilityLabel={page.previewLabel}>
               <Preview width="100%" height="100%" preserveAspectRatio="xMidYMin meet" accessible={false} />
             </View>
+          </ScrollView>
+          <View style={styles.footer}>
             <Pressable
               accessibilityRole="button"
               onPress={onNextPress}
@@ -71,7 +74,7 @@ export function OnboardingIntroScreen({ step = 0, onNextPress, onBackPress }) {
             >
               <Text style={styles.nextText}>{page.buttonLabel ?? "다음"}</Text>
             </Pressable>
-          </ScrollView>
+          </View>
         </ScreenTransition>
       </SafeAreaView>
     </View>
@@ -84,7 +87,8 @@ const styles = StyleSheet.create({
     flex: 1, width: "100%", backgroundColor: colors.white,
     ...Platform.select({ web: { alignSelf: "center", maxWidth: layout.mobileFrameWidth } }),
   },
-  content: { flexGrow: 1, alignItems: "center", paddingHorizontal: 16, paddingBottom: 42 },
+  scroll: { flex: 1 },
+  content: { flexGrow: 1, alignItems: "center", paddingHorizontal: 16 },
   heading: { alignItems: "center", width: "100%" },
   progress: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 30 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.gray05 },
@@ -92,7 +96,8 @@ const styles = StyleSheet.create({
   title: { fontFamily: "SUIT", fontSize: 24, fontWeight: "700", lineHeight: 34, letterSpacing: -0.6, color: colors.main, textAlign: "center" },
   description: { fontFamily: "SUIT", marginTop: 10, fontSize: 14, fontWeight: "600", lineHeight: 21, color: colors.gray08, textAlign: "center" },
   preview: { flex: 1, width: "100%", minHeight: 240, maxHeight: 440, marginTop: 36 },
-  nextButton: { width: "100%", height: 56, borderRadius: 9, backgroundColor: colors.main, alignItems: "center", justifyContent: "center", marginTop: 16 },
+  footer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 },
+  nextButton: { width: "100%", height: 56, borderRadius: 9, backgroundColor: colors.main, alignItems: "center", justifyContent: "center" },
   pressed: { opacity: 0.8 },
   nextText: { fontFamily: "SUIT", fontSize: 18, fontWeight: "600", color: colors.white },
 });

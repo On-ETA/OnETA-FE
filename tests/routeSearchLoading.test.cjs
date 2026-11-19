@@ -18,11 +18,11 @@ function renderer() {
   };
   return { react, render(Component, props) { cursor = 0; return Component(props); }, flush() { effects.splice(0).forEach(fn => fn()); }, unmount() { slots.forEach(slot => slot?.cleanup?.()); } };
 }
-function load(file, mocks) {
+function load(file, mocks, globals = {}) {
   const exports = {};
   const { code } = babel.transformSync(fs.readFileSync(file, 'utf8'), { configFile: false, babelrc: false,
     plugins: ['@babel/plugin-transform-react-jsx', '@babel/plugin-transform-modules-commonjs'] });
-  vm.runInNewContext(code, { exports, AbortController, require: name => mocks[name] ?? {} }); return exports;
+  vm.runInNewContext(code, { exports, AbortController, ...globals, require: name => mocks[name] ?? {} }); return exports;
 }
 function find(tree, predicate) { if (!tree || typeof tree !== 'object') return undefined; if (!Array.isArray(tree) && predicate(tree)) return tree;
   for (const child of Array.isArray(tree) ? tree : tree.children ?? []) { const match = find(child, predicate); if (match) return match; } }
@@ -35,6 +35,7 @@ function resultFixture(scheduleType = 'NORMAL') {
   const exports = load('src/screens/home/custom-alarm/ScheduleAlarmAddScreen.js', {
     react: view.react, 'react-native': { View: 'View', Text: 'Text', ScrollView: 'ScrollView', Platform: { select: value => value.default }, StyleSheet: { create: value => value } },
     '../../../components/RouteSearchLoadingScreen': { RouteSearchLoadingScreen: 'Loading' },
+    '../../../components/DelayedLoading': { DelayedLoading: 'DelayedLoading' },
     '../../../api/transit/routes': { searchTransitRoutes: search, searchFirstLastTransitRoutes: search },
     '../../../theme': { colors: {}, typography: {}, layout: {} },
   });
@@ -43,14 +44,48 @@ function resultFixture(scheduleType = 'NORMAL') {
 }
 
 for (const type of ['NORMAL', 'FIRST_TRANSIT', 'LAST_TRANSIT']) {
-  test(type + ' displays loading from the first frame and cancels before returning to place setup', async () => {
-    const f = resultFixture(type); assert.equal(f.render().type, 'Loading'); f.view.flush();
+  test(type + ' delays loading and cancels before returning to place setup', async () => {
+    const f = resultFixture(type); const initial = f.render();
+    assert.equal(initial.type, 'DelayedLoading');
+    assert.equal(initial.props.fallback.type, 'View'); f.view.flush();
     assert.equal(f.calls[0].scheduleType, type);
-    f.render().props.onFindAnotherRoute(); assert.equal(f.calls[0].signal.aborted, true); assert.equal(f.back(), 1);
+    find(f.render(), node => node.type === 'Loading').props.onFindAnotherRoute(); assert.equal(f.calls[0].signal.aborted, true); assert.equal(f.back(), 1);
     f.request.resolve([{ routeId: 'late', totalDurationMinutes: 10 }]); await settle();
-    assert.equal(f.render().type, 'Loading'); f.view.unmount();
+    assert.equal(f.render().type, 'DelayedLoading'); f.view.unmount();
   });
 }
+
+function delayedFixture() {
+  const view = renderer(), timers = new Map(); let now = 0, id = 0;
+  const { DelayedLoading } = load('src/components/DelayedLoading.js', { react: view.react }, {
+    setTimeout(callback, delay) { timers.set(++id, { callback, at: now + delay }); return id; },
+    clearTimeout(timer) { timers.delete(timer); },
+  });
+  return {
+    render: () => view.render(DelayedLoading, { children: 'loading', fallback: 'content' }),
+    flush: view.flush, unmount: view.unmount, pending: () => timers.size,
+    advance(ms) { now += ms; for (const [key, timer] of timers) if (timer.at <= now) { timers.delete(key); timer.callback(); } },
+  };
+}
+
+test('loading remains hidden through 999ms and appears only at one second', () => {
+  const f = delayedFixture(); assert.equal(f.render(), 'content'); f.flush();
+  f.advance(999); assert.equal(f.render(), 'content');
+  f.advance(1); assert.equal(f.render(), 'loading'); f.unmount();
+});
+
+test('finishing or leaving before one second cancels the pending loading display', () => {
+  const f = delayedFixture(); f.render(); f.flush(); f.advance(400);
+  assert.equal(f.render(), 'content'); f.unmount(); assert.equal(f.pending(), 0);
+  f.advance(2000); assert.equal(f.render(), 'content');
+});
+
+test('a subsequent request starts with a fresh one-second loading delay', () => {
+  const first = delayedFixture(); first.render(); first.flush(); first.advance(1000);
+  assert.equal(first.render(), 'loading'); first.unmount();
+  const next = delayedFixture(); assert.equal(next.render(), 'content'); next.flush();
+  next.advance(999); assert.equal(next.render(), 'content'); next.unmount();
+});
 
 test('loading ends on success or error and leaving the screen aborts the request', async () => {
   const success = resultFixture(); success.render(); success.view.flush(); success.request.resolve([]); await settle();

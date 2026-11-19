@@ -24,6 +24,10 @@ config.resolver = {
     /[/\\]android[/\\](?:app[/\\])?build(?:[/\\]|$)/,
     /[/\\]node_modules[/\\](?:@[^/\\]+[/\\])?[^/\\]+[/\\](?:android|ios)(?:[/\\]|$)/,
     new RegExp(`^${projectPathPattern}[/\\\\](?:dist|\\.expo[/\\\\]onboarding-preview)(?:[/\\\\]|$)`),
+    // Keep local credentials and development-only files out of the JS/asset graph.
+    new RegExp(`^${projectPathPattern}[/\\\\](?:credentials|tests|docs|\\.idea|\\.vscode|\\.agents|\\.codex|\\.aws)(?:[/\\\\]|$)`),
+    new RegExp(`^${projectPathPattern}[/\\\\]src[/\\\\]api[/\\\\]test(?:[/\\\\]|$)`),
+    /[/\\](?:credentials\.json|\.env(?:\.[^/\\]+)?|[^/\\]+\.(?:jks|keystore|p12|p8|mobileprovision))$/,
   ],
   assetExts: assetExts.filter((ext) => ext !== "svg"),
   sourceExts: [...sourceExts, "svg"],

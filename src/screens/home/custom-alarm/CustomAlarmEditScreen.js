@@ -19,13 +19,19 @@ import {
   getArrivalNotificationById,
   updateArrivalNotification,
 } from "../../../api/notifications/arrival";
-import { getBusRouteDirections } from "../../../api/busRoutes";
+import {
+  getBusRouteDirections,
+  getCachedBusRouteDirections,
+  getCachedBusRouteDirectionsAsync,
+} from "../../../api/busRoutes";
 import { updateDepotNotification } from "../../../api/notifications/depot";
 import { Header } from "../../../components";
+import { DelayedLoading } from "../../../components/DelayedLoading";
 import { RouteTimeline } from "../../../components/RouteTimeline";
 import { colors, typography } from "../../../theme";
 import { normalizeTimelineSegments } from "../../../utils/routeSegments";
 import { getArrivalNotificationPatch } from "../../../utils/arrivalNotificationPatch";
+import { isSameData } from "../../../utils/isSameData";
 
 const days = ["월", "화", "수", "목", "금", "토", "일"];
 const apiDayToKoreanDay = {
@@ -104,6 +110,15 @@ function getAlarmRoute(alarm) {
     parsedRouteDetails?.route ??
     parsedRouteDetails
   );
+}
+
+function getScheduleEditData(alarm) {
+  return {
+    route: getAlarmRoute(alarm),
+    arrivalTime: formatArrivalTime(alarm?.targetArrivalTime ?? alarm?.arrivalTime),
+    reminderOffsetMinutes: alarm?.reminderOffsetMinutes,
+    scheduleType: alarm?.scheduleType ?? "NORMAL",
+  };
 }
 
 function getSegmentStopName(segment, edge) {
@@ -203,6 +218,8 @@ export function ScheduleAlarmEditScreen({
   );
   const [arrivalAlarm, setArrivalAlarm] = useState(alarm);
   const originalAlarmRef = useRef(alarm);
+  const editedFieldsRef = useRef({});
+  const detailControllerRef = useRef(null);
   const [isLoadingAlarm, setIsLoadingAlarm] = useState(false);
   const [isSavingAlarm, setIsSavingAlarm] = useState(false);
   const [alarmError, setAlarmError] = useState("");
@@ -230,6 +247,7 @@ export function ScheduleAlarmEditScreen({
     .map((offset) => `${offset}분 전`)
     .join(", ");
   const toggleReminderOffset = (offset) => {
+    editedFieldsRef.current.reminderOffsetMinutes = true;
     const current = reminderOffsets.map(Number);
     const next = current.includes(Number(offset))
       ? current.filter((value) => value !== Number(offset))
@@ -260,9 +278,29 @@ export function ScheduleAlarmEditScreen({
 
     let isActive = true;
     const controller = new AbortController();
+    detailControllerRef.current = controller;
+    const showLoading = !getAlarmRoute(alarm);
+
+    function applyFreshAlarm(nextAlarm) {
+      if (!isActive || controller.signal.aborted) return;
+      originalAlarmRef.current = nextAlarm;
+      setArrivalAlarm((current) => {
+        const next = {
+          ...nextAlarm,
+          ...(editedFieldsRef.current.reminderOffsetMinutes
+            ? { reminderOffsetMinutes: current?.reminderOffsetMinutes } : {}),
+        };
+        return isSameData(getScheduleEditData(current), getScheduleEditData(next)) ? current : next;
+      });
+      if (!editedFieldsRef.current.routeName) setRouteName(nextAlarm.routeName ?? "");
+      if (!editedFieldsRef.current.repeatDays) setSelectedDays((current) => {
+        const next = getRepeatDays(nextAlarm.repeatDays);
+        return isSameData([...current].sort(), [...next].sort()) ? current : next;
+      });
+    }
 
     async function loadArrivalAlarm() {
-      setIsLoadingAlarm(true);
+      if (showLoading) setIsLoadingAlarm(true);
       setAlarmError("");
 
       try {
@@ -271,14 +309,9 @@ export function ScheduleAlarmEditScreen({
           signal: controller.signal,
         });
 
-        if (isActive) {
-          originalAlarmRef.current = nextAlarm;
-          setArrivalAlarm(nextAlarm);
-          setRouteName(nextAlarm.routeName ?? "");
-          setSelectedDays(getRepeatDays(nextAlarm.repeatDays));
-        }
+        applyFreshAlarm(nextAlarm);
       } catch (error) {
-        if (isActive) {
+        if (isActive && !controller.signal.aborted && error?.name !== "AbortError") {
           try {
             const notifications = await getArrivalNotifications({
               forceRefresh: true,
@@ -292,11 +325,9 @@ export function ScheduleAlarmEditScreen({
                 ) === String(notificationId),
             );
 
+            if (!isActive || controller.signal.aborted) return;
             if (fallbackAlarm) {
-              originalAlarmRef.current = fallbackAlarm;
-              setArrivalAlarm(fallbackAlarm);
-              setRouteName(fallbackAlarm.routeName ?? "");
-              setSelectedDays(getRepeatDays(fallbackAlarm.repeatDays));
+              applyFreshAlarm(fallbackAlarm);
               setAlarmError("");
               return;
             }
@@ -304,10 +335,12 @@ export function ScheduleAlarmEditScreen({
             // Keep the original detail request error when the list fallback also fails.
           }
 
-          setAlarmError(error?.message ?? "도착 알림을 불러오지 못했습니다.");
+          if (isActive && !controller.signal.aborted) {
+            setAlarmError(error?.message ?? "도착 알림을 불러오지 못했습니다.");
+          }
         }
       } finally {
-        if (isActive) {
+        if (isActive && showLoading) {
           setIsLoadingAlarm(false);
         }
       }
@@ -322,6 +355,7 @@ export function ScheduleAlarmEditScreen({
   }, [notificationId]);
 
   const toggleDay = (day) => {
+    editedFieldsRef.current.repeatDays = true;
     setSelectedDays((current) =>
       current.includes(day)
         ? current.filter((selectedDay) => selectedDay !== day)
@@ -350,11 +384,11 @@ export function ScheduleAlarmEditScreen({
     }
 
     const payload = getArrivalNotificationPatch(originalAlarmRef.current, {
-      routeName: routeName.trim() || undefined,
-      reminderOffsetMinutes,
-      repeatDays: selectedDays
+      routeName: editedFieldsRef.current.routeName ? routeName.trim() || undefined : undefined,
+      reminderOffsetMinutes: editedFieldsRef.current.reminderOffsetMinutes ? reminderOffsetMinutes : undefined,
+      repeatDays: editedFieldsRef.current.repeatDays ? selectedDays
         .map((day) => koreanDayToApiDay[day])
-        .filter(Boolean),
+        .filter(Boolean) : undefined,
     });
 
     Object.keys(payload).forEach((key) => {
@@ -363,6 +397,8 @@ export function ScheduleAlarmEditScreen({
       }
     });
 
+    detailControllerRef.current?.abort();
+    setIsLoadingAlarm(false);
     if (Object.keys(payload).length === 0) {
       onSavePress?.();
       return;
@@ -396,10 +432,12 @@ export function ScheduleAlarmEditScreen({
         titleStyle={styles.headerTitle}
         type="back"
       />
-      {isLoadingAlarm ? (
-        <View style={styles.statusBox}>
-          <Text style={styles.statusText}>알림 정보를 불러오는 중입니다.</Text>
-        </View>
+      {isLoadingAlarm && !route ? (
+        <DelayedLoading>
+          <View style={styles.statusBox}>
+            <Text style={styles.statusText}>알림 정보를 불러오는 중입니다.</Text>
+          </View>
+        </DelayedLoading>
       ) : alarmError ? (
         <View style={styles.statusBox}>
           <Text style={styles.statusText}>{alarmError}</Text>
@@ -466,7 +504,10 @@ export function ScheduleAlarmEditScreen({
         <View style={styles.formSection}>
           <Text style={styles.sectionLabel}>경로 이름</Text>
           <TextInput
-            onChangeText={setRouteName}
+            onChangeText={(value) => {
+              editedFieldsRef.current.routeName = true;
+              setRouteName(value);
+            }}
             placeholder="경로 이름"
             placeholderTextColor={colors.gray06}
             style={styles.nameInput}
@@ -555,50 +596,63 @@ export function GarageDepartureAlarmEditScreen({
   onChangeBusPress,
   onSavePress,
 }) {
+  const routeId = alarm?.routeId ?? alarm?.raw?.routeId;
   const initialDirectionId = alarm?.directionType ?? alarm?.raw?.direction ?? "";
   const [selectedDirectionId, setSelectedDirectionId] = useState(
     initialDirectionId,
   );
-  const [directions, setDirections] = useState(alarm?.directions ?? []);
-  const [busRouteInfo, setBusRouteInfo] = useState(null);
+  const [busRouteInfo, setBusRouteInfo] = useState(() => getCachedBusRouteDirections(routeId));
+  const [directions, setDirections] = useState(busRouteInfo?.directions ?? alarm?.directions ?? []);
+  const routeInfoRef = useRef(busRouteInfo);
   const [isLoadingDirections, setIsLoadingDirections] = useState(false);
   const [isSavingAlarm, setIsSavingAlarm] = useState(false);
 
   useEffect(() => {
-    const routeId = alarm?.routeId ?? alarm?.raw?.routeId;
-
     if (!routeId) {
       return undefined;
     }
 
     const controller = new AbortController();
     let isActive = true;
+    const showLoading = directions.length === 0;
+
+    function applyRouteInfo(routeInfo) {
+      if (isSameData(routeInfoRef.current, routeInfo)) return;
+      routeInfoRef.current = routeInfo;
+      setBusRouteInfo(routeInfo);
+      setDirections((current) => isSameData(current, routeInfo.directions ?? []) ? current : routeInfo.directions ?? []);
+      setSelectedDirectionId((current) => current || routeInfo.directions?.[0]?.id || "");
+    }
 
     async function loadDirections() {
-      setIsLoadingDirections(true);
+      if (showLoading) setIsLoadingDirections(true);
 
       try {
+        const cached = await getCachedBusRouteDirectionsAsync(routeId);
+        if (!isActive || controller.signal.aborted) return;
+        if (cached) {
+          applyRouteInfo(cached);
+        }
         const routeInfo = await getBusRouteDirections({
           routeId,
           signal: controller.signal,
+          forceRefresh: true,
         });
 
         if (!isActive) {
           return;
         }
 
-        setBusRouteInfo(routeInfo);
-        setDirections(routeInfo.directions ?? []);
-        setSelectedDirectionId((current) => current || routeInfo.directions?.[0]?.id || "");
+        applyRouteInfo(routeInfo);
       } catch (error) {
-        if (isActive && error?.name !== "AbortError") {
+        if (isActive && error?.name !== "AbortError" && !routeInfoRef.current) {
           Alert.alert(
             "방면 정보 조회 실패",
             error?.message ?? "버스 방면 정보를 불러오지 못했습니다.",
           );
         }
       } finally {
-        if (isActive) {
+        if (isActive && showLoading) {
           setIsLoadingDirections(false);
         }
       }
@@ -610,7 +664,7 @@ export function GarageDepartureAlarmEditScreen({
       isActive = false;
       controller.abort();
     };
-  }, [alarm?.raw?.routeId, alarm?.routeId]);
+  }, [routeId]);
 
   const selectedDirection = directions.find(
     (direction) => direction.id === selectedDirectionId,
@@ -620,12 +674,12 @@ export function GarageDepartureAlarmEditScreen({
     const userBusId = alarm?.userBusId ?? alarm?.id;
     const direction = selectedDirection?.type ?? selectedDirection?.direction ?? selectedDirection?.id;
     const directionName =
-      direction === "DEPOT"
+      (direction === "DEPOT"
         ? busRouteInfo?.depotName
         : direction === "TURNAROUND"
           ? busRouteInfo?.turnaroundName
-          : selectedDirection?.directionName ??
-            selectedDirection?.name ??
+          : undefined) || selectedDirection?.directionName ||
+            selectedDirection?.name ||
             String(selectedDirection?.title ?? "").replace(/\s*방면$/, "").trim();
 
     if (!userBusId || !direction || !directionName) {
@@ -696,7 +750,9 @@ export function GarageDepartureAlarmEditScreen({
 
         <View style={styles.directionList}>
           {isLoadingDirections && directions.length === 0 ? (
-            <Text style={styles.directionDescription}>방면 정보를 불러오는 중입니다.</Text>
+            <DelayedLoading>
+              <Text style={styles.directionDescription}>방면 정보를 불러오는 중입니다.</Text>
+            </DelayedLoading>
           ) : null}
           {directions.map((direction) => {
             const selected = selectedDirectionId === direction.id;
@@ -726,11 +782,11 @@ export function GarageDepartureAlarmEditScreen({
         </View>
         <Pressable
           accessibilityRole="button"
-          disabled={isSavingAlarm || isLoadingDirections}
+          disabled={isSavingAlarm || !selectedDirection}
           onPress={handleSave}
           style={[
             styles.fullSaveButton,
-            (isSavingAlarm || isLoadingDirections) && styles.saveButtonDisabled,
+            (isSavingAlarm || !selectedDirection) && styles.saveButtonDisabled,
           ]}
         >
           <Text style={styles.saveText}>{isSavingAlarm ? "저장 중" : "저장"}</Text>

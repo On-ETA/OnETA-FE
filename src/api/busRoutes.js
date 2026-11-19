@@ -1,6 +1,30 @@
-import { getAccessToken } from "./auth/tokens";
+import { getAccessToken, getAuthSessionId } from "./auth/tokens";
 import { reissueAuthTokens } from "./auth/reissue";
 import { requestJson } from "./client";
+import { homeCacheKeys, readHomeCache, readHomeCacheAsync, writeHomeCache } from "./homeCache";
+import { isSameData } from "../utils/isSameData";
+
+const DIRECTIONS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_CACHED_DIRECTIONS = 50;
+let directionsRequestSequence = 0;
+const latestDirectionsRequests = new Map();
+
+export function getCachedBusRouteDirections(routeId) {
+  if (routeId === undefined || routeId === null || routeId === "") return null;
+  const entry = readHomeCache(homeCacheKeys.busRouteDirections, {})?.[String(routeId)];
+  return entry?.expiresAt > Date.now() && String(entry.value?.routeId) === String(routeId)
+    && Array.isArray(entry.value?.directions) && entry.value.directions.length > 0
+    ? entry.value : null;
+}
+
+export async function getCachedBusRouteDirectionsAsync(routeId) {
+  await readHomeCacheAsync(homeCacheKeys.busRouteDirections, {});
+  return getCachedBusRouteDirections(routeId);
+}
+
+function directionsAbortError() {
+  return Object.assign(new Error("방면 정보 요청이 취소되었습니다."), { name: "AbortError" });
+}
 
 const BUS_ROUTES_SEARCH_ENDPOINT = "/api/bus-routes/search";
 
@@ -258,20 +282,59 @@ export async function getBusRouteDirections({
   routeId,
   accessToken = getAccessToken(),
   signal,
+  forceRefresh = false,
 } = {}) {
   if (routeId === undefined || routeId === null || routeId === "") {
     throw new Error("버스 노선 id가 필요합니다.");
   }
 
-  const response = await requestBusRouteJson({
-    path: buildBusRouteDirectionsEndpoint(routeId),
-    method: "GET",
-    accessToken,
-    signal,
-    errorMessage: "버스 노선 방향 정보를 불러오지 못했습니다.",
-  });
+  const sessionId = getAuthSessionId();
+  if (signal?.aborted) throw directionsAbortError();
+  if (!forceRefresh) {
+    const cached = await getCachedBusRouteDirectionsAsync(routeId);
+    if (signal?.aborted || sessionId !== getAuthSessionId()) throw directionsAbortError();
+    if (cached) return cached;
+  }
 
-  return normalizeBusRouteDirections(response);
+  const requestKey = String(routeId);
+  const requestId = ++directionsRequestSequence;
+  latestDirectionsRequests.set(requestKey, requestId);
+
+  try {
+    const response = await requestBusRouteJson({
+      path: buildBusRouteDirectionsEndpoint(routeId),
+      method: "GET",
+      accessToken,
+      signal,
+      errorMessage: "버스 노선 방향 정보를 불러오지 못했습니다.",
+    });
+
+    if (signal?.aborted || sessionId !== getAuthSessionId()
+      || latestDirectionsRequests.get(requestKey) !== requestId) throw directionsAbortError();
+
+    const value = normalizeBusRouteDirections(response);
+    value.routeId ??= routeId;
+    if (String(value.routeId) !== requestKey) {
+      throw new Error("버스 방면 정보가 올바르지 않습니다.");
+    }
+    // Preserve partial responses for the existing UI, but do not persist
+    // fallback labels in place of previously complete direction metadata.
+    if (!value.depotName || !value.turnaroundName) return value;
+    const now = Date.now();
+    const cached = getCachedBusRouteDirections(routeId);
+    const result = isSameData(cached, value) ? cached : value;
+    const entries = Object.entries(readHomeCache(homeCacheKeys.busRouteDirections, {}) ?? {})
+      .filter(([key, entry]) => key !== requestKey && entry?.expiresAt > now)
+      .sort((a, b) => b[1].expiresAt - a[1].expiresAt)
+      .slice(0, MAX_CACHED_DIRECTIONS - 1);
+    writeHomeCache(homeCacheKeys.busRouteDirections, {
+      ...Object.fromEntries(entries),
+      [requestKey]: { expiresAt: now + DIRECTIONS_CACHE_TTL_MS, value: result },
+    });
+    return result;
+  } finally {
+    if (latestDirectionsRequests.get(requestKey) === requestId) latestDirectionsRequests.delete(requestKey);
+  }
 }
 
 export async function getBusRouteLocations({

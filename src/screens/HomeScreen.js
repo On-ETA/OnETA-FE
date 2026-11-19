@@ -639,8 +639,8 @@ export function HomeScreen({
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="dark" backgroundColor={homeBackground} />
-      <SafeAreaView edges={["top", "bottom"]} style={styles.phone}>
+      <StatusBar style="dark" />
+      <SafeAreaView edges={["top", "right", "bottom", "left"]} style={styles.phone}>
         <ScreenTransition routeAware style={styles.content} animateOnMount={false}
           transitionDepth={firstLastRouteSetupStep === "result" ? 2 : (activeTab === "myPage" || isAddressManagerVisible || isGarageDepartureAddVisible || isScheduleAlarmAddVisible || firstLastRouteSetupStep || editingCustomAlarm || isRouteDetailVisible) ? 1 : 0}
           transitionKey={[
@@ -762,6 +762,7 @@ export function HomeScreen({
               />
             ) : editingCustomAlarm?.type === "schedule" ? (
               <ScheduleAlarmEditScreen
+                key={editingCustomAlarm.alarm.notificationId ?? editingCustomAlarm.alarm.id}
                 alarm={editingCustomAlarm.alarm}
                 onBackPress={() => {
                   blurActiveElement();
@@ -782,6 +783,7 @@ export function HomeScreen({
               />
             ) : editingCustomAlarm?.type === "garage" ? (
               <GarageDepartureAlarmEditScreen
+                key={`${editingCustomAlarm.alarm.userBusId ?? editingCustomAlarm.alarm.id}:${editingCustomAlarm.alarm.routeId ?? editingCustomAlarm.alarm.raw?.routeId}`}
                 alarm={editingCustomAlarm.alarm}
                 onBackPress={() => {
                   blurActiveElement();

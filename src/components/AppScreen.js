@@ -9,8 +9,8 @@ import { ScreenTransition } from "./ScreenTransition";
 export function AppScreen({ children }) {
   return (
     <View style={styles.screen}>
-      <StatusBar style="dark" backgroundColor={colors.white} />
-      <SafeAreaView edges={["top", "bottom"]} style={styles.phone}>
+      <StatusBar style="dark" />
+      <SafeAreaView edges={["top", "right", "bottom", "left"]} style={styles.phone}>
         <ScreenTransition routeAware animateOnMount={false}>{children}</ScreenTransition>
       </SafeAreaView>
     </View>

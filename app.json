@@ -5,11 +5,8 @@
     "scheme": "oneta",
     "icon": "./assets/images/pabicon.png",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "web": {
       "favicon": "./assets/images/pabicon.png",
       "name": "ON-ETA",
@@ -20,6 +17,7 @@
     },
     "android": {
       "package": "com.oneta.app",
+      "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -51,6 +49,9 @@
         "expo-build-properties",
         {
           "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep interface expo.modules.kotlin.records.Record\n-keep @interface expo.modules.kotlin.records.Field { *; }",
             "extraMavenRepos": [
               "https://repository.map.naver.com/archive/maven"
             ]

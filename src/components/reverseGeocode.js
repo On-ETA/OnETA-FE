@@ -267,11 +267,17 @@ async function reverseGeocodeOnWeb(coordinate) {
 async function fetchCurrentCoordinate() {
   await ensureForegroundLocationPermission();
 
-  const lastKnownPosition =
-    await Location.getLastKnownPositionAsync({
+  // The device's cached position is optional; a cache/bridge failure must not
+  // prevent the fresh-position lookup below.
+  let lastKnownPosition = null;
+  try {
+    lastKnownPosition = await Location.getLastKnownPositionAsync({
       maxAge: 60 * 1000,
       requiredAccuracy: 200,
     });
+  } catch {
+    // Continue with a fresh location instead of repeatedly retrying this cache.
+  }
 
   if (lastKnownPosition?.coords) {
     return normalizeCoordinate({

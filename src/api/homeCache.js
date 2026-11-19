@@ -12,6 +12,7 @@ export const homeCacheKeys = {
   arrivalNotifications: "arrivalNotifications",
   scheduleNotifications: "scheduleNotifications",
   depotNotifications: "depotNotifications",
+  busRouteDirections: "busRouteDirections",
   hiddenArrivalNotifications: "hiddenArrivalNotifications",
   transitNotifications: "transitNotifications",
   firstTransitNotifications: "firstTransitNotifications",

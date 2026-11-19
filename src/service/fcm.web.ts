@@ -1,26 +1,9 @@
+import type { FirebaseOptions } from "firebase/app";
+import type { MessagePayload, Messaging } from "firebase/messaging";
+
 type WebRemoteMessage = MessagePayload & {
   messageId?: string;
 };
-
-type FirebaseOptions = {
-  apiKey?: string;
-  authDomain?: string;
-  projectId?: string;
-  storageBucket?: string;
-  messagingSenderId?: string;
-  appId?: string;
-  measurementId?: string;
-};
-
-type MessagePayload = {
-  notification?: {
-    title?: string;
-    body?: string;
-  };
-  data?: Record<string, string>;
-};
-
-type Messaging = unknown;
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,

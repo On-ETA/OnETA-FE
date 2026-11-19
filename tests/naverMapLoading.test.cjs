@@ -273,6 +273,20 @@ test('searching cancels a scheduled retry and a late failure does not schedule a
   assert.equal(failed.timers[0].cancelled, true);
 });
 
+test('native bridge failures show a concise message and leave manual map search available', async () => {
+  const f = locationFixture({ selectionMode: true }, null, async () => {
+    throw new Error("Call to function 'ExpoLocation.getLastKnownPositionAsync' has been rejected. The 1st argument cannot be cast to type expo.modules.location.records.LocationLastKnownOptions: java.lang.NullPointerException");
+  });
+  const tree = f.render(); find(tree, 'NaverMapView').props.onReady(); f.view.flushEffects();
+  await new Promise(setImmediate);
+  const message = textContent(f.render());
+  assert.ok(message.includes('위치 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'));
+  assert.ok(!message.includes('NullPointerException'));
+  assert.ok(!message.includes('expo.modules'));
+  find(f.render(), 'TextInput').props.onChangeText('홍대입구역');
+  assert.equal(f.timers[0].cancelled, true);
+});
+
 test('a late location result does not replace saved place coordinates', async () => {
   const f = locationFixture({ initialOrigin: { name: 'saved', x: 126.9, y: 37.6 } });
   assert.equal(find(f.render(), 'NaverMapView').props.center.latitude, 37.6);

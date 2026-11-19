@@ -3,4 +3,37 @@ node_modules
 .expo/
 android/local.properties
 android/.gradle/
+android/.kotlin/
 **/.gradle/
+
+# Local credentials and environment values
+credentials.json
+credentials/
+.env*
+!.env.example
+.aws/
+.npmrc
+.netrc
+*.jks
+*.keystore
+!android/app/debug.keystore
+*.p12
+*.p8
+*.mobileprovision
+
+# Local tools and generated output
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+*.hprof
+*.apk
+*.aab
+*.apks
+__pycache__/
+*.pyc
+android/build/
+android/app/build/
+**/.cxx/
+**/.externalNativeBuild/

@@ -75,6 +75,18 @@ test('an old native storage read cannot restore cache after logout cleared it', 
   assert.equal(cache.readHomeCache(key), null);
 });
 
+test('direction metadata survives native cache hydration and is included in logout cleanup', async () => {
+  const { cache, disk } = cacheFixture();
+  const key = cache.homeCacheKeys.busRouteDirections;
+  const value = { '10': { expiresAt: Date.now() + 10000, value: { routeId: '10' } } };
+  await cache.writeHomeCacheAsync(key, value);
+  const restored = cacheFixture({ getItem: async name => disk.get(name) ?? null });
+  assert.equal(JSON.stringify(await restored.cache.readHomeCacheAsync(key)), JSON.stringify(value));
+  await cache.clearHomeCacheAsync();
+  assert.equal(cache.readHomeCache(key), null);
+  assert.equal(disk.has('oneta.homeCache.busRouteDirections'), false);
+});
+
 test('logout cancels the auth session before its final cache deletion, including expired-session errors', async () => {
   for (const status of [undefined, 401]) {
     const order = [];
