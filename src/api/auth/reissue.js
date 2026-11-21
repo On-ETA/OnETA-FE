@@ -113,6 +113,7 @@ export function reissueAuthTokens({
   if (!refreshToken) {
     const error = new Error("Refresh Token이 없습니다.");
     error.code = "C005";
+    clearAuthTokens().catch(() => null);
     notifyAuthRequired({ reason: "missing_refresh_token" });
     return Promise.reject(error);
   }

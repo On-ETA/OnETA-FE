@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -42,7 +42,10 @@ function getApiErrorMessage(error, fallbackMessage) {
   const fieldErrors = error?.data?.data ?? error?.details?.data;
 
   if (fieldErrors && typeof fieldErrors === "object") {
-    return Object.values(fieldErrors).find(Boolean) ?? fallbackMessage;
+    const fieldMessage = Object.values(fieldErrors).find(
+      (value) => typeof value === "string" && value.trim().length > 0,
+    );
+    if (fieldMessage) return fieldMessage;
   }
 
   return (

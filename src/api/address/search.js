@@ -21,6 +21,10 @@ function toQueryString(params = {}) {
 }
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -60,24 +64,31 @@ async function requestAddressSearchJson(options) {
       throw error;
     }
 
+    let nextAccessToken;
+
     try {
       const { accessToken } = await reissueAuthTokens({
         signal: options.signal,
       });
-      const response = await requestJson({
-        ...options,
-        accessToken,
-      });
-      const businessError = createBusinessError(response, fallbackMessage);
-
-      if (businessError) {
-        throw businessError;
+      nextAccessToken = accessToken;
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
       }
-
-      return response;
-    } catch {
       throw error;
     }
+
+    const response = await requestJson({
+      ...options,
+      accessToken: nextAccessToken,
+    });
+    const businessError = createBusinessError(response, fallbackMessage);
+
+    if (businessError) {
+      throw businessError;
+    }
+
+    return response;
   }
 }
 

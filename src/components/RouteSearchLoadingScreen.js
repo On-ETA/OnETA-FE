@@ -2,12 +2,13 @@ import React, { useEffect, useRef } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme";
 
-export function RouteSearchLoadingScreen({ onFindAnotherRoute }) {
+export function RouteSearchLoadingScreen({ onFindAnotherRoute, animateDots = true }) {
   const dotsRef = useRef(null);
   if (!dotsRef.current) dotsRef.current = [0, 1, 2].map(() => new Animated.Value(0));
   const dots = dotsRef.current;
 
   useEffect(() => {
+    if (!animateDots) return undefined;
     let disposed = false;
     let animation;
     const stop = () => {
@@ -34,7 +35,7 @@ export function RouteSearchLoadingScreen({ onFindAnotherRoute }) {
       if (!preferenceChanged) animate(reduced);
     }).catch(() => {});
     return () => { disposed = true; stop(); subscription.remove(); };
-  }, [dots]);
+  }, [animateDots, dots]);
 
   return (
     <View style={styles.screen}>

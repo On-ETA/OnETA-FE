@@ -11,7 +11,11 @@ import { getArrivalNotificationPatch } from "../utils/arrivalNotificationPatch";
 import { getCurrentCoordinate } from "../components/reverseGeocode";
 import { startTransitRefresh } from "../utils/transitRefresh";
 import { getPreferredTransitType, startFirstLastClock } from "../utils/firstLastDisplay";
-import { FCM_NOTIFICATION_TYPES, subscribeNotifications } from "../notifications/events";
+import {
+  FCM_NOTIFICATION_TYPES,
+  getFcmNotificationType,
+  subscribeNotifications,
+} from "../notifications/events";
 import {
   homeCacheKeys,
   readHomeCache,
@@ -32,11 +36,7 @@ import {
   ScheduleAlarmEditScreen,
 } from "./home/custom-alarm/CustomAlarmEditScreen";
 import { GarageDepartureAlarmAddScreen } from "./home/custom-alarm/GarageDepartureAlarmAddScreen";
-import {
-  ScheduleAlarmAddScreen,
-  ScheduleRouteMapStep,
-  ScheduleRouteResultStep,
-} from "./home/custom-alarm/ScheduleAlarmAddScreen";
+import { ScheduleAlarmAddScreen } from "./home/custom-alarm/ScheduleAlarmAddScreen";
 import { FirstLastRouteDetailScreen } from "./home/first-last/FirstLastRouteDetailScreen";
 import { FirstLastRouteScreen } from "./home/first-last/FirstLastRouteScreen";
 import { MyPageScreen } from "./MyPageScreen";
@@ -237,11 +237,6 @@ export function HomeScreen({
   const [isDeletingRoute, setIsDeletingRoute] = useState(false);
   const deletingRouteRef = useRef(false);
   const [isRouteDetailVisible, setIsRouteDetailVisible] = useState(false);
-  const [firstLastRouteSetupStep, setFirstLastRouteSetupStep] = useState(null);
-  const [firstLastRoutePlaces, setFirstLastRoutePlaces] = useState({
-    origin: "마포구 와우산로 94",
-    destination: "우리집",
-  });
   const [isScheduleAlarmAddVisible, setIsScheduleAlarmAddVisible] =
     useState(false);
   const [scheduleAlarmInitialStep, setScheduleAlarmInitialStep] =
@@ -289,7 +284,10 @@ export function HomeScreen({
   useEffect(() => {
     let controller;
     const unsubscribe = subscribeNotifications((message, update) => {
-      if (message?.data?.type !== FCM_NOTIFICATION_TYPES.transit) return;
+      const type = getFcmNotificationType
+        ? getFcmNotificationType(message)
+        : message?.data?.type;
+      if (type !== FCM_NOTIFICATION_TYPES.transit) return;
       controller?.abort();
       controller = new AbortController();
       for (const scheduleType of [TRANSIT_SCHEDULE_TYPES.first, TRANSIT_SCHEDULE_TYPES.last]) {
@@ -332,7 +330,7 @@ export function HomeScreen({
   }, []);
 
   const isFirstLastVisible = isFocused && activeTab === "home" && activeHomeTab === "firstLast"
-    && !isAddressManagerVisible && !isRouteDetailVisible && !firstLastRouteSetupStep
+    && !isAddressManagerVisible && !isRouteDetailVisible
     && !isScheduleAlarmAddVisible && !isGarageDepartureAddVisible && !editingCustomAlarm;
 
   const hasFirstRoute = Boolean(firstLastRouteSummaries[TRANSIT_SCHEDULE_TYPES.first]);
@@ -460,7 +458,6 @@ export function HomeScreen({
     blurActiveElement();
     setIsAddressManagerVisible(false);
     setIsRouteDetailVisible(false);
-    setFirstLastRouteSetupStep(null);
     setIsScheduleAlarmAddVisible(false);
     setScheduleAlarmInitialStep("form");
     setScheduleAlarmInitialValues(null);
@@ -563,6 +560,19 @@ export function HomeScreen({
     setEditingCustomAlarm({ type: "schedule", alarm });
   }, []);
 
+  const handleNightOnlyRouteSelect = useCallback((route, places) => {
+    blurActiveElement();
+    setScheduleAlarmInitialStep("form");
+    setScheduleAlarmInitialValues({
+      selectedRoute: route,
+      routePlaces: {
+        origin: places.originPlace,
+        destination: places.destinationPlace,
+      },
+    });
+    setIsScheduleAlarmAddVisible(true);
+  }, []);
+
   useEffect(() => {
     if (Platform.OS !== "android" || !backHandlingEnabled) {
       return undefined;
@@ -594,18 +604,6 @@ export function HomeScreen({
           return false;
         }
 
-        if (firstLastRouteSetupStep === "result") {
-          blurActiveElement();
-          setFirstLastRouteSetupStep("map");
-          return true;
-        }
-
-        if (firstLastRouteSetupStep === "map") {
-          blurActiveElement();
-          setFirstLastRouteSetupStep(null);
-          return true;
-        }
-
         if (editingCustomAlarm) {
           blurActiveElement();
           setEditingCustomAlarm(null);
@@ -629,7 +627,6 @@ export function HomeScreen({
     activeTab,
     backHandlingEnabled,
     editingCustomAlarm,
-    firstLastRouteSetupStep,
     handleTabPress,
     isAddressManagerVisible,
     isGarageDepartureAddVisible,
@@ -642,10 +639,10 @@ export function HomeScreen({
       <StatusBar style="dark" />
       <SafeAreaView edges={["top", "right", "bottom", "left"]} style={styles.phone}>
         <ScreenTransition routeAware style={styles.content} animateOnMount={false}
-          transitionDepth={firstLastRouteSetupStep === "result" ? 2 : (activeTab === "myPage" || isAddressManagerVisible || isGarageDepartureAddVisible || isScheduleAlarmAddVisible || firstLastRouteSetupStep || editingCustomAlarm || isRouteDetailVisible) ? 1 : 0}
+          transitionDepth={(activeTab === "myPage" || isAddressManagerVisible || isGarageDepartureAddVisible || isScheduleAlarmAddVisible || editingCustomAlarm || isRouteDetailVisible) ? 1 : 0}
           transitionKey={[
           activeTab, isAddressManagerVisible, isGarageDepartureAddVisible,
-          isScheduleAlarmAddVisible, firstLastRouteSetupStep, editingCustomAlarm?.type, isRouteDetailVisible,
+          isScheduleAlarmAddVisible, editingCustomAlarm?.type, isRouteDetailVisible,
         ].join(":")}>
           {activeTab === "myPage" ? (
             <MyPageScreen
@@ -709,57 +706,6 @@ export function HomeScreen({
                     : undefined
                 }
               />
-            ) : firstLastRouteSetupStep === "map" ? (
-              <ScheduleRouteMapStep
-                headerTitle="경로 재설정"
-                onBackPress={() => {
-                  blurActiveElement();
-                  setFirstLastRouteSetupStep(null);
-                }}
-                onConfirm={(places) => {
-                  blurActiveElement();
-                  setFirstLastRoutePlaces(places);
-                  setFirstLastRouteSetupStep("result");
-                }}
-              />
-            ) : firstLastRouteSetupStep === "result" ? (
-              <ScheduleRouteResultStep
-                actionLabel="이 경로로 설정"
-                initialDestination={firstLastRoutePlaces.destination}
-                initialOrigin={firstLastRoutePlaces.origin}
-                scheduleType={activeFirstLastScheduleType}
-                onFindAnotherRoute={() => {
-                  blurActiveElement();
-                  setFirstLastRouteSetupStep(null);
-                  setScheduleAlarmInitialStep("routeSetup");
-                  setScheduleAlarmInitialValues({ routePlaces: firstLastRoutePlaces });
-                  setIsScheduleAlarmAddVisible(true);
-                }}
-                onBackPress={() => {
-                  blurActiveElement();
-                  setFirstLastRouteSetupStep("map");
-                }}
-                onRouteSelect={async (route, places) => {
-                  await saveFirstLastRoute(route, places);
-                  blurActiveElement();
-                  setFirstLastRouteSetupStep(null);
-                }}
-                onNightOnlyRouteSelect={(route, places) => {
-                  blurActiveElement();
-                  setFirstLastRouteSetupStep(null);
-                  // Open the alarm form first so the user can enter the
-                  // route name and desired arrival time before the details.
-                  setScheduleAlarmInitialStep("form");
-                  setScheduleAlarmInitialValues({
-                    selectedRoute: route,
-                    routePlaces: {
-                      origin: places.originPlace,
-                      destination: places.destinationPlace,
-                    },
-                  });
-                  setIsScheduleAlarmAddVisible(true);
-                }}
-              />
             ) : editingCustomAlarm?.type === "schedule" ? (
               <ScheduleAlarmEditScreen
                 key={editingCustomAlarm.alarm.notificationId ?? editingCustomAlarm.alarm.id}
@@ -812,10 +758,8 @@ export function HomeScreen({
               <HomeDashboard
                 activeHomeTab={activeHomeTab}
                 addressLabel={dashboardAddressLabel}
-                notificationCount={notificationCount}
                 customAlarmRefreshKey={customAlarmRefreshKey}
                 onAddressPress={handleAddressPress}
-                onBellPress={onOpenNotifications}
                 onGarageDepartureAddPress={handleGarageDepartureAddPress}
                 onHomeTabPress={setActiveHomeTab}
                 activeFirstLastScheduleType={activeFirstLastScheduleType}
@@ -825,18 +769,7 @@ export function HomeScreen({
                 onRouteSetupPress={handleRouteSetupPress}
                 onRouteDeletePress={handleRouteDeletePress}
                 firstLastRouteSummary={firstLastRouteSummary}
-                onNightOnlyRouteSelect={(route, places) => {
-                  blurActiveElement();
-                  setScheduleAlarmInitialStep("form");
-                  setScheduleAlarmInitialValues({
-                    selectedRoute: route,
-                    routePlaces: {
-                      origin: places.originPlace,
-                      destination: places.destinationPlace,
-                    },
-                  });
-                  setIsScheduleAlarmAddVisible(true);
-                }}
+                onNightOnlyRouteSelect={handleNightOnlyRouteSelect}
                 onScheduleAlarmAddPress={handleScheduleAlarmAddPress}
                 onGarageAlarmEditPress={handleGarageAlarmEditPress}
                 onScheduleAlarmEditPress={handleScheduleAlarmEditPress}
@@ -855,15 +788,12 @@ const HomeDashboard = React.memo(function HomeDashboard({
   activeFirstLastScheduleType,
   addressLabel,
   customAlarmRefreshKey,
-  notificationCount,
   onAddressPress,
-  onBellPress,
   onGarageDepartureAddPress,
   onGarageAlarmEditPress,
   onFirstLastScheduleTypeChange,
   onHomeTabPress,
   onMyPagePress,
-  onFirstLastRouteSetupPress,
   firstLastRouteSummary,
   onRouteDeletePress,
   onRouteDetailPress,
@@ -877,9 +807,7 @@ const HomeDashboard = React.memo(function HomeDashboard({
       <HomeTopSection
         activeTab={activeHomeTab}
         addressLabel={addressLabel}
-        notificationCount={notificationCount}
         onAddressPress={onAddressPress}
-        onBellPress={onBellPress}
         onMyPagePress={onMyPagePress}
         onTabPress={onHomeTabPress}
         showMyPageButton

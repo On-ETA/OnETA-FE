@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -13,21 +13,8 @@ import BackIcon from "../../../../assets/images/L.svg";
 import { DelayedLoading } from "../../../components/DelayedLoading";
 import WalkAsset from "../../../../assets/images/man.svg";
 import SmallBusAsset from "../../../../assets/images/smallbus.svg";
-import BGaIcon from "../../../../assets/bus/b_ga.svg";
-import BJiIcon from "../../../../assets/bus/b_ji.svg";
-import BGwIcon from "../../../../assets/bus/b_gw.svg";
-import BSIcon from "../../../../assets/bus/b_s.svg";
-import BOIcon from "../../../../assets/bus/b_o.svg";
-import S1Icon from "../../../../assets/subway/s_1.svg";
-import S2Icon from "../../../../assets/subway/s_2.svg";
-import S3Icon from "../../../../assets/subway/s_3.svg";
-import S4Icon from "../../../../assets/subway/s_4.svg";
-import S5Icon from "../../../../assets/subway/s_5.svg";
-import S6Icon from "../../../../assets/subway/s_6.svg";
-import S7Icon from "../../../../assets/subway/s_7.svg";
-import S8Icon from "../../../../assets/subway/s_8.svg";
-import S9Icon from "../../../../assets/subway/s_9.svg";
 import SubwayIcon from "../../../../assets/subway/subway_i.svg";
+import { TRANSIT_ICONS } from "../../../components/TransitIcons";
 import {
   getTransitNotification,
   getTransitNotifications,
@@ -41,29 +28,12 @@ import {
 } from "../../../utils/transitColors";
 import { formatDurationMinutes } from "../../../utils/formatDuration";
 
-const DETAIL_TRANSIT_ICONS = {
-  b_ga: BGaIcon,
-  b_ji: BJiIcon,
-  b_gw: BGwIcon,
-  b_s: BSIcon,
-  b_o: BOIcon,
-  s_1: S1Icon,
-  s_2: S2Icon,
-  s_3: S3Icon,
-  s_4: S4Icon,
-  s_5: S5Icon,
-  s_6: S6Icon,
-  s_7: S7Icon,
-  s_8: S8Icon,
-  s_9: S9Icon,
-};
-
 function DetailTransitIcon({ segment, size = 13 }) {
   const colorsForSegment = getTransitColors(segment);
   const iconKey = colorsForSegment.isSubway
     ? getSubwayIconKey(segment)
     : getBusIconKey(segment);
-  const Icon = DETAIL_TRANSIT_ICONS[iconKey];
+  const Icon = TRANSIT_ICONS[iconKey];
 
   return Icon ? <Icon width={size} height={size} /> : <BusIcon size={size} />;
 }
@@ -97,7 +67,22 @@ export function FirstLastRouteDetailScreen({
     route?.params?.id ??
     null;
 
+  const requestRef = useRef(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      requestRef.current?.abort();
+    };
+  }, []);
+
   const loadRouteDetail = useCallback(async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+
     setIsLoading(true);
     setErrorMessage("");
 
@@ -108,11 +93,13 @@ export function FirstLastRouteDetailScreen({
         selectedNotificationId === ""
       ) {
         if (routeSummary?.route || Array.isArray(routeSummary?.segments)) {
-          setRouteDetail(createRouteDetailFromSummary(routeSummary));
+          if (isMountedRef.current && !controller.signal.aborted) {
+            setRouteDetail(createRouteDetailFromSummary(routeSummary));
+          }
           return;
         }
 
-        throw new Error("議고쉶??寃쎈줈 id媛 ?놁뒿?덈떎.");
+        throw new Error("조회할 경로 id가 없습니다.");
       }
 
       /*
@@ -129,11 +116,19 @@ export function FirstLastRouteDetailScreen({
        */
       const selectedNotification = await loadSelectedTransitNotification(
         selectedNotificationId,
+        {
+          scheduleType: routeSummary?.scheduleType,
+          signal: controller.signal,
+        },
       );
+
+      if (!isMountedRef.current || controller.signal.aborted) {
+        return;
+      }
 
       if (!selectedNotification) {
         setRouteDetail(null);
-        setErrorMessage("?대떦 寃쎈줈瑜?李얠쓣 ???놁뒿?덈떎.");
+        setErrorMessage("해당 경로를 찾을 수 없습니다.");
         return;
       }
 
@@ -141,11 +136,15 @@ export function FirstLastRouteDetailScreen({
         createRouteDetail(selectedNotification),
       );
     } catch (error) {
-      console.error("泥ル쭑李?寃쎈줈 ?곸꽭 議고쉶 ?ㅽ뙣:", error);
+      if (!isMountedRef.current || controller.signal.aborted || error?.name === "AbortError") {
+        return;
+      }
+
+      console.error("첫막차 경로 상세 조회 실패:", error);
 
       if (isAuthError(error)) {
         setRouteDetail(null);
-        setErrorMessage("?ㅼ떆 濡쒓렇?명빐二쇱꽭??");
+        setErrorMessage("다시 로그인해주세요.");
 
         if (typeof onLoginRequired === "function") {
           onLoginRequired();
@@ -158,15 +157,20 @@ export function FirstLastRouteDetailScreen({
 
       setErrorMessage(
         error?.message ||
-          "寃쎈줈 ?뺣낫瑜?遺덈윭?ㅼ? 紐삵뻽?듬땲??",
+          "경로 정보를 불러오지 못했습니다.",
       );
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current && !controller.signal.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [selectedNotificationId, routeSummary, onLoginRequired]);
 
   useEffect(() => {
     loadRouteDetail();
+    return () => {
+      requestRef.current?.abort();
+    };
   }, [loadRouteDetail]);
 
   return (
@@ -627,7 +631,7 @@ function ErrorView({
           <Text
             style={styles.retryButtonText}
           >
-            ?ㅼ떆 ?쒕룄
+            다시 시도
           </Text>
         </Pressable>
       )}
@@ -635,16 +639,16 @@ function ErrorView({
   );
 }
 
-async function loadSelectedTransitNotification(notificationId) {
+async function loadSelectedTransitNotification(notificationId, { scheduleType, signal } = {}) {
   try {
-    return await getTransitNotification({ notificationId });
+    return await getTransitNotification({ notificationId, signal });
   } catch (error) {
-    if (isAuthError(error)) {
+    if (error?.name === "AbortError" || isAuthError(error)) {
       throw error;
     }
   }
 
-  const notifications = await getTransitNotifications();
+  const notifications = await getTransitNotifications({ scheduleType, signal });
 
   return notifications.find(
     (item) => String(item.notificationId) === String(notificationId),
@@ -729,7 +733,7 @@ function createRouteDetail(notification) {
   const targetArrivalTime =
     notification?.arrivalTime &&
     notification.arrivalTime !==
-      "?쒓컙 ?뺣낫 ?놁쓬"
+      "시간 정보 없음"
       ? notification.arrivalTime
       : formatTime(
           notification
@@ -812,7 +816,7 @@ function parseRouteDetails(
     return JSON.parse(routeDetails);
   } catch (error) {
     console.warn(
-      "routeDetails ?뚯떛 ?ㅽ뙣:",
+      "routeDetails 파싱 실패:",
       routeDetails,
       error,
     );
@@ -1051,31 +1055,6 @@ function isAuthError(error) {
   );
 }
 
-function WalkIcon({
-  color = colors.white,
-  size = 12,
-}) {
-  return (
-    <Svg
-      height={size}
-      viewBox="0 0 12 12"
-      width={size}
-    >
-      <Circle
-        cx={6}
-        cy={2.2}
-        fill={color}
-        r={1.4}
-      />
-
-      <Path
-        d="M5.4 4.1 3.7 6.1c-.2.2-.2.6.1.8.2.2.6.2.8-.1l.9-1.1.8 1.1-1.3 3c-.1.3 0 .7.3.8.3.1.7 0 .8-.3l1.1-2.5 1.2 1.5c.2.3.6.3.8.1.3-.2.3-.6.1-.8L7.8 6.7 7 4.8l.9.6c.3.2.6.1.8-.1.2-.3.1-.6-.1-.8L7 3.4c-.5-.3-1.1-.1-1.6.7Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
 function BusIcon({ size = 13 }) {
   return (
     <Svg
@@ -1189,55 +1168,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 30,
     color: colors.gray09,
-  },
-
-  statusBadge: {
-    paddingHorizontal: 10,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
-    backgroundColor: colors.sub,
-  },
-
-  statusBadgeDisabled: {
-    backgroundColor: colors.gray03,
-  },
-
-  statusBadgeText: {
-    fontFamily: "SUIT",
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.main,
-  },
-
-  statusBadgeTextDisabled: {
-    color: colors.gray06,
-  },
-
-  arrivalBox: {
-    marginTop: 16,
-    paddingHorizontal: 18,
-    height: 58,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: 12,
-    backgroundColor: colors.gray02,
-  },
-
-  arrivalLabel: {
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.gray07,
-  },
-
-  arrivalTime: {
-    fontFamily: "SUIT",
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.main,
   },
 
   timeline: {
@@ -1610,87 +1540,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: colors.gray07,
-  },
-
-  divider: {
-    height: 8,
-    marginTop: 28,
-    backgroundColor: colors.gray02,
-  },
-
-  infoSection: {
-    paddingHorizontal: 24,
-    paddingTop: 26,
-  },
-
-  sectionTitle: {
-    marginBottom: 14,
-    fontFamily: "SUIT",
-    fontSize: 17,
-    fontWeight: "800",
-    color: colors.gray09,
-  },
-
-  infoCard: {
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: colors.gray03,
-    borderRadius: 14,
-    backgroundColor: colors.white,
-  },
-
-  infoRow: {
-    minHeight: 58,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  infoLabel: {
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.gray07,
-  },
-
-  infoValue: {
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.gray09,
-  },
-
-  infoDivider: {
-    height: 1,
-    backgroundColor: colors.gray03,
-  },
-
-  daysRow: {
-    minHeight: 76,
-    paddingVertical: 14,
-  },
-
-  daysContainer: {
-    marginTop: 10,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-
-  dayBadge: {
-    width: 30,
-    height: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 15,
-    backgroundColor: colors.sub,
-  },
-
-  dayBadgeText: {
-    fontFamily: "SUIT",
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.main,
   },
 
   centerContainer: {

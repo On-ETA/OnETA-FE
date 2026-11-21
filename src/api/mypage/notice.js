@@ -26,7 +26,7 @@
   }
 */
 import { getAccessToken } from "../auth/tokens";
-import { requestJson } from "../client";
+import { requestMyPageJson } from "../mypage.js";
 
 const NOTICES_ENDPOINT = "/api/mypage/notices";
 
@@ -76,7 +76,7 @@ function getNoticeList(response) {
 }
 
 export async function getNotices({ accessToken = getAccessToken(), signal } = {}) {
-  const response = await requestJson({
+  const response = await requestMyPageJson({
     path: NOTICES_ENDPOINT,
     method: "GET",
     accessToken,

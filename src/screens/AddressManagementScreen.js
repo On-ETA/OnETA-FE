@@ -4,6 +4,7 @@ import { ScreenTransition } from "../components/ScreenTransition";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -79,6 +80,7 @@ export function AddressManagementScreen({
   const [editingAddress, setEditingAddress] = useState(null);
   const [searchPurpose, setSearchPurpose] = useState("create");
   const [isRegisteringAddress, setIsRegisteringAddress] = useState(false);
+  const [isUpdatingAddress, setIsUpdatingAddress] = useState(false);
   const [isDeletingAddress, setIsDeletingAddress] = useState(false);
   const [settingCurrentAddressId, setSettingCurrentAddressId] = useState(null);
 
@@ -101,12 +103,16 @@ export function AddressManagementScreen({
           setAddresses([]);
           if (isAuthError(error)) {
             setAddressLoadError("로그인이 필요합니다.");
-            Alert.alert("로그인이 필요합니다", "다시 로그인해 주세요.", [
-              {
-                text: "확인",
-                onPress: onAuthRequired,
-              },
-            ]);
+            if (Platform?.OS === "web") {
+              onAuthRequired?.();
+            } else {
+              Alert.alert("로그인이 필요합니다", "다시 로그인해 주세요.", [
+                {
+                  text: "확인",
+                  onPress: onAuthRequired,
+                },
+              ]);
+            }
           } else {
             setAddressLoadError("주소를 불러오지 못했습니다.");
           }
@@ -171,7 +177,7 @@ export function AddressManagementScreen({
         },
       });
 
-      const nextAddresses = await getAddresses({ forceRefresh: true });
+      const nextAddresses = await getAddresses();
 
       setAddresses(nextAddresses);
       onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
@@ -184,8 +190,8 @@ export function AddressManagementScreen({
   };
 
   const updateAddress = async (alias) => {
-    if (!editingAddress) {
-      setScreenMode("list");
+    if (!editingAddress || isUpdatingAddress) {
+      if (!editingAddress) setScreenMode("list");
       return;
     }
 
@@ -202,6 +208,8 @@ export function AddressManagementScreen({
       return;
     }
 
+    setIsUpdatingAddress(true);
+
     try {
       const response = await updateAddressRequest({
         addressId,
@@ -216,26 +224,24 @@ export function AddressManagementScreen({
         ? normalizeAddress(response.data)
         : null;
 
-      setAddresses((current) => {
-        const nextAddresses = current.map((address) =>
-          getAddressId(address) === addressId
-            ? updatedAddress ?? {
-                ...address,
-                ...editingAddress,
-                name: alias || address.name,
-                detail: nextAddressText,
-                address: nextAddressText,
-              }
-            : address,
-        );
-
-        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
-
-        return nextAddresses;
-      });
+      const nextAddresses = addresses.map((address) =>
+        getAddressId(address) === addressId
+          ? updatedAddress ?? {
+              ...address,
+              ...editingAddress,
+              name: alias || address.name,
+              detail: nextAddressText,
+              address: nextAddressText,
+            }
+          : address,
+      );
+      setAddresses(nextAddresses);
+      onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
       setScreenMode("list");
     } catch (error) {
       Alert.alert("주소 수정 실패", error?.message ?? "주소 수정에 실패했습니다.");
+    } finally {
+      setIsUpdatingAddress(false);
     }
   };
 
@@ -257,6 +263,7 @@ export function AddressManagementScreen({
       return;
     }
 
+    const previousAddresses = addresses;
     const nextAddresses = addresses.filter(
       (item) => getAddressId(item) !== addressId,
     );
@@ -270,8 +277,14 @@ export function AddressManagementScreen({
     setEditingAddress(null);
     setScreenMode("list");
 
+    let deletedOnServer = false;
+
     try {
-      await deleteAddressRequest({ addressId });
+      await deleteAddressRequest({
+        addressId,
+        refresh: !nextCurrentAddress,
+      });
+      deletedOnServer = true;
 
       if (nextCurrentAddress) {
         const nextCurrentAddressId = getAddressId(nextCurrentAddress);
@@ -298,6 +311,14 @@ export function AddressManagementScreen({
       setAddresses(resolvedAddresses);
       onCurrentAddressChange?.(getCurrentAddressLabel(resolvedAddresses));
     } catch (error) {
+      if (deletedOnServer) {
+        const refreshedAddresses = await getAddresses({ forceRefresh: true }).catch(() => nextAddresses);
+        setAddresses(refreshedAddresses);
+        onCurrentAddressChange?.(getCurrentAddressLabel(refreshedAddresses));
+      } else {
+        setAddresses(previousAddresses);
+        onCurrentAddressChange?.(getCurrentAddressLabel(previousAddresses));
+      }
       Alert.alert("주소 삭제 실패", error?.message ?? "주소 삭제에 실패했습니다.");
     } finally {
       setIsDeletingAddress(false);
@@ -319,31 +340,27 @@ export function AddressManagementScreen({
         ? normalizeAddress(response.data)
         : null;
 
-      setAddresses((current) => {
-        const nextAddresses = current.map((item) => {
-          const itemAddressId = getAddressId(item);
-          const isSelectedAddress = itemAddressId === addressId;
+      const nextAddresses = addresses.map((item) => {
+        const itemAddressId = getAddressId(item);
+        const isSelectedAddress = itemAddressId === addressId;
 
-          if (!isSelectedAddress) {
-            return {
-              ...item,
-              current: false,
-              isCurrent: false,
-            };
-          }
-
+        if (!isSelectedAddress) {
           return {
             ...item,
-            ...(changedAddress ?? {}),
-            current: true,
-            isCurrent: true,
+            current: false,
+            isCurrent: false,
           };
-        });
+        }
 
-        onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
-
-        return nextAddresses;
+        return {
+          ...item,
+          ...(changedAddress ?? {}),
+          current: true,
+          isCurrent: true,
+        };
       });
+      setAddresses(nextAddresses);
+      onCurrentAddressChange?.(getCurrentAddressLabel(nextAddresses));
     } catch (error) {
       Alert.alert(
         "현재 주소 설정 실패",
@@ -412,6 +429,7 @@ export function AddressManagementScreen({
         buttonLabel="저장"
         initialAlias={editingAddress?.name ?? ""}
         isDeleting={isDeletingAddress}
+        isSubmitting={isUpdatingAddress}
         onBackPress={handleBackPress}
         onChangeAddress={() => {
           setSearchPurpose("edit");
@@ -508,7 +526,12 @@ function AddressSearchScreen({ onBackPress, onResultPress }) {
             <CloseIcon />
           </Pressable>
         </View>
-        <View style={styles.resultList}>
+        <ScrollView
+          contentContainerStyle={styles.resultList}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
+          style={{ flex: 1 }}
+        >
           {isSearching ? (
             <Text style={styles.searchStatusText}>주소를 검색하는 중입니다.</Text>
           ) : searchError ? (
@@ -527,7 +550,7 @@ function AddressSearchScreen({ onBackPress, onResultPress }) {
               <Text style={styles.resultAddress}>{result.roadAddress}</Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -547,8 +570,8 @@ function AddressFormScreen({
 }) {
   const [alias, setAlias] = useState(initialAlias);
   const selectedAddress = {
-    name: address?.name || "홍익대학교 제2기숙사",
-    detail: address?.detail || DEFAULT_ADDRESS_DETAIL,
+    name: address?.name || address?.detail || "",
+    detail: address?.detail || address?.address || "",
   };
 
   return (

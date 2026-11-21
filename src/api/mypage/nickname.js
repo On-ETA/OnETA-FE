@@ -92,8 +92,8 @@
 }
 ```
 */
-import { getAccessToken } from "../auth/tokens";
-import { requestJson } from "../client";
+import { getAccessToken, getAuthSessionId } from "../auth/tokens";
+import { requestMyPageJson } from "../mypage.js";
 import { homeCacheKeys, readHomeCache, writeHomeCache } from "../homeCache";
 
 const NICKNAME_ENDPOINT = "/api/mypage/nickname";
@@ -137,7 +137,8 @@ export async function changeNickname({
     throw error;
   }
 
-  const response = await requestJson({
+  const sessionId = getAuthSessionId?.();
+  const response = await requestMyPageJson({
     path: NICKNAME_ENDPOINT,
     method: "PATCH",
     body: {
@@ -148,13 +149,15 @@ export async function changeNickname({
     errorMessage: "닉네임 변경에 실패했습니다.",
   });
 
-  const cachedMyPage = readHomeCache(homeCacheKeys.myPage);
+  if (sessionId === getAuthSessionId?.()) {
+    const cachedMyPage = readHomeCache(homeCacheKeys.myPage);
 
-  if (cachedMyPage) {
-    writeHomeCache(homeCacheKeys.myPage, {
-      ...cachedMyPage,
-      nickname: trimmedNickname,
-    });
+    if (cachedMyPage) {
+      writeHomeCache(homeCacheKeys.myPage, {
+        ...cachedMyPage,
+        nickname: trimmedNickname,
+      });
+    }
   }
 
   return response;

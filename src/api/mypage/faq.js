@@ -1,5 +1,5 @@
 import { getAccessToken } from "../auth/tokens";
-import { requestJson } from "../client";
+import { requestMyPageJson } from "../mypage.js";
 
 const FAQS_ENDPOINT = "/api/mypage/faqs";
 
@@ -13,7 +13,7 @@ export function normalizeFaq(faq) {
 }
 
 export async function getFaqs({ accessToken = getAccessToken(), signal } = {}) {
-  const response = await requestJson({
+  const response = await requestMyPageJson({
     path: FAQS_ENDPOINT,
     method: "GET",
     accessToken,

@@ -220,3 +220,32 @@ test('withdrawal completion appears only after a successful delete response', as
   const tree = f.render();
   assert.ok(content(findNode(tree, node => node.type === 'Modal' && node.props.visible)).includes(completeLabel));
 });
+
+test('pressing my page on home navigates via onTabPress without throwing', () => {
+  const h = hooks();
+  h.react.memo = component => component;
+  h.react.useCallback = fn => fn;
+  const exports = {};
+  const { code } = babel.transformSync(fs.readFileSync(path.join(__dirname, '../src/screens/HomeScreen.js'), 'utf8'), {
+    configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs', '@babel/plugin-transform-react-jsx'],
+  });
+  const tabs = [];
+  const mocks = {
+    react: h.react,
+    'react-native': { Platform: { OS: 'android', select: options => options.android ?? options.default }, StyleSheet: { create: value => value }, AppState: { currentState: 'active' } },
+    '../theme': { colors: {}, layout: {} },
+    '../utils/accessibility': { blurActiveElement() {} },
+    '../utils/firstLastDisplay': { getPreferredTransitType: () => 'FIRST_TRANSIT', startFirstLastClock: () => () => {} },
+    '../utils/transitRefresh': { startTransitRefresh: () => () => {} },
+    '../api/addresses': { getAddresses: async () => [] },
+    '../notifications/events': { FCM_NOTIFICATION_TYPES: {}, subscribeNotifications: () => () => {} },
+    '../api/homeCache': { homeCacheKeys: {}, readHomeCache: () => null },
+    '../api/notifications/transit': { TRANSIT_SCHEDULE_TYPES: { first: 'FIRST_TRANSIT', last: 'LAST_TRANSIT' }, getTransitNotifications: async () => [] },
+  };
+  vm.runInNewContext(code, { exports, AbortController, require: name => mocks[name] ?? {} });
+  const tree = h.render(exports.HomeScreen, { onTabPress: tab => { tabs.push(tab); return true; } });
+  const dashboard = findNode(tree, node => typeof node.props?.onMyPagePress === 'function');
+  assert.ok(dashboard);
+  dashboard.props.onMyPagePress();
+  assert.deepEqual(tabs, ['myPage']);
+});

@@ -1,4 +1,4 @@
-import { getAccessToken } from "../auth/tokens";
+import { getAccessToken, getAuthSessionId } from "../auth/tokens";
 import { reissueAuthTokens } from "../auth/reissue";
 import { requestJson } from "../client";
 import {
@@ -28,6 +28,10 @@ function toQueryString(params = {}) {
 }
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -67,24 +71,31 @@ async function requestTransitRouteJson(options) {
       throw error;
     }
 
+    let nextAccessToken;
+
     try {
       const { accessToken } = await reissueAuthTokens({
         signal: options.signal,
       });
-      const response = await requestJson({
-        ...options,
-        accessToken,
-      });
-      const businessError = createBusinessError(response, fallbackMessage);
-
-      if (businessError) {
-        throw businessError;
+      nextAccessToken = accessToken;
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
       }
-
-      return response;
-    } catch {
       throw error;
     }
+
+    const response = await requestJson({
+      ...options,
+      accessToken: nextAccessToken,
+    });
+    const businessError = createBusinessError(response, fallbackMessage);
+
+    if (businessError) {
+      throw businessError;
+    }
+
+    return response;
   }
 }
 
@@ -195,6 +206,7 @@ async function searchRoutes(endpoint, cacheTtlMs, {
     ...params,
     scheduleType: scheduleType ?? params?.scheduleType,
   };
+  const sessionId = getAuthSessionId?.();
   const queryString = toQueryString(queryParams);
   const requestPath = `${endpoint}${queryString}`;
 
@@ -229,6 +241,10 @@ async function searchRoutes(endpoint, cacheTtlMs, {
   const normalizedRoutes = Array.isArray(routes)
     ? routes.map(normalizeTransitRoute)
     : [];
+
+  if (signal?.aborted || sessionId !== getAuthSessionId?.()) {
+    return normalizedRoutes;
+  }
 
   const cachedSearches = await readHomeCacheAsync(
     homeCacheKeys.transitRouteSearch,

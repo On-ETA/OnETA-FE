@@ -1,4 +1,4 @@
-import { getAccessToken } from "./auth/tokens";
+import { getAccessToken, getAuthSessionId } from "./auth/tokens";
 import { reissueAuthTokens } from "./auth/reissue";
 import { requestJson } from "./client";
 import {
@@ -27,6 +27,10 @@ function compactPayload(payload) {
 }
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -65,24 +69,31 @@ async function requestAddressJson(options) {
       throw error;
     }
 
+    let nextAccessToken;
+
     try {
       const { accessToken } = await reissueAuthTokens({
         signal: options.signal,
       });
-      const response = await requestJson({
-        ...options,
-        accessToken,
-      });
-      const businessError = createBusinessError(response, fallbackMessage);
-
-      if (businessError) {
-        throw businessError;
+      nextAccessToken = accessToken;
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
       }
-
-      return response;
-    } catch {
       throw error;
     }
+
+    const response = await requestJson({
+      ...options,
+      accessToken: nextAccessToken,
+    });
+    const businessError = createBusinessError(response, fallbackMessage);
+
+    if (businessError) {
+      throw businessError;
+    }
+
+    return response;
   }
 }
 
@@ -117,6 +128,7 @@ export async function getAddresses({
   forceRefresh = false,
   signal,
 } = {}) {
+  const sessionId = getAuthSessionId?.();
   if (!forceRefresh) {
     const cachedAddresses = readHomeCache(homeCacheKeys.addresses);
 
@@ -134,11 +146,13 @@ export async function getAddresses({
   });
 
   const addresses = Array.isArray(response?.data) ? response.data : response;
+  const normalized = Array.isArray(addresses) ? addresses.map(normalizeAddress) : [];
 
-  return writeHomeCache(
-    homeCacheKeys.addresses,
-    Array.isArray(addresses) ? addresses.map(normalizeAddress) : [],
-  );
+  if (signal?.aborted || sessionId !== getAuthSessionId?.()) {
+    return normalized;
+  }
+
+  return writeHomeCache(homeCacheKeys.addresses, normalized);
 }
 
 export async function createAddress({
@@ -150,6 +164,7 @@ export async function createAddress({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
+  const sessionId = getAuthSessionId?.();
   const response = await requestAddressJson({
     path: ADDRESSES_ENDPOINT,
     method: "POST",
@@ -164,8 +179,14 @@ export async function createAddress({
     errorMessage: "주소 등록에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.addresses);
-  await getAddresses({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  if (sessionId === getAuthSessionId?.()) {
+    removeHomeCache(homeCacheKeys.addresses);
+    await getAddresses({
+      accessToken: getAccessToken() ?? accessToken,
+      forceRefresh: true,
+      signal,
+    }).catch(() => null);
+  }
 
   return response;
 }
@@ -184,6 +205,7 @@ export async function updateAddress({
     throw new Error("주소 id가 필요합니다.");
   }
 
+  const sessionId = getAuthSessionId?.();
   const response = await requestAddressJson({
     path: buildAddressEndpoint(addressId),
     method: "PATCH",
@@ -198,8 +220,14 @@ export async function updateAddress({
     errorMessage: "주소 수정에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.addresses);
-  await getAddresses({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  if (sessionId === getAuthSessionId?.()) {
+    removeHomeCache(homeCacheKeys.addresses);
+    await getAddresses({
+      accessToken: getAccessToken() ?? accessToken,
+      forceRefresh: true,
+      signal,
+    }).catch(() => null);
+  }
 
   return response;
 }
@@ -207,12 +235,14 @@ export async function updateAddress({
 export async function deleteAddress({
   addressId,
   accessToken = getAccessToken(),
+  refresh = true,
   signal,
 } = {}) {
   if (addressId === undefined || addressId === null || addressId === "") {
     throw new Error("주소 id가 필요합니다.");
   }
 
+  const sessionId = getAuthSessionId?.();
   const response = await requestAddressJson({
     path: buildAddressEndpoint(addressId),
     method: "DELETE",
@@ -221,8 +251,16 @@ export async function deleteAddress({
     errorMessage: "주소 삭제에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.addresses);
-  await getAddresses({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  if (sessionId === getAuthSessionId?.()) {
+    removeHomeCache(homeCacheKeys.addresses);
+    if (refresh) {
+      await getAddresses({
+        accessToken: getAccessToken() ?? accessToken,
+        forceRefresh: true,
+        signal,
+      }).catch(() => null);
+    }
+  }
 
   return response;
 }
@@ -236,6 +274,7 @@ export async function setCurrentAddress({
     throw new Error("주소 id가 필요합니다.");
   }
 
+  const sessionId = getAuthSessionId?.();
   const response = await requestAddressJson({
     path: buildCurrentAddressEndpoint(addressId),
     method: "PUT",
@@ -244,8 +283,14 @@ export async function setCurrentAddress({
     errorMessage: "현재 주소 설정에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.addresses);
-  await getAddresses({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  if (sessionId === getAuthSessionId?.()) {
+    removeHomeCache(homeCacheKeys.addresses);
+    await getAddresses({
+      accessToken: getAccessToken() ?? accessToken,
+      forceRefresh: true,
+      signal,
+    }).catch(() => null);
+  }
 
   return response;
 }

@@ -9,6 +9,14 @@ import { colors, typography } from "../theme";
 
 let naverMapsScriptPromise = null;
 let naverMapIdSeed = 0;
+let nativeNaverMapModule = null;
+
+function getNativeNaverMapModule() {
+  if (!nativeNaverMapModule) {
+    nativeNaverMapModule = require("@mj-studio/react-native-naver-map");
+  }
+  return nativeNaverMapModule;
+}
 
 function loadNaverMapsScript(clientId) {
   if (typeof document === "undefined") {
@@ -62,6 +70,14 @@ export function preloadNaverMap() {
   return loadNaverMapsScript(NAVER_MAP_CLIENT_ID);
 }
 
+function toFiniteNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return NaN;
+  }
+  const num = Number(value);
+  return Number.isFinite(num) ? num : NaN;
+}
+
 function normalizeMarkers(
   markers,
   center,
@@ -70,8 +86,8 @@ function normalizeMarkers(
   const normalizedMarkers = Array.isArray(markers)
     ? markers
         .map((marker) => ({
-          latitude: Number(marker?.latitude),
-          longitude: Number(marker?.longitude),
+          latitude: toFiniteNumber(marker?.latitude),
+          longitude: toFiniteNumber(marker?.longitude),
         }))
         .filter(
           (marker) =>
@@ -292,8 +308,6 @@ function WebNaverMapView({
         marker.setMap?.(null);
       });
       markerRefs.current = [];
-      mapRef.current = null;
-      mapsRef.current = null;
       if (readyListener && globalThis.naver?.maps?.Event) {
         globalThis.naver.maps.Event.removeListener(readyListener);
       }
@@ -314,6 +328,17 @@ function WebNaverMapView({
         globalThis.naver.maps.Event.removeListener(
           idleListener,
         );
+      }
+
+      const currentMap = mapRef.current;
+      mapRef.current = null;
+      mapsRef.current = null;
+      if (currentMap?.destroy) {
+        try {
+          currentMap.destroy();
+        } catch {
+          // Ignore teardown errors from already-detached map containers.
+        }
       }
     };
   }, [clientId, mapId]);
@@ -418,7 +443,7 @@ function NativeNaverMap({
   const {
     NaverMapMarkerOverlay,
     NaverMapView: NativeNaverMapView,
-  } = require("@mj-studio/react-native-naver-map");
+  } = getNativeNaverMapModule();
 
   const markerPositions = useMemo(
     () =>
@@ -436,7 +461,7 @@ function NativeNaverMap({
     zoom: level,
   }), [center.latitude, center.longitude, level]);
 
-  const handleTapMap = (event) => {
+  const handleTapMap = useMemo(() => (event) => {
     /*
      * @mj-studio/react-native-naver-map에서는
      * 일반적으로 latitude / longitude를 전달.
@@ -471,9 +496,9 @@ function NativeNaverMap({
       latitude,
       longitude,
     });
-  };
+  }, [onMapPress]);
 
-  const handleCameraIdle = (event) => {
+  const handleCameraIdle = useMemo(() => (event) => {
     const latitude = Number(
       event?.latitude ??
         event?.coord?.latitude ??
@@ -498,7 +523,7 @@ function NativeNaverMap({
       longitude,
       zoom: event?.zoom ?? event?.camera?.zoom,
     });
-  };
+  }, [onCameraIdle]);
 
   return (
     <NativeNaverMapView

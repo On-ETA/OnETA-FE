@@ -31,7 +31,10 @@ function AppEntry({ isHeadless }) {
     if (Platform.OS === "ios") {
       isHeadlessLaunch().then((headless) => {
         if (mounted && !headless) setReady(true);
-      }).catch((error) => console.warn("[FCM] Headless check failed", error?.code));
+      }).catch((error) => {
+        console.warn("[FCM] Headless check failed", error?.code);
+        if (mounted) setReady(true);
+      });
     }
     return () => { mounted = false; subscription.remove(); };
   }, []);

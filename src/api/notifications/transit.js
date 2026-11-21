@@ -52,6 +52,10 @@ async function writeTransitNotificationsCache(scheduleType, notifications) {
 }
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -98,7 +102,10 @@ async function requestTransitNotificationJson(options) {
         signal: options.signal,
       });
       nextAccessToken = accessToken;
-    } catch {
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
+      }
       throw error;
     }
 
@@ -301,6 +308,7 @@ export async function createTransitNotification({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
+  const sessionId = getAuthSessionId?.();
   const requestBody = {
     reminderOffsetMinutes: Array.isArray(payload?.reminderOffsetMinutes)
       ? payload.reminderOffsetMinutes
@@ -323,12 +331,15 @@ export async function createTransitNotification({
 
   const notification = response?.data ?? response;
 
-  await getTransitNotifications({
-    accessToken,
-    forceRefresh: true,
-    scheduleType: requestBody.scheduleType,
-    signal,
-  }).catch(() => null);
+  if (sessionId === getAuthSessionId?.()) {
+    removeHomeCache(getTransitNotificationsCacheKey(requestBody.scheduleType));
+    await getTransitNotifications({
+      accessToken: getAccessToken() ?? accessToken,
+      forceRefresh: true,
+      scheduleType: requestBody.scheduleType,
+      signal,
+    }).catch(() => null);
+  }
 
   return notification;
 }
@@ -342,6 +353,7 @@ export async function deleteTransitNotification({
     throw new Error("삭제할 첫차·막차 경로 id가 필요합니다.");
   }
 
+  const sessionId = getAuthSessionId?.();
   const response = await requestTransitNotificationJson({
     path: buildTransitNotificationEndpoint(notificationId),
     method: "DELETE",
@@ -350,8 +362,12 @@ export async function deleteTransitNotification({
     errorMessage: "첫차·막차 경로 삭제에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.firstTransitNotifications);
-  removeHomeCache(homeCacheKeys.lastTransitNotifications);
+  if (sessionId === getAuthSessionId?.()) {
+    for (const key of [homeCacheKeys.firstTransitNotifications, homeCacheKeys.lastTransitNotifications]) {
+      transitListRequestIds.set(key, (transitListRequestIds.get(key) ?? 0) + 1);
+      removeHomeCache(key);
+    }
+  }
 
   return response;
 }

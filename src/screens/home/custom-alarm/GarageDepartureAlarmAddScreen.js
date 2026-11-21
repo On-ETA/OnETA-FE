@@ -1,5 +1,5 @@
 import { ScreenTransition } from "../../../components/ScreenTransition";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Platform,
@@ -21,41 +21,6 @@ import {
 } from "../../../api/busRoutes";
 import { createDepotNotification } from "../../../api/notifications/depot";
 import { colors, typography } from "../../../theme";
-
-function createDirection({ id, title, departurePoint }) {
-  return {
-    id,
-    title,
-    description: `${departurePoint} 정류장에서 출고 시 1회 알림`,
-  };
-}
-
-function normalizeGarageBusResult(route) {
-  const routeId = route.routeId;
-  const routeName = route.routeName || route.routeNm || "";
-  const startPoint = route.startPoint || "기점";
-  const endPoint = route.endPoint || "종점";
-
-  return {
-    id: routeId,
-    routeId,
-    name: `${routeName}번`,
-    interval: route.term ? `${route.term}분` : "정보 없음",
-    route: `${startPoint} - ${endPoint}`,
-    directions: [
-      createDirection({
-        id: `${routeId}-to-end`,
-        title: `${endPoint} 방면`,
-        departurePoint: startPoint,
-      }),
-      createDirection({
-        id: `${routeId}-to-start`,
-        title: `${startPoint} 방면`,
-        departurePoint: endPoint,
-      }),
-    ],
-  };
-}
 
 function formatBusInterval(interval) {
   if (interval === undefined || interval === null || interval === "") {
@@ -115,12 +80,24 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
   const [searchErrorMessage, setSearchErrorMessage] = useState("");
   const [loadingDirectionRouteId, setLoadingDirectionRouteId] = useState(null);
   const [isSubmittingAlarm, setIsSubmittingAlarm] = useState(false);
+  const directionRequestRef = useRef(null);
+  const isMountedRef = useRef(true);
   const isDirectionStep = Boolean(selectedBus);
   const trimmedSearchText = searchText.trim();
   const hasSearchText = trimmedSearchText.length > 0;
-  const selectedDirection = selectedBus?.directions.find(
-    (direction) => direction.id === selectedDirectionId,
-  );
+  const selectedDirection = Array.isArray(selectedBus?.directions)
+    ? selectedBus.directions.find(
+        (direction) => direction.id === selectedDirectionId,
+      )
+    : undefined;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      directionRequestRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!hasSearchText) {
@@ -228,14 +205,27 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
       return;
     }
 
+    directionRequestRef.current?.abort();
+    const controller = new AbortController();
+    directionRequestRef.current = controller;
     setLoadingDirectionRouteId(routeId);
 
     try {
-      const busWithDirections = await getBusRouteDirections({ routeId });
+      const busWithDirections = await getBusRouteDirections({
+        routeId,
+        signal: controller.signal,
+      });
+
+      if (!isMountedRef.current || controller.signal.aborted) {
+        return;
+      }
 
       setSelectedBus({
         ...bus,
         ...busWithDirections,
+        directions: Array.isArray(busWithDirections?.directions)
+          ? busWithDirections.directions
+          : [],
         id: bus.id,
         routeId,
         name: busWithDirections.name || bus.name,
@@ -244,12 +234,17 @@ export function GarageDepartureAlarmAddScreen({ onBackPress }) {
       });
       setSelectedDirectionId(null);
     } catch (error) {
+      if (!isMountedRef.current || controller.signal.aborted || error?.name === "AbortError") {
+        return;
+      }
       Alert.alert(
         "버스 방향 조회 실패",
         error?.message ?? "버스 방향 정보를 불러오지 못했습니다.",
       );
     } finally {
-      setLoadingDirectionRouteId(null);
+      if (isMountedRef.current && directionRequestRef.current === controller) {
+        setLoadingDirectionRouteId(null);
+      }
     }
   };
 
@@ -385,7 +380,7 @@ function BusDirectionStep({
           contentContainerStyle={styles.directionList}
           showsVerticalScrollIndicator
         >
-          {bus.directions.map((direction) => {
+          {(Array.isArray(bus?.directions) ? bus.directions : []).map((direction) => {
             const selected = selectedDirectionId === direction.id;
 
             return (
@@ -584,15 +579,6 @@ const styles = StyleSheet.create({
     lineHeight: 16.8,
     letterSpacing: -0.12,
     color: colors.gray07,
-  },
-  resultStatus: {
-    minHeight: 96,
-    marginTop: 24,
-    justifyContent: "center",
-  },
-  resultStatusText: {
-    ...typography.body03M,
-    color: colors.gray06,
   },
   directionStep: {
     flex: 1,

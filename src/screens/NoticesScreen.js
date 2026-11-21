@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { getNotices } from "../api/mypage/notice";
 import { AppScreen, Header } from "../components";
@@ -35,25 +35,27 @@ export function NoticesScreen({
       };
     }
 
+    const controller = new AbortController();
+
     async function loadNotices() {
       setIsLoading(true);
       setErrorMessage("");
 
       try {
-        const data = await getNotices();
+        const data = await getNotices({ signal: controller.signal });
 
-        if (isActive) {
+        if (isActive && !controller.signal.aborted) {
           setNoticeItems(data);
         }
       } catch (error) {
-        if (isActive) {
+        if (isActive && !controller.signal.aborted && error?.name !== "AbortError") {
           setNoticeItems(DEFAULT_NOTICE_ITEMS);
           setErrorMessage(
             error?.message ?? "공지사항 목록을 불러오지 못했습니다.",
           );
         }
       } finally {
-        if (isActive) {
+        if (isActive && !controller.signal.aborted) {
           setIsLoading(false);
         }
       }
@@ -63,6 +65,7 @@ export function NoticesScreen({
 
     return () => {
       isActive = false;
+      controller.abort();
     };
   }, [notices]);
 
@@ -71,7 +74,10 @@ export function NoticesScreen({
       <View style={styles.container}>
         <Header topSpacerStyle={{ height: 0 }} type="back" title="공지사항" onBackPress={onBackPress} />
 
-        <View style={styles.list}>
+        <ScrollView
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator
+        >
           {isLoading ? (
             <Text style={styles.stateText}>공지사항을 불러오는 중입니다.</Text>
           ) : errorMessage ? (
@@ -93,7 +99,7 @@ export function NoticesScreen({
               </Pressable>
             ))
           )}
-        </View>
+        </ScrollView>
       </View>
     </AppScreen>
   );

@@ -9,7 +9,6 @@ import {
 import {
   clearHomeCacheAsync,
   homeCacheKeys,
-  readHomeCache,
   readHomeCacheAsync,
 } from "./homeCache";
 
@@ -36,14 +35,6 @@ async function hasRequiredPreloadCache() {
   return cachedValues.every((value) => value !== CACHE_MISS);
 }
 
-export function getCachedFirstLastRoute() {
-  return readHomeCache(homeCacheKeys.firstLastRoute, null);
-}
-
-export function getCachedFirstLastRouteAsync() {
-  return readHomeCacheAsync(homeCacheKeys.firstLastRoute, null);
-}
-
 export async function cancelHomePreload() {
   preloadController?.abort();
   await preloadPromise?.catch(() => null);
@@ -56,6 +47,10 @@ export async function preloadHomeCache({ reset = false, signal } = {}) {
 
   if (preloadPromise && reset) {
     await cancelHomePreload();
+  }
+
+  if (preloadPromise && !reset) {
+    return preloadPromise;
   }
 
   const controller = new AbortController();
@@ -71,8 +66,6 @@ export async function preloadHomeCache({ reset = false, signal } = {}) {
       return;
     }
 
-    if (controller.signal.aborted) return;
-    await getCachedFirstLastRouteAsync();
     if (controller.signal.aborted) return;
     const results = await Promise.allSettled([
       getAddresses({ forceRefresh: true, signal: controller.signal }),
@@ -94,8 +87,10 @@ export async function preloadHomeCache({ reset = false, signal } = {}) {
     if (failure) throw failure.reason;
   })().finally(() => {
     signal?.removeEventListener("abort", onAbort);
-    preloadController = null;
-    preloadPromise = null;
+    if (preloadController === controller) {
+      preloadController = null;
+      preloadPromise = null;
+    }
   });
 
   return preloadPromise;

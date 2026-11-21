@@ -127,6 +127,7 @@ test('native reverse geocoding rejects missing and administrative-only addresses
       reverseGeocodeAsync: async () => results,
     },
     '../utils/currentLocationRequest': { createCurrentLocationRequest: () => ({}) },
+    '../utils/roadAddress': road,
   });
   const coordinate = { latitude: 37.5666, longitude: 126.9784 };
   for (const empty of [[], [{ region: '서울특별시', city: '중구', name: '중구' }]]) {
@@ -137,6 +138,10 @@ test('native reverse geocoding rejects missing and administrative-only addresses
   assert.equal((await api.reverseGeocode(coordinate)).address, address);
   results = [{ region: '서울특별시', city: '중구', district: '태평로1가', name: '31' }];
   assert.equal((await api.reverseGeocode(coordinate)).address, '서울특별시 중구 태평로1가 31');
+  results = [{ street: '태평로1가', formattedAddress: `대한민국 ${address}`, name: '31' }];
+  assert.equal((await api.reverseGeocode(coordinate)).roadAddress, address);
+  results = [{ city: '화성시', street: null, streetNumber: null, name: '동탄고등학교', formattedAddress: '대한민국 화성시 동탄고등학교' }];
+  await assert.rejects(api.reverseGeocode(coordinate), /주소/);
 });
 
 test('web reverse geocoding rejects empty address responses and keeps parcel-only addresses', async () => {
@@ -156,6 +161,52 @@ test('web reverse geocoding rejects empty address responses and keeps parcel-onl
   }
   response = { v2: { address: { jibunAddress: '서울특별시 중구 태평로1가 31' } } };
   assert.equal((await api.reverseGeocode(coordinate)).address, response.v2.address.jibunAddress);
+  response = { v2: { address: { roadAddress: '   ', jibunAddress: '서울특별시 중구 태평로1가 31' } } };
+  assert.equal((await api.reverseGeocode(coordinate)).address, '서울특별시 중구 태평로1가 31');
+  response = {
+    v2: {
+      address: {},
+      results: [
+        {
+          name: 'roadaddr',
+          region: { area1: { name: '경기도' }, area2: { name: '군포시' }, area3: { name: '산본동' } },
+          land: { name: '청백리길', number1: '6', number2: '' },
+        },
+      ],
+    },
+  };
+  assert.equal((await api.reverseGeocode(coordinate)).address, '경기도 군포시 청백리길 6');
+  response = {
+    v2: {
+      address: {},
+      results: [{ name: 'admcode', region: { area1: { name: '경기도' }, area2: { name: '군포시' } } }],
+    },
+  };
+  await assert.rejects(api.reverseGeocode(coordinate), /주소/);
   status = 'ERROR';
   await assert.rejects(api.reverseGeocode(coordinate), /주소/);
+});
+
+test('web reverse geocoding waits for async geocoder submodule initialization after maps preload', async () => {
+  const naver = {
+    maps: {
+      LatLng: class {},
+      jsContentLoaded: false,
+    },
+  };
+  const api = load('src/components/reverseGeocode.web.js', {
+    './NaverMapView': { preloadNaverMap: async () => {} },
+    '../utils/currentLocationRequest': { createCurrentLocationRequest: () => ({}) },
+  }, { naver });
+  const pending = api.reverseGeocode({ latitude: 37.361, longitude: 126.935 });
+  await new Promise(setImmediate);
+  naver.maps.Service = {
+    Status: { OK: 'OK' },
+    OrderType: { ROAD_ADDR: 'roadaddr', ADDR: 'addr' },
+    reverseGeocode: (_, callback) => callback('OK', { v2: { address: { roadAddress: '경기도 군포시 청백리길 6' } } }),
+  };
+  naver.maps.jsContentLoaded = true;
+  naver.maps.onJSContentLoaded?.();
+  const found = await pending;
+  assert.equal(found.roadAddress, '경기도 군포시 청백리길 6');
 });

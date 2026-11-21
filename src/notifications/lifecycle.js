@@ -149,7 +149,7 @@ export function startFcm({ onForegroundMessage, onNotificationOpen, onSessionEnd
 
   const unsubscribeMessage = listenForegroundMessage((message) => {
     fcmDiag("foreground message received", { messageId: message?.messageId ?? null });
-    if (disposed || !getAccessToken() || !firstDelivery(seenMessages, message)) return;
+    if (disposed || !message || !getAccessToken() || !firstDelivery(seenMessages, message)) return;
     invalidateNotifications(message);
     if (isActive()) onForegroundMessage(message);
   });

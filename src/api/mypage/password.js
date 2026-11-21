@@ -88,7 +88,7 @@
  }
 */
 import { getAccessToken } from "../auth/tokens";
-import { requestJson } from "../client";
+import { requestMyPageJson } from "../mypage.js";
 
 const PASSWORD_ENDPOINT = "/api/mypage/password";
 
@@ -132,7 +132,7 @@ export async function changePassword({
 
   const body = { currentPassword, newPassword, newPasswordConfirm };
 
-  const response = await requestJson({
+  const response = await requestMyPageJson({
     path: PASSWORD_ENDPOINT,
     method: "PATCH",
     body,

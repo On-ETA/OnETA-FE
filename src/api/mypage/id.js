@@ -28,7 +28,7 @@
   }
 */
 import { getAccessToken } from "../auth/tokens";
-import { requestJson } from "../client";
+import { requestMyPageJson } from "../mypage.js";
 import { normalizeNotice } from "./notice";
 
 function buildNoticeDetailEndpoint(id) {
@@ -55,7 +55,7 @@ export async function getNoticeById({
     throw new Error("공지사항 id가 필요합니다.");
   }
 
-  const response = await requestJson({
+  const response = await requestMyPageJson({
     path: buildNoticeDetailEndpoint(id),
     method: "GET",
     accessToken,

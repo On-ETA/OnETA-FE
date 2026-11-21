@@ -125,7 +125,11 @@ export function LoginScreen({
     const oauthErrorMessage = consumeCookie(OAUTH_AUTH_ERROR_COOKIE);
 
     if (oauthErrorMessage) {
-      Alert.alert("소셜 로그인", oauthErrorMessage);
+      if (Platform.OS === "web") {
+        setLoginError(oauthErrorMessage);
+      } else {
+        Alert.alert("소셜 로그인", oauthErrorMessage);
+      }
     }
   }, []);
 
@@ -339,7 +343,10 @@ function getLoginErrorMessage(error) {
   const fieldErrors = error?.data?.data;
 
   if (fieldErrors && typeof fieldErrors === "object") {
-    return Object.values(fieldErrors).find(Boolean) ?? "로그인에 실패했습니다.";
+    const fieldMessage = Object.values(fieldErrors).find(
+      (value) => typeof value === "string" && value.trim().length > 0,
+    );
+    if (fieldMessage) return fieldMessage;
   }
 
   return error?.message ?? "로그인에 실패했습니다. 다시 시도해 주세요.";

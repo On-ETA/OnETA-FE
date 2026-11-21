@@ -24,6 +24,10 @@ import { cancelHomePreload } from "./homePreload";
 const USER_ENDPOINT = "/api/user";
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -62,47 +66,32 @@ async function requestUserJson(options) {
       throw error;
     }
 
+    let nextAccessToken;
+
     try {
       const { accessToken } = await reissueAuthTokens({
         signal: options.signal,
       });
-      const response = await requestJson({
-        ...options,
-        accessToken,
-      });
-      const businessError = createBusinessError(response, fallbackMessage);
-
-      if (businessError) {
-        throw businessError;
+      nextAccessToken = accessToken;
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
       }
-
-      return response;
-    } catch {
       throw error;
     }
+
+    const response = await requestJson({
+      ...options,
+      accessToken: nextAccessToken,
+    });
+    const businessError = createBusinessError(response, fallbackMessage);
+
+    if (businessError) {
+      throw businessError;
+    }
+
+    return response;
   }
-}
-
-export function normalizeUser(user) {
-  const userData = user?.data ?? user;
-
-  return {
-    email: userData?.email,
-    nickname: userData?.nickname,
-    raw: userData,
-  };
-}
-
-export async function getUser({ accessToken = getAccessToken(), signal } = {}) {
-  const response = await requestUserJson({
-    path: USER_ENDPOINT,
-    method: "GET",
-    accessToken,
-    signal,
-    errorMessage: "회원 정보를 불러오지 못했습니다.",
-  });
-
-  return normalizeUser(response);
 }
 
 export async function deleteUser({ accessToken = getAccessToken(), signal } = {}) {

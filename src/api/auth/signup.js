@@ -144,8 +144,12 @@ export async function signup({
       errorMessage: "회원가입에 실패했습니다.",
     });
   } catch (error) {
+    if (error?.name === "AbortError") {
+      throw error;
+    }
     // 에러 객체에 상세 정보 추가
     const enhancedError = {
+      name: error?.name,
       message: error.message,
       status: error.status,
       code: error.code,

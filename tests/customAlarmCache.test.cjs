@@ -89,40 +89,59 @@ function fixture(cached = true, send, accessToken = 'access', globals = {}) {
   return { cache, requests, events, mount, auth, arrival, depot, transit };
 }
 
-test('custom alarms reuse cached lists on entry even after a saved alarm increased the refresh key', async () => {
-  const f = fixture();
+test('custom alarms reuse cached schedules on entry while revalidating depot alarms for auto-deactivation', async () => {
+  const f = fixture(true, async options => {
+    if (options.path === '/api/notifications/depot/my') {
+      return { code: 'SUCCESS', data: [{ userBusId: 10, active: false }] };
+    }
+    return { code: 'SUCCESS', data: [] };
+  });
+  f.cache.set('depot', [{ id: 10, userBusId: 10, enabled: true }]);
   const first = f.mount(3);
   await first.render();
+  assert.equal(first.state[0][0].enabled, false);
+  assert.equal(f.cache.get('depot')[0].enabled, false);
   first.unmount();
   await f.mount(3).render();
-  assert.equal(f.requests.length, 0);
+  assert.deepEqual(f.requests.map(request => request.path), [
+    '/api/notifications/depot/my',
+    '/api/notifications/depot/my',
+  ]);
 });
 
-test('missing caches fetch my and schedules once and subsequent entry uses the saved lists', async () => {
+test('missing caches fetch my and schedules once and subsequent entry reuses cached schedules while revalidating my', async () => {
   const f = fixture(false);
   const screen = f.mount();
   await screen.render();
   assert.deepEqual(f.requests.map(request => request.path).sort(), ['/api/notifications/depot/my', '/api/notifications/schedules']);
   screen.unmount();
   await f.mount().render();
-  assert.equal(f.requests.length, 2);
+  assert.deepEqual(f.requests.map(request => request.path), [
+    '/api/notifications/depot/my',
+    '/api/notifications/schedules',
+    '/api/notifications/depot/my',
+  ]);
 });
 
-test('normal FCM refreshes only schedules while mounted and later reentry uses the refreshed cache', async () => {
+test('normal FCM refreshes only schedules while mounted and later reentry reuses the refreshed schedules cache', async () => {
   const f = fixture();
   const screen = f.mount();
   await screen.render();
+  f.requests.length = 0;
   await f.events.invalidateNotifications({ data: { type: 'normal' } });
   await screen.render();
   assert.deepEqual(f.requests.map(request => request.path), ['/api/notifications/schedules']);
   screen.unmount();
   await f.mount().render();
-  assert.equal(f.requests.length, 1);
+  assert.deepEqual(f.requests.map(request => request.path), [
+    '/api/notifications/schedules',
+    '/api/notifications/depot/my',
+  ]);
 });
 
-test('depot FCM outside custom alarms refreshes only my and next entry uses its cache', async () => {
+test('depot FCM outside custom alarms refreshes only my and next entry revalidates my without fetching schedules', async () => {
   const f = fixture();
-  const refresh = f.events.invalidateNotifications({ data: { type: 'depot' } });
+  const refresh = f.events.invalidateNotifications({ data: { type: 'DEPOT' } });
   assert.equal(f.cache.has('depot'), false);
   assert.equal(f.cache.has('schedules'), true);
   assert.deepEqual(f.requests.map(request => request.path), ['/api/notifications/depot/my']);
@@ -130,7 +149,39 @@ test('depot FCM outside custom alarms refreshes only my and next entry uses its 
   assert.equal(f.cache.has('depot'), true);
   assert.equal(f.cache.has('schedules'), true);
   await f.mount().render();
-  assert.equal(f.requests.length, 1);
+  assert.deepEqual(f.requests.map(request => request.path), [
+    '/api/notifications/depot/my',
+    '/api/notifications/depot/my',
+  ]);
+});
+
+test('foreground return refreshes mounted custom alarms to reflect one-shot depot auto-deactivation and keeps cached cards on error', async () => {
+  let active = true;
+  let failDepot = false;
+  const f = fixture(true, async options => {
+    if (options.path === '/api/notifications/depot/my') {
+      if (failDepot) throw new Error('offline');
+      return { code: 'SUCCESS', data: [{ userBusId: 10, active }] };
+    }
+    return { code: 'SUCCESS', data: [] };
+  });
+  f.cache.set('depot', [{ id: 10, userBusId: 10, enabled: true }]);
+  const screen = f.mount();
+  await screen.render();
+  assert.equal(screen.state[0][0].enabled, true);
+
+  active = false;
+  await f.events.invalidateNotifications();
+  await new Promise(setImmediate);
+  assert.equal(screen.state[0][0].enabled, false);
+  assert.equal(f.cache.get('depot')[0].enabled, false);
+
+  failDepot = true;
+  await f.events.invalidateNotifications();
+  await new Promise(setImmediate);
+  assert.equal(screen.state[0][0].enabled, false);
+  assert.equal(screen.state[3], '');
+  screen.unmount();
 });
 
 test('a failed depot refresh does not affect the schedules cache', async () => {
@@ -153,6 +204,7 @@ test('firstandlast FCM fetches only first and last transit APIs even with custom
   const f = fixture();
   const screen = f.mount();
   await screen.render();
+  f.requests.length = 0;
   await f.events.invalidateNotifications({ data: { type: 'firstandlast' } });
   await screen.render();
   assert.deepEqual(f.requests.map(request => request.path).sort(), [
@@ -263,6 +315,7 @@ test('exhausted failures keep existing screen data and retry only the failed typ
   f.cache.set('schedules', saved);
   const screen = f.mount();
   await screen.render();
+  f.requests.length = 0;
   await f.events.invalidateNotifications({ messageId: 'retry', data: { type: 'normal' } });
   assert.equal(f.requests.length, 3);
   assert.equal(screen.state[1], saved);
@@ -277,6 +330,7 @@ test('permanent HTTP errors are not retried and unrelated missing caches do not 
   const f = fixture(true, async () => { throw Object.assign(new Error('invalid'), { status: 400 }); });
   const screen = f.mount();
   await screen.render();
+  f.requests.length = 0;
   f.cache.delete('depot');
   await f.events.invalidateNotifications({ data: { type: 'normal' } });
   await screen.render();

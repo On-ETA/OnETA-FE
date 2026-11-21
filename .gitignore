@@ -1,6 +1,7 @@
 node_modules
 .tools/
 .expo/
+dist/
 android/local.properties
 android/.gradle/
 android/.kotlin/

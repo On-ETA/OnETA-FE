@@ -21,9 +21,10 @@ export function useAddressSearch({ keyword, enabled = true, fallbackToRoadAddres
       return undefined;
     }
     const controller = new AbortController();
-    setIsSearching(true);
+    setIsSearching(isSearchKeywordReady(trimmedKeyword));
     scheduler.current.schedule(async () => {
       if (controller.signal.aborted) return;
+      setIsSearching(true);
       try {
         const found = await searchAddresses({ keyword: trimmedKeyword, fallbackToRoadAddress, signal: controller.signal });
         if (!controller.signal.aborted) setResults(found);

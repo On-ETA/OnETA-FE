@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 
 import { NAVER_MAP_CLIENT_ID } from "../config/naverMap";
 import { createCurrentLocationRequest } from "../utils/currentLocationRequest";
+import { parseRoadAddress } from "../utils/roadAddress";
 
 let permissionPromise = null;
 let naverGeocoderScriptPromise = null;
@@ -127,7 +128,7 @@ function cleanAddress(value) {
   }
 
   return String(value)
-    .replace(/^대한민국\s*/, "")
+    .replace(/^대한민국(?:[\s,]+|$)/, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -151,55 +152,41 @@ function removeDuplicateParts(values) {
 }
 
 function buildRoadAddress(result) {
-  if (!result) {
-    return "";
+  const formattedAddress = cleanAddress(result.formattedAddress);
+  if (parseRoadAddress(formattedAddress)) return formattedAddress;
+
+  const areas = [result.region, result.city, result.district, result.subregion];
+  const name = cleanAddress(result.name);
+  if (parseRoadAddress(name)) {
+    const includesArea = areas.some((area) => area && name.startsWith(`${area} `));
+    return includesArea ? name : cleanAddress(removeDuplicateParts([...areas, name]).join(" "));
   }
 
-  // Administrative areas alone do not identify the address of the pin.
-  if (
-    !result.street &&
-    !result.streetNumber &&
-    !/\d/.test(`${result.name ?? ""} ${result.formattedAddress ?? ""}`)
-  ) {
-    return "";
+  const street = cleanAddress(result.street);
+  const streetNumber = cleanAddress(result.streetNumber);
+  const numberFromName = /^\d+(?:-\d+)?(?:번지)?$/.test(name) ? name : "";
+  if (street) {
+    return cleanAddress(removeDuplicateParts([...areas, street, streetNumber || numberFromName]).join(" "));
   }
 
-  if (result.street) {
-    const address = cleanAddress(
-      removeDuplicateParts([
-        result.region,
-        result.city,
-        result.district,
-        result.subregion,
-        result.street,
-        result.streetNumber,
-      ]).join(" "),
-    );
-
-    if (address) {
-      return address;
-    }
-  }
-
-  const formattedAddress = cleanAddress(
-    result.formattedAddress,
-  );
-
-  if (formattedAddress) {
+  // Administrative areas and place names alone do not identify a street address.
+  if (/(?:^|[\s,])(?:산\s*)?\d+(?:-\d+)?(?:번지)?(?:\s*\([^)]*\))?$/.test(formattedAddress)) {
     return formattedAddress;
   }
+  if (streetNumber || numberFromName) {
+    return cleanAddress(removeDuplicateParts([...areas, streetNumber || numberFromName]).join(" "));
+  }
 
-  return cleanAddress(
-    removeDuplicateParts([
-      result.region,
-      result.city,
-      result.district,
-      result.subregion,
-      result.street,
-      result.streetNumber,
-      result.name,
-    ]).join(" "),
-  );
+  return "";
+}
+
+function getGeocodedPlaceName(result) {
+  const name = cleanAddress(result.name);
+  const administrativeNames = [result.region, result.city, result.district, result.subregion, result.country];
+  if (!/\p{L}/u.test(name) || administrativeNames.some((area) => cleanAddress(area) === name)) {
+    return "";
+  }
+  return name;
 }
 
 function buildNaverRoadAddress(address) {
@@ -337,7 +324,6 @@ export async function reverseGeocode({
 
   const roadAddress =
     buildRoadAddress(result);
-
   if (!roadAddress) {
     throw new Error(
       "선택한 위치의 주소 정보가 없습니다.",
@@ -349,7 +335,7 @@ export async function reverseGeocode({
     roadAddress,
     latitude: coordinate.latitude,
     longitude: coordinate.longitude,
-    name: result.name ?? "",
+    name: getGeocodedPlaceName(result) || roadAddress,
     raw: result,
   };
 }

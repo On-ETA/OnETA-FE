@@ -139,7 +139,10 @@ function getNicknameErrorMessage(error) {
   const fieldErrors = error?.data?.data ?? error?.details?.data;
 
   if (fieldErrors && typeof fieldErrors === "object") {
-    return Object.values(fieldErrors).find(Boolean) ?? "닉네임 변경에 실패했습니다.";
+    const fieldMessage = Object.values(fieldErrors).find(
+      (value) => typeof value === "string" && value.trim().length > 0,
+    );
+    if (fieldMessage) return fieldMessage;
   }
 
   return (

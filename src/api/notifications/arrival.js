@@ -23,12 +23,18 @@ function buildArrivalNotificationStatusEndpoint(id) {
 function buildArrivalNotificationsDeleteEndpoint(ids) {
   const query = new URLSearchParams();
 
-  query.append("ids", ids.join(","));
+  ids.forEach((id) => {
+    query.append("ids", String(id));
+  });
 
   return `${ARRIVAL_NOTIFICATIONS_ENDPOINT}?${query.toString()}`;
 }
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -75,7 +81,10 @@ async function requestArrivalNotificationJson(options) {
         signal: options.signal,
       });
       nextAccessToken = accessToken;
-    } catch {
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
+      }
       throw error;
     }
 
@@ -284,6 +293,7 @@ export async function createArrivalNotification({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
+  const sessionId = getAuthSessionId?.();
   const response = await requestArrivalNotificationJson({
     path: SCHEDULE_NOTIFICATIONS_ENDPOINT,
     method: "POST",
@@ -296,8 +306,14 @@ export async function createArrivalNotification({
     errorMessage: "도착 알림 등록에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.scheduleNotifications);
-  await getArrivalNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  if (sessionId === getAuthSessionId?.()) {
+    removeHomeCache(homeCacheKeys.scheduleNotifications);
+    await getArrivalNotifications({
+      accessToken: getAccessToken() ?? accessToken,
+      forceRefresh: true,
+      signal,
+    }).catch(() => null);
+  }
 
   return response;
 }
@@ -305,12 +321,14 @@ export async function createArrivalNotification({
 export async function deleteArrivalNotifications({
   ids,
   accessToken = getAccessToken(),
+  refresh = true,
   signal,
 } = {}) {
   if (!Array.isArray(ids) || ids.length === 0) {
     throw new Error("삭제할 도착 알림 id가 필요합니다.");
   }
 
+  const sessionId = getAuthSessionId?.();
   const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationsDeleteEndpoint(ids),
     method: "DELETE",
@@ -319,8 +337,16 @@ export async function deleteArrivalNotifications({
     errorMessage: "도착 알림 삭제에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.scheduleNotifications);
-  await getArrivalNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  if (sessionId === getAuthSessionId?.()) {
+    removeHomeCache(homeCacheKeys.scheduleNotifications);
+    if (refresh) {
+      await getArrivalNotifications({
+        accessToken: getAccessToken() ?? accessToken,
+        forceRefresh: true,
+        signal,
+      }).catch(() => null);
+    }
+  }
 
   return response;
 }
@@ -379,6 +405,7 @@ export async function updateArrivalNotification({
     throw new Error("도착 알림 id가 필요합니다.");
   }
 
+  const sessionId = getAuthSessionId?.();
   const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationEndpoint(id),
     method: "PATCH",
@@ -388,15 +415,18 @@ export async function updateArrivalNotification({
     errorMessage: "도착 알림 수정에 실패했습니다.",
   });
 
-  updateScheduleNotificationsCache(id, (notification) =>
-    normalizeArrivalNotification({
-      ...notification.raw,
-      ...notification.payload,
-      ...payload,
-      notificationId: notification.notificationId ?? id,
-      id: notification.notificationId ?? id,
-    }),
-  );
+  if (sessionId === getAuthSessionId?.()) {
+    ++arrivalListRequestId;
+    updateScheduleNotificationsCache(id, (notification) =>
+      normalizeArrivalNotification({
+        ...notification.raw,
+        ...notification.payload,
+        ...payload,
+        notificationId: notification.notificationId ?? id,
+        id: notification.notificationId ?? id,
+      }),
+    );
+  }
 
   return response;
 }
@@ -421,6 +451,7 @@ export async function updateArrivalNotificationStatus({
   const nextActive =
     payload?.isActive ?? payload?.active ?? payload?.enabled ?? payload?.status === "ACTIVE";
 
+  const sessionId = getAuthSessionId?.();
   const response = await requestArrivalNotificationJson({
     path: buildArrivalNotificationStatusEndpoint(id),
     method: "PATCH",
@@ -430,22 +461,25 @@ export async function updateArrivalNotificationStatus({
     errorMessage: "도착 알림 상태 변경에 실패했습니다.",
   });
 
-  updateScheduleNotificationsCache(id, (notification) => ({
-    ...notification,
-    enabled: Boolean(nextActive),
-    raw: {
-      ...notification.raw,
-      ...payload,
-      isActive: Boolean(nextActive),
-      active: Boolean(nextActive),
-    },
-    payload: {
-      ...notification.payload,
-      ...payload,
-      isActive: Boolean(nextActive),
-      active: Boolean(nextActive),
-    },
-  }));
+  if (sessionId === getAuthSessionId?.()) {
+    ++arrivalListRequestId;
+    updateScheduleNotificationsCache(id, (notification) => ({
+      ...notification,
+      enabled: Boolean(nextActive),
+      raw: {
+        ...notification.raw,
+        ...payload,
+        isActive: Boolean(nextActive),
+        active: Boolean(nextActive),
+      },
+      payload: {
+        ...notification.payload,
+        ...payload,
+        isActive: Boolean(nextActive),
+        active: Boolean(nextActive),
+      },
+    }));
+  }
 
   return response;
 }

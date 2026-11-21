@@ -4,7 +4,7 @@ import { ScreenTransition } from "../../../components/ScreenTransition";
 import { useAndroidBackPress } from "../../../hooks/useAndroidBackPress";
 import { RouteSearchLoadingScreen } from "../../../components/RouteSearchLoadingScreen";
 import { DelayedLoading } from "../../../components/DelayedLoading";
-﻿import React, {
+import React, {
   useEffect,
   useMemo,
   useRef,
@@ -28,7 +28,6 @@ import Svg, { Path } from "react-native-svg";
 import RouteBackIcon from "../../../../assets/images/L.svg";
 import RouteArrowIcon from "../../../../assets/images/R_g.svg";
 import RouteClearIcon from "../../../../assets/images/x.svg";
-import BigBusAsset from "../../../../assets/images/bigbus.svg";
 
 import { searchAddresses } from "../../../api/address/search";
 import { saveArrivalNotification } from "../../../api/notifications/arrival";
@@ -138,6 +137,14 @@ function createRoutePlace(place) {
   };
 }
 
+function toFiniteNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return NaN;
+  }
+  const num = Number(value);
+  return Number.isFinite(num) ? num : NaN;
+}
+
 function preserveCoordinatesForSamePlace(previous, next) {
   const previousPlace = createRoutePlace(previous);
   const nextPlace = createRoutePlace(next);
@@ -147,8 +154,8 @@ function preserveCoordinatesForSamePlace(previous, next) {
   if (
     previousText &&
     previousText === nextText &&
-    !Number.isFinite(Number(nextPlace.x)) &&
-    !Number.isFinite(Number(nextPlace.y))
+    !Number.isFinite(toFiniteNumber(nextPlace.x)) &&
+    !Number.isFinite(toFiniteNumber(nextPlace.y))
   ) {
     return {
       ...nextPlace,
@@ -229,10 +236,10 @@ function createRoutePlaceFromMapSearchResult(
   result,
   coordinate,
 ) {
-  const latitude = Number(
+  const latitude = toFiniteNumber(
     coordinate?.latitude,
   );
-  const longitude = Number(
+  const longitude = toFiniteNumber(
     coordinate?.longitude,
   );
 
@@ -295,8 +302,8 @@ function getMapCenterFromPlaces(origin, destination, activePlaceType) {
 
 function getMapCenterFromPlace(place) {
   const routePlace = createRoutePlace(place);
-  const latitude = Number(routePlace.y ?? routePlace.latitude ?? routePlace.lat);
-  const longitude = Number(
+  const latitude = toFiniteNumber(routePlace.y ?? routePlace.latitude ?? routePlace.lat);
+  const longitude = toFiniteNumber(
     routePlace.x ?? routePlace.longitude ?? routePlace.lng ?? routePlace.lon,
   );
 
@@ -438,7 +445,7 @@ function createScheduleRouteDetails(route, routePlaces) {
   };
 }
 
-function getArrivalRegistrationErrorContent(error) {
+function getArrivalRegistrationErrorContent(error, route) {
   const serverMessage = String(error?.data?.message ?? "").trim();
   const message = serverMessage || error?.message || "";
 
@@ -466,9 +473,25 @@ function getArrivalRegistrationErrorContent(error) {
     };
   }
 
+  let description = message || "내 일정 알림 등록에 실패했습니다.";
+  if (error?.code === "T012") {
+    const routePayload = route?.raw ?? route;
+    const isKakaoRoute =
+      routePayload?.provider === "KAKAO" ||
+      String(routePayload?.routeId ?? "").startsWith("KAKAO_");
+    const segments = routePayload?.segments;
+    if (
+      isKakaoRoute &&
+      Array.isArray(segments) &&
+      segments.some((segment) => segment?.transitType === "BUS")
+    ) {
+      description += "\n\n현재 카카오 버스 경로의 운행시간은 서울 버스 시간표로 확인합니다. 조회 범위 밖의 구간이 포함되어 있다면 다른 경로를 선택해주세요.";
+    }
+  }
+
   return {
     title: "알림 등록에 실패했습니다.",
-    description: message || "내 일정 알림 등록에 실패했습니다.",
+    description,
   };
 }
 
@@ -520,13 +543,21 @@ export function ScheduleAlarmAddScreen({
     setActivePlaceType,
   ] = useState("origin");
 
+  const [
+    placeReturnStep,
+    setPlaceReturnStep,
+  ] = useState("routeSetup");
+
   const formattedTime =
     `${arrivalTime.period} ${arrivalTime.hour} : ${arrivalTime.minute}`;
+
+  const hasResetRouteRef = useRef(false);
 
   // A night-bus route is selected before this screen opens. Keep that route
   // as the source for the next screen even if the route object is normalized
   // asynchronously after the form has mounted.
-  const hasPreselectedRoute = Boolean(initialValues?.selectedRoute);
+  const hasPreselectedRoute =
+    Boolean(initialValues?.selectedRoute) && !hasResetRouteRef.current;
 
   const handleNextPress = () => {
     setStep(selectedRoute || hasPreselectedRoute ? "alarmFinal" : "routeSetup");
@@ -549,7 +580,9 @@ export function ScheduleAlarmAddScreen({
         return;
       }
 
-      setStep("routeSetup");
+      const nextStep = placeReturnStep;
+      setPlaceReturnStep("routeSetup");
+      setStep(nextStep);
       return;
     }
 
@@ -592,7 +625,9 @@ export function ScheduleAlarmAddScreen({
             ...current,
             [type]: preserveCoordinatesForSamePlace(current[type], place),
           }));
-          setStep("routeSetup");
+          const nextStep = placeReturnStep;
+          setPlaceReturnStep("routeSetup");
+          setStep(nextStep);
         }}
         onAddressListPress={() =>
           setStep("addressList")
@@ -630,7 +665,9 @@ export function ScheduleAlarmAddScreen({
               },
             ),
           }));
-          setStep("routeSetup");
+          const nextStep = placeReturnStep;
+          setPlaceReturnStep("routeSetup");
+          setStep(nextStep);
         }}
       />
     );
@@ -647,6 +684,7 @@ export function ScheduleAlarmAddScreen({
         onPlacePress={(type) => {
           preloadNaverMap().catch(() => null);
           setActivePlaceType(type);
+          setPlaceReturnStep("routeSetup");
           setStep("route");
         }}
         places={routePlaces}
@@ -667,6 +705,19 @@ export function ScheduleAlarmAddScreen({
         onBackPress={
           handleBackPress
         }
+        onEditPlacePress={(type) => {
+          blurActiveElement();
+          preloadNaverMap().catch(() => null);
+          setActivePlaceType(type);
+          setPlaceReturnStep("routeResult");
+          setStep("route");
+        }}
+        onSwapPlaces={({ origin: nextOrigin, destination: nextDestination }) => {
+          setRoutePlaces({
+            origin: nextOrigin,
+            destination: nextDestination,
+          });
+        }}
         onNightOnlyRouteSelect={(route, places) => {
           setIsNightOnlyAlarm(true);
           setSelectedRoute(route);
@@ -700,10 +751,10 @@ export function ScheduleAlarmAddScreen({
     return (
       <ScheduleAlarmFinalStep
         initialValues={initialValues}
-        notificationId={initialValues?.notificationId}
+        notificationId={isNightOnlyAlarm ? undefined : initialValues?.notificationId}
         initialReminderOffsetMinutes={initialValues?.reminderOffsetMinutes}
         initialRepeatDays={initialValues?.repeatDays}
-        scheduleType={scheduleType}
+        scheduleType={isNightOnlyAlarm ? "NORMAL" : scheduleType}
         arrivalTime={
           arrivalTime
         }
@@ -715,11 +766,14 @@ export function ScheduleAlarmAddScreen({
           onSaveComplete ??
           onBackPress
         }
-        onResetRoutePress={() =>
-          setStep("form")
-        }
+        onResetRoutePress={() => {
+          hasResetRouteRef.current = true;
+          setSelectedRoute(null);
+          setIsNightOnlyAlarm(false);
+          setStep("form");
+        }}
         route={
-          selectedRoute ?? initialValues?.selectedRoute
+          selectedRoute ?? (hasResetRouteRef.current ? null : initialValues?.selectedRoute)
         }
         routePlaces={
           routePlaces
@@ -868,7 +922,16 @@ export function ScheduleAlarmAddScreen({
     </View>
   );
   };
-  return <ScreenTransition transitionKey={step} transitionDepth={{ form: 0, routeSetup: 1, route: 2, addressList: 3, routeResult: 2, alarmFinal: 3 }[step] ?? 0} animateOnMount={false}>{renderStep()}</ScreenTransition>;
+  return (
+    <ScreenTransition
+      active={step !== "route" && step !== "routeResult"}
+      animateOnMount={false}
+      transitionDepth={{ form: 0, routeSetup: 1, route: 2, addressList: 3, routeResult: 2, alarmFinal: 3 }[step] ?? 0}
+      transitionKey={step}
+    >
+      {renderStep()}
+    </ScreenTransition>
+  );
 }
 
 function ScheduleRouteSetupStep({
@@ -885,12 +948,12 @@ function ScheduleRouteSetupStep({
     getRoutePlaceText(places.destination);
 
   const hasOriginCoordinates =
-    Number.isFinite(Number(places.origin?.x)) &&
-    Number.isFinite(Number(places.origin?.y));
+    Number.isFinite(toFiniteNumber(places.origin?.x)) &&
+    Number.isFinite(toFiniteNumber(places.origin?.y));
 
   const hasDestinationCoordinates =
-    Number.isFinite(Number(places.destination?.x)) &&
-    Number.isFinite(Number(places.destination?.y));
+    Number.isFinite(toFiniteNumber(places.destination?.x)) &&
+    Number.isFinite(toFiniteNumber(places.destination?.y));
 
   const canGoNext =
     Boolean(originText) &&
@@ -1310,7 +1373,9 @@ export function ScheduleRouteMapStep({
         if (!isActive) return;
         setIsLoadingCurrentLocation(false);
         setCurrentLocationError(getLocationErrorMessage(error));
-        if (!hasInteractedWithMapRef.current) {
+        const isPermissionDenied =
+          error?.code === "LOCATION_PERMISSION_DENIED" || error?.code === 1;
+        if (!hasInteractedWithMapRef.current && !isPermissionDenied) {
           locationRetryTimerRef.current = setTimeout(loadCurrentLocation, 5000);
         }
       }
@@ -1323,22 +1388,6 @@ export function ScheduleRouteMapStep({
       clearTimeout(locationRetryTimerRef.current);
     };
   }, []);
-
-  const focusPlaceSearch = (
-    type,
-  ) => {
-    setActivePlaceType(type);
-    setPlaceKeyword("");
-    setPlaceResults([]);
-    setPlaceSearchError("");
-    setMapSelectedCoordinate(null);
-    setMapSelectedResults([]);
-    setMapSelectionError("");
-
-    requestAnimationFrame(() => {
-      placeSearchInputRef.current?.focus?.();
-    });
-  };
 
   const sheetTranslateY =
     useRef(
@@ -1590,27 +1639,16 @@ export function ScheduleRouteMapStep({
     latitude,
     longitude,
   }) => {
+    const resolvedLatitude = toFiniteNumber(latitude);
+    const resolvedLongitude = toFiniteNumber(longitude);
+    if (!Number.isFinite(resolvedLatitude) || !Number.isFinite(resolvedLongitude)) return;
+
     pinSearchControllerRef.current?.abort();
     keywordSearchControllerRef.current?.abort();
     keywordSearchThrottleRef.current.cancel();
     const pinController = new AbortController();
     pinSearchControllerRef.current = pinController;
     stopAutomaticLocation();
-    const resolvedLatitude =
-      Number(latitude);
-    const resolvedLongitude =
-      Number(longitude);
-
-    if (
-      !Number.isFinite(
-        resolvedLatitude,
-      ) ||
-      !Number.isFinite(
-        resolvedLongitude,
-      )
-    ) {
-      return;
-    }
 
     const requestId =
       mapPressRequestIdRef.current +
@@ -1637,120 +1675,68 @@ export function ScheduleRouteMapStep({
 
     placeSearchInputRef.current?.blur?.();
 
+    const isCurrentPin = () =>
+      !pinController.signal.aborted && requestId === mapPressRequestIdRef.current;
+    const pinResult = {
+      id: `map-${resolvedLatitude}-${resolvedLongitude}`,
+      x: resolvedLongitude,
+      y: resolvedLatitude,
+      ...coordinate,
+    };
+    let roadAddress;
     try {
-      const geocoded =
-        await reverseGeocode(
-          coordinate,
-        );
+      const geocoded = await reverseGeocode(coordinate);
+      if (!isCurrentPin()) return;
 
-      if (
-        pinController.signal.aborted || requestId !==
-        mapPressRequestIdRef.current
-      ) {
-        return;
-      }
-
-      const roadAddress =
-        (geocoded.roadAddress ||
-          geocoded.address ||
-          "").trim();
-
+      roadAddress = geocoded?.roadAddress?.trim() || geocoded?.address?.trim();
       if (!roadAddress) {
         throw new Error("선택한 위치의 주소 정보가 없습니다.");
       }
 
-      let searchResults = [];
-      let searchErrorMessage = "";
-
-      if (roadAddress) {
-        try {
-          searchResults =
-            await searchAddresses({
-              keyword: roadAddress,
-              signal: pinController.signal,
-            });
-        } catch (searchError) {
-          searchErrorMessage =
-            searchError?.message ??
-            "주소 검색 결과를 불러오지 못했습니다.";
-        }
-      }
-
-      if (
-        pinController.signal.aborted || requestId !==
-        mapPressRequestIdRef.current
-      ) {
-        return;
-      }
-
-      const normalizedResults =
-        Array.isArray(searchResults)
-          ? sortPlacesByDistance(
-              // Keyword search can return unrelated places, even for a full address.
-              searchResults.filter((result) =>
-                [result.address, result.roadAddress, result.raw?.roadAddress, result.raw?.jibunAddress]
-                  .some((address) =>
-                    typeof address === "string" &&
-                    address.replace(/\s+/g, "") === roadAddress.replace(/\s+/g, ""),
-                  ),
-              ),
-              coordinate,
-            )
-          : [];
-
-      const fallbackResult = {
-        id: `map-${resolvedLatitude}-${resolvedLongitude}`,
-        name:
-          geocoded.name ||
-          roadAddress ||
-          "선택한 위치",
+      setMapSelectedResults([{
+        ...pinResult,
+        name: geocoded.name?.trim() || roadAddress,
         address: roadAddress,
         roadAddress,
-        x: resolvedLongitude,
-        y: resolvedLatitude,
-        latitude: resolvedLatitude,
-        longitude: resolvedLongitude,
         raw: geocoded.raw,
-      };
-
-      setMapSelectedResults(
-        normalizedResults.length > 0
-          ? normalizedResults
-          : [fallbackResult],
-      );
-
-      setMapSelectionError(
-        normalizedResults.length === 0
-          ? searchErrorMessage
-          : "",
-      );
-    } catch (error) {
-      if (
-        pinController.signal.aborted || requestId !==
-        mapPressRequestIdRef.current
-      ) {
-        return;
-      }
+      }]);
+    } catch {
+      if (!isCurrentPin()) return;
 
       setMapSelectedResults([{
-        id: `map-${resolvedLatitude}-${resolvedLongitude}`,
+        ...pinResult,
         name: "선택한 위치",
         address: `${resolvedLatitude.toFixed(6)}, ${resolvedLongitude.toFixed(6)}`,
         roadAddress: "",
-        x: resolvedLongitude,
-        y: resolvedLatitude,
-        latitude: resolvedLatitude,
-        longitude: resolvedLongitude,
         raw: coordinate,
       }]);
-      setMapSelectionError("");
+      setMapSelectionError("주소를 확인하지 못했습니다. 핀 위치로 지정할 수 있어요.");
+      return;
     } finally {
-      if (
-        requestId ===
-        mapPressRequestIdRef.current
-      ) {
-        setIsReverseGeocoding(false);
+      if (isCurrentPin()) setIsReverseGeocoding(false);
+    }
+
+    try {
+      const searchResults = await searchAddresses({
+        keyword: roadAddress,
+        signal: pinController.signal,
+      });
+      if (!isCurrentPin() || !Array.isArray(searchResults)) return;
+
+      const addressKey = roadAddress.replace(/\s+/g, "");
+      const matchingPlaces = searchResults.filter((result) =>
+        [result.address, result.roadAddress, result.raw?.roadAddress, result.raw?.jibunAddress]
+          .some((address) => typeof address === "string" && address.replace(/\s+/g, "") === addressKey),
+      );
+      if (matchingPlaces.length > 0) {
+        setMapSelectedResults(sortPlacesByDistance(matchingPlaces, coordinate).map((place) => ({
+          ...place,
+          address: roadAddress,
+          roadAddress,
+        })));
       }
+    } catch {
+      // The resolved pin address is already available for selection.
     }
   };
 
@@ -1760,9 +1746,9 @@ export function ScheduleRouteMapStep({
     zoom,
   }) => {
     const resolvedLatitude =
-      Number(latitude);
+      toFiniteNumber(latitude);
     const resolvedLongitude =
-      Number(longitude);
+      toFiniteNumber(longitude);
 
     if (
       !Number.isFinite(
@@ -1775,7 +1761,7 @@ export function ScheduleRouteMapStep({
       return;
     }
 
-    const resolvedZoom = Number(zoom);
+    const resolvedZoom = toFiniteNumber(zoom);
     if (Number.isFinite(resolvedZoom)) {
       setMapZoomLevel(resolvedZoom);
     }
@@ -1891,6 +1877,7 @@ export function ScheduleRouteMapStep({
         selectedResult,
         mapSelectedCoordinate,
       );
+    pinSearchControllerRef.current?.abort();
 
     if (selectionMode) {
       onPlaceSelect?.(
@@ -1927,10 +1914,10 @@ export function ScheduleRouteMapStep({
     setMapSelectionError("");
   };
 
-  const searchResultMarkers =
-    getMapMarkersFromPlaces(
-      placeResults,
-    );
+  const searchResultMarkers = useMemo(
+    () => getMapMarkersFromPlaces(placeResults),
+    [placeResults],
+  );
 
   const nearestSearchResultCenter =
     searchResultMarkers[0] ?? null;
@@ -1944,13 +1931,30 @@ export function ScheduleRouteMapStep({
         userLocation ??
         mapSelectedCoordinate;
 
-  const mapMarkers =
-    mapSelectedCoordinate
-      ? [mapSelectedCoordinate]
-      : hasPlaceKeyword &&
-    searchResultMarkers.length > 0
-      ? searchResultMarkers
-      : undefined;
+  const mapMarkers = useMemo(
+    () =>
+      mapSelectedCoordinate
+        ? [mapSelectedCoordinate]
+        : hasPlaceKeyword && searchResultMarkers.length > 0
+          ? searchResultMarkers
+          : undefined,
+    [hasPlaceKeyword, mapSelectedCoordinate, searchResultMarkers],
+  );
+
+  const handleMapReady = useMemo(
+    () => () => {
+      setIsMapReady(true);
+      setIsMapLoading(false);
+    },
+    [],
+  );
+
+  const handleMapError = useMemo(
+    () => () => {
+      setIsMapLoading(false);
+    },
+    [],
+  );
 
   const hasMapSelection =
     Boolean(mapSelectedCoordinate);
@@ -1980,11 +1984,8 @@ export function ScheduleRouteMapStep({
           onCameraIdle={handleMapCameraIdle}
           onMapPress={handleMapPress}
           showCenterMarker={false}
-          onReady={() => {
-            setIsMapReady(true);
-            setIsMapLoading(false);
-          }}
-          onError={() => setIsMapLoading(false)}
+          onReady={handleMapReady}
+          onError={handleMapError}
         />
       </View>
 
@@ -2301,9 +2302,7 @@ export function ScheduleRouteMapStep({
               placeholder={
                 isLoadingCurrentAddress
                   ? "현재 주소 불러오는 중..."
-                  : currentAddressError
-                    ? "출발지 입력"
-                    : "출발지 입력"
+                  : "출발지 입력"
               }
               placeholderTextColor={
                 colors.gray06
@@ -2468,9 +2467,11 @@ export function ScheduleRouteResultStep({
   initialDestination,
   initialOrigin,
   onBackPress,
+  onEditPlacePress,
   onFindAnotherRoute = onBackPress,
   onNightOnlyRouteSelect,
   onRouteSelect,
+  onSwapPlaces,
   scheduleType = "NORMAL",
 }) {
   const [
@@ -2517,6 +2518,25 @@ export function ScheduleRouteResultStep({
   const [isNightOnlyNoticeVisible, setIsNightOnlyNoticeVisible] = useState(false);
   const [nightOnlyRoute, setNightOnlyRoute] = useState(null);
 
+  const handleEditPlacePress = (type) => {
+    if (isSelectingRoute) return;
+    routeRequestRef.current?.abort();
+    onEditPlacePress?.(type);
+  };
+
+  const handleSwapPlaces = () => {
+    if (isSelectingRoute) return;
+    const nextOrigin = destination;
+    const nextDestination = origin;
+    setSelectionError("");
+    setOrigin(nextOrigin);
+    setDestination(nextDestination);
+    onSwapPlaces?.({
+      origin: nextOrigin,
+      destination: nextDestination,
+    });
+  };
+
   const handleRouteSelect = async (selectedRoute) => {
     if (isSelectingRoute) return;
 
@@ -2554,11 +2574,11 @@ export function ScheduleRouteResultStep({
     async function loadTransitRoutes() {
       routeRequestRef.current = controller;
       const hasOriginCoordinates =
-        Number.isFinite(Number(origin?.x)) &&
-        Number.isFinite(Number(origin?.y));
+        Number.isFinite(toFiniteNumber(origin?.x)) &&
+        Number.isFinite(toFiniteNumber(origin?.y));
       const hasDestinationCoordinates =
-        Number.isFinite(Number(destination?.x)) &&
-        Number.isFinite(Number(destination?.y));
+        Number.isFinite(toFiniteNumber(destination?.x)) &&
+        Number.isFinite(toFiniteNumber(destination?.y));
 
       if (!hasOriginCoordinates || !hasDestinationCoordinates) {
         setRoutes([]);
@@ -2637,29 +2657,11 @@ export function ScheduleRouteResultStep({
     scheduleType,
   ]);
 
-  const updateOriginText = (
-    value,
-  ) => {
-    setOrigin(
-      createRoutePlace(
-        value,
-      ),
-    );
-  };
-
-  const updateDestinationText = (
-    value,
-  ) => {
-    setDestination(
-      createRoutePlace(
-        value,
-      ),
-    );
-  };
-
   if (isLoadingRoutes) {
     return (
-      <DelayedLoading fallback={<View style={styles.resultScreen} />}>
+      <DelayedLoading fallback={
+        <RouteSearchLoadingScreen animateDots={false} onFindAnotherRoute={handleFindAnotherRoute} />
+      }>
         <RouteSearchLoadingScreen onFindAnotherRoute={handleFindAnotherRoute} />
       </DelayedLoading>
     );
@@ -2695,31 +2697,53 @@ export function ScheduleRouteResultStep({
             styles.routeSummaryPill
           }
         >
-          <Text
-            ellipsizeMode="tail"
-            numberOfLines={1}
-            style={
-              styles.routeSummaryInput
-            }
+          <Pressable
+            accessibilityLabel="출발지 변경"
+            accessibilityRole="button"
+            onPress={() => handleEditPlacePress("origin")}
+            style={styles.routeSummaryPlaceButton}
           >
-            {getRoutePlaceText(
-              origin,
-            ) || "출발지"}
-          </Text>
+            <Text
+              ellipsizeMode="tail"
+              numberOfLines={1}
+              style={
+                styles.routeSummaryInput
+              }
+            >
+              {getRoutePlaceText(
+                origin,
+              ) || "출발지"}
+            </Text>
+          </Pressable>
 
-          <RouteArrowIcon width={20} height={20} />
-
-          <Text
-            ellipsizeMode="tail"
-            numberOfLines={1}
-            style={
-              styles.routeSummaryInput
-            }
+          <Pressable
+            accessibilityLabel="출발지와 목적지 바꾸기"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={handleSwapPlaces}
+            style={styles.routeSummaryIconButton}
           >
-            {getRoutePlaceText(
-              destination,
-            ) || "도착지"}
-          </Text>
+            <RouteArrowIcon width={20} height={20} />
+          </Pressable>
+
+          <Pressable
+            accessibilityLabel="목적지 변경"
+            accessibilityRole="button"
+            onPress={() => handleEditPlacePress("destination")}
+            style={styles.routeSummaryPlaceButton}
+          >
+            <Text
+              ellipsizeMode="tail"
+              numberOfLines={1}
+              style={
+                styles.routeSummaryInput
+              }
+            >
+              {getRoutePlaceText(
+                destination,
+              ) || "도착지"}
+            </Text>
+          </Pressable>
 
           <RouteClearIcon width={20} height={20} />
         </View>
@@ -3056,16 +3080,6 @@ function ScheduleAlarmFinalStep({
         )}분 전 알림`
       : "알림 시간 선택";
 
-  const finalInfoText =
-    `${formattedArrivalTime}까지 도착하실 수 있도록`;
-
-  const finalInfoSubText =
-    selectedReminderOffsets.length > 0
-      ? `예상 출발 시간 ${selectedReminderOffsets[0]}분 전인 ${getFormattedStartTime(
-          arrivalTime,
-          displayDuration + Number(selectedReminderOffsets[0]),
-        )}에 알려드릴게요.`
-      : "알림 시간을 선택하면 출발 전 알림을 알려드릴게요.";
   const finalInfoRealTimeText =
     selectedReminderOffsets.length > 0
       ? `실시간 교통정보를 반영해 출발 적정 시간을 확인하고, ${selectedReminderOffsets
@@ -3153,7 +3167,7 @@ function ScheduleAlarmFinalStep({
 
         await onSavePress?.();
       } catch (error) {
-        setRegistrationError(getArrivalRegistrationErrorContent(error));
+        setRegistrationError(getArrivalRegistrationErrorContent(error, route));
       } finally {
         setIsSubmitting(false);
       }
@@ -3876,6 +3890,11 @@ function WheelPickerColumn({
         scrollToIndex(currentIndex, false);
         scrollOffsetRef.current = currentIndex * TIME_PICKER_ITEM_HEIGHT;
         lastReportedIndexRef.current = currentIndex;
+        if (Platform.OS === "web") {
+          requestAnimationFrame(() => {
+            hasInteractedRef.current = true;
+          });
+        }
       });
     }, 50);
 
@@ -4131,27 +4150,6 @@ function ChevronDownIcon() {
   );
 }
 
-function HeaderBackIcon() {
-  return (
-    <Svg
-      height={24}
-      viewBox="0 0 24 24"
-      width={24}
-    >
-      <Path
-        d="M15 5 8 12l7 7"
-        fill="none"
-        stroke={
-          colors.gray07
-        }
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2.2}
-      />
-    </Svg>
-  );
-}
-
 function ChevronRightIcon() {
   return (
     <Svg
@@ -4208,40 +4206,6 @@ function SearchIcon() {
         }
         strokeLinecap="round"
         strokeWidth={1.6}
-      />
-    </Svg>
-  );
-}
-
-function WalkIcon() {
-  return (
-    <Svg
-      height={11}
-      viewBox="0 0 12 12"
-      width={11}
-    >
-      <Path
-        d="M6 3.5a1.4 1.4 0 1 0 0-2.8 1.4 1.4 0 0 0 0 2.8Zm-.6.6L3.7 6.1c-.2.2-.2.6.1.8.2.2.6.2.8-.1l.9-1.1.8 1.1-1.3 3c-.1.3 0 .7.3.8.3.1.7 0 .8-.3l1.1-2.5 1.2 1.5c.2.3.6.3.8.1.3-.2.3-.6.1-.8L7.8 6.7 7 4.8l.9.6c.3.2.6.1.8-.1.2-.3.1-.6-.1-.8L7 3.4c-.5-.3-1.1-.1-1.6.7Z"
-        fill={
-          colors.white
-        }
-      />
-    </Svg>
-  );
-}
-
-function BusIconPlain() {
-  return (
-    <Svg
-      height={13}
-      viewBox="0 0 16 16"
-      width={13}
-    >
-      <Path
-        d="M4.2 1.5h7.6c1.1 0 2 .9 2 2v7.4c0 .9-.6 1.7-1.4 1.9v1.1c0 .3-.3.6-.6.6h-.7c-.3 0-.6-.3-.6-.6v-1H5.5v1c0 .3-.3.6-.6.6h-.7c-.3 0-.6-.3-.6-.6v-1.1c-.8-.3-1.4-1-1.4-1.9V3.5c0-1.1.9-2 2-2Zm.4 2.2v3.7h6.8V3.7H4.6Zm1 7.4a1.1 1.1 0 1 0 0-2.2 1.1 1.1 0 0 0 0 2.2Zm4.8-1.1a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 0 0-2.2 0Z"
-        fill={
-          colors.white
-        }
       />
     </Svg>
   );
@@ -4978,9 +4942,23 @@ const styles =
         colors.white,
     },
 
-    routeSummaryInput: {
+    routeSummaryPlaceButton: {
       flex: 1,
       flexShrink: 1,
+      minWidth: 0,
+      height: "100%",
+      justifyContent: "center",
+    },
+
+    routeSummaryIconButton: {
+      height: "100%",
+      flexShrink: 0,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    routeSummaryInput: {
+      width: "100%",
       height: 24,
       minWidth: 0,
       paddingVertical: 0,
@@ -5097,12 +5075,6 @@ const styles =
     },
     routeResultList: { paddingBottom: 24, gap: 16 },
     routeResultCard: { paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: colors.gray04 },
-    resultStopLine: {
-      position: "absolute",
-      left: 11,
-      top: 12,
-      zIndex: 0,
-    },
 
     routeStatusBox: {
       minHeight: 180,
@@ -5205,136 +5177,6 @@ const styles =
         colors.gray04,
     },
 
-    routeTimelineSegment: {
-      height: "100%",
-      flexDirection: "row",
-      alignItems: "center",
-      minWidth: 0,
-    },
-
-    routeWalkSegment: {
-      flex: 1.1,
-    },
-
-    routeBusSegment: {
-      flex: 1.05,
-      borderRadius: 10,
-      backgroundColor:
-        colors.bus,
-    },
-
-    routeWalkIcon: {
-      width: 18,
-      height: 18,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      borderRadius: 9,
-      backgroundColor:
-        colors.gray06,
-    },
-
-    routeBusIcon: {
-      width: 18,
-      height: 18,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      borderRadius: 9,
-      backgroundColor:
-        colors.bus,
-    },
-
-    routeTimelineTextWrap: {
-      flex: 1,
-      minWidth: 0,
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    routeTimelineText: {
-      fontFamily: "SUIT",
-      fontSize: 12,
-      fontStyle: "normal",
-      fontWeight: "500",
-      lineHeight: 19.2,
-      letterSpacing: -0.12,
-      textAlign: "center",
-      color: colors.gray07,
-    },
-
-    routeTimelineTextOn: {
-      fontFamily: "SUIT",
-      fontSize: 12,
-      fontStyle: "normal",
-      fontWeight: "500",
-      lineHeight: 19.2,
-      letterSpacing: -0.12,
-      textAlign: "center",
-      color: colors.white,
-    },
-
-    routeDivider: {
-      height: 1,
-      marginTop: 14,
-      marginBottom: 14,
-      backgroundColor:
-        colors.gray03,
-    },
-
-    routeBusInfo: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-
-    routeBusBadge: {
-      width: 22,
-      height: 22,
-      marginRight: 7,
-      alignItems: "center",
-      justifyContent:
-        "center",
-      borderRadius: 11,
-      backgroundColor:
-        colors.bus,
-    },
-
-    routeBusNumber: {
-      fontFamily: "SUIT",
-      fontSize: 18,
-      fontStyle: "normal",
-      fontWeight: "600",
-      lineHeight: 18,
-      letterSpacing: -0.18,
-      color: colors.gray09,
-    },
-
-    routeBusDirection: {
-      fontFamily: "SUIT",
-      fontSize: 13,
-      fontStyle: "normal",
-      fontWeight: "500",
-      lineHeight: 18.2,
-      letterSpacing: -0.13,
-      color: colors.gray06,
-    },
-
-    routeBusDirectionRow: {
-      marginLeft: 6,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      minWidth: 0,
-      flexShrink: 1,
-    },
-
-    routeStops: {
-      marginTop: 12,
-      gap: 11,
-      position: "relative",
-    },
-
     routeAlarmButton: {
       flexDirection: "row",
       gap: 8,
@@ -5391,13 +5233,6 @@ const styles =
       alignItems: "center",
       justifyContent:
         "flex-start",
-    },
-
-    finalBusInfo: {
-      flex: 1,
-      minWidth: 0,
-      flexDirection: "row",
-      alignItems: "center",
     },
 
     finalTotalTime: {

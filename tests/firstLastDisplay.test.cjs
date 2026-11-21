@@ -119,3 +119,40 @@ test('removing both alarms through refresh falls back to the current time instea
   assert.equal(dashboard.activeFirstLastScheduleType, types.last);
   assert.equal(dashboard.firstLastRouteSummary, null);
 });
+
+test('first and last labels select their own schedule and the center icon still switches between them', () => {
+  const { FirstLastRouteScreen } = load('src/screens/home/first-last/FirstLastRouteScreen.js', {
+    react: {
+      createElement: (type, props, ...children) => ({ type, props, children }),
+      useState: value => [value, () => {}],
+      useEffect() {},
+    },
+    'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', StyleSheet: { create: value => value } },
+    '../../../theme': { colors: {}, typography: {} },
+    '../../../utils/firstLastRouteSummary': { getCorrectedRemainingMinutes: () => 0 },
+  });
+
+  function findButton(node, label) {
+    if (node?.type === 'Pressable' &&
+        (node.props.accessibilityLabel === label || node.children.some(child => child?.children?.includes(label)))) {
+      return node;
+    }
+    for (const child of node?.children ?? []) {
+      const button = findButton(child, label);
+      if (button) return button;
+    }
+  }
+
+  for (const [active, other] of [[types.first, types.last], [types.last, types.first]]) {
+    const changes = [];
+    const tree = FirstLastRouteScreen({ activeScheduleType: active, onScheduleTypeChange: type => changes.push(type) });
+    const first = findButton(tree, '첫차');
+    const last = findButton(tree, '막차');
+    assert.equal(first.props.accessibilityState.selected, active === types.first);
+    assert.equal(last.props.accessibilityState.selected, active === types.last);
+    first.props.onPress();
+    last.props.onPress();
+    findButton(tree, '첫차 막차 전환').props.onPress();
+    assert.deepEqual(changes, [types.first, types.last, other]);
+  }
+});

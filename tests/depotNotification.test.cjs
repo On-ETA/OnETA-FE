@@ -62,3 +62,22 @@ test('fresh depot list reflects backend auto-deactivation despite an older activ
   assert.equal(alarms[1].enabled, true);
   assert.equal(f.cache()[0].enabled, false);
 });
+
+test('normalizeDepotNotification supports active and isActive fields and a late GET cannot overwrite a newer toggle', async () => {
+  let resolveList;
+  const listPromise = new Promise(resolve => { resolveList = resolve; });
+  const f = fixture(async options => {
+    if (options.method === 'GET') return listPromise;
+    return { code: 'SUCCESS' };
+  });
+  assert.equal(f.api.normalizeDepotNotification({ userBusId: 10, isActive: false }).enabled, false);
+  assert.equal(f.api.normalizeDepotNotification({ userBusId: 10, isActive: true }).enabled, true);
+
+  const staleGet = f.api.getMyDepotNotifications({ forceRefresh: true });
+  const staleRejected = assert.rejects(staleGet, error => error.name === 'AbortError');
+  await f.api.updateDepotNotificationStatus({ userBusId: 10, active: false });
+  assert.equal(f.cache()[0].enabled, false);
+  resolveList({ code: 'SUCCESS', data: [{ userBusId: 10, active: true }] });
+  await staleRejected;
+  assert.equal(f.cache()[0].enabled, false);
+});

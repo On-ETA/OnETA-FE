@@ -161,10 +161,63 @@ test('pin address search excludes unrelated places and falls back to the resolve
   assert.ok(!textContent(f.render()).includes('Unrelated place'));
   assert.ok(textContent(f.render()).includes('Pin address'));
   assert.equal(findButton(f.render(), '출발지로 지정').props.disabled, false);
-  results.push({ name: 'Matching place', address: 'Pin  address', x: 126.8, y: 37.7 });
+  results.push(
+    { name: 'Matching place farther away', address: 'Pin address', x: 126.81, y: 37.7 },
+    { name: 'Matching place nearby', address: 'Pin  address', x: 126.8, y: 37.7 },
+  );
   await pin();
-  assert.ok(textContent(f.render()).includes('Matching place'));
-  assert.ok(!textContent(f.render()).includes('Unrelated place'));
+  const shown = textContent(f.render());
+  assert.ok(shown.includes('Matching place nearby'));
+  assert.ok(shown.indexOf('Matching place farther away') > shown.indexOf('Matching place nearby'));
+  assert.ok(!shown.includes('Unrelated place'));
+});
+
+test('a reverse-geocoded address is selectable while its place-name lookup is pending', async () => {
+  let completeSearch, searchSignal, selected;
+  const search = new Promise(resolve => { completeSearch = resolve; });
+  const coordinate = { latitude: 37.7, longitude: 126.8 };
+  const f = locationFixture({ selectionMode: true, onPlaceSelect: (_, place) => { selected = place; } }, coordinate, undefined, {
+    '../../../components/reverseGeocode': {
+      getCachedCurrentCoordinate: () => coordinate,
+      reverseGeocode: async () => ({ roadAddress: 'Pin address' }),
+    },
+    '../../../api/address/search': { searchAddresses: ({ signal }) => { searchSignal = signal; return search; } },
+  });
+  const pending = find(f.render(), 'NaverMapView').props.onMapPress(coordinate);
+  await new Promise(setImmediate);
+  const rendered = f.render();
+  assert.ok(textContent(rendered).includes('Pin address'));
+  const select = findButton(rendered, '출발지로 지정');
+  assert.equal(select.props.disabled, false);
+  select.props.onPress();
+  assert.equal(selected.address, 'Pin address');
+  assert.equal(searchSignal.aborted, true);
+  completeSearch([{ name: 'Late match', address: 'Pin address', x: coordinate.longitude, y: coordinate.latitude }]);
+  await pending;
+  assert.ok(!textContent(f.render()).includes('Late match'));
+});
+
+test('an Android place-only result leaves the exact pin selectable without searching by place name', async () => {
+  const coordinate = { latitude: 37.20384903, longitude: 127.05947686 };
+  const requests = [];
+  let selected;
+  const f = locationFixture({ selectionMode: true, onPlaceSelect: (_, place) => { selected = place; } }, coordinate, undefined, {
+    '../../../components/reverseGeocode': {
+      getCachedCurrentCoordinate: () => coordinate,
+      reverseGeocode: async () => ({ name: '동탄고등학교', address: '', roadAddress: '' }),
+    },
+    '../../../api/address/search': { searchAddresses: async ({ keyword }) => {
+      requests.push(keyword);
+      return [];
+    } },
+  });
+  await find(f.render(), 'NaverMapView').props.onMapPress(coordinate);
+  const rendered = f.render();
+  assert.deepEqual(requests, []);
+  assert.ok(textContent(rendered).includes('37.203849, 127.059477'));
+  findButton(rendered, '출발지로 지정').props.onPress();
+  assert.equal(selected.x, coordinate.longitude);
+  assert.equal(selected.y, coordinate.latitude);
 });
 
 test('confirming a pin after address lookup failure forwards the exact pin coordinates', async () => {
@@ -344,6 +397,64 @@ test('web SDK preload is shared and initializes the map with the latest coordina
   assert.equal(readyCount, 1);
   listeners.tilesloaded();
   assert.equal(readyCount, 1);
+});
+
+test('web NaverMapView removes event listeners before destroying the map instance', async () => {
+  const slots = [];
+  const effects = [];
+  let cursor = 0;
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useState(initial) {
+      const index = cursor++;
+      if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
+      return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
+    },
+    useRef(initial) {
+      const index = cursor++;
+      if (!(index in slots)) slots[index] = { current: initial };
+      return slots[index];
+    },
+    useMemo: callback => callback(),
+    useEffect(callback, deps) {
+      const index = cursor++;
+      const previous = slots[index];
+      if (!previous || !deps || deps.some((value, i) => !Object.is(value, previous.deps?.[i]))) {
+        slots[index] = { deps, cleanup: previous?.cleanup };
+        effects.push(() => {
+          slots[index].cleanup?.();
+          slots[index].cleanup = callback();
+        });
+      }
+    },
+  };
+  const order = [];
+  const naver = {
+    maps: {
+      LatLng: class { constructor(latitude, longitude) { this.latitude = latitude; this.longitude = longitude; } },
+      Map: class { destroy() { order.push('destroy'); } },
+      Event: {
+        addListener: (_, event) => ({ event }),
+        removeListener: listener => { order.push(`remove:${listener.event}`); },
+      },
+    },
+  };
+  const api = load('src/components/NaverMapView.js', {
+    react,
+    'react-native': { Platform: { OS: 'web' }, View: 'View', StyleSheet: { create: value => value } },
+    '../config/naverMap': { NAVER_MAP_CLIENT_ID: 'test', NAVER_MAP_DEFAULT_CENTER: { latitude: 37, longitude: 127 } },
+    '../theme': { colors: {}, typography: {} },
+  }, {
+    naver,
+    document: { getElementById: () => ({}) },
+  });
+  const wrapper = api.NaverMapView({ center: { latitude: 37, longitude: 127 }, showCenterMarker: false });
+  cursor = 0;
+  wrapper.type(wrapper.props);
+  effects.splice(0).forEach(fn => fn());
+  await new Promise(setImmediate);
+  slots.forEach(slot => slot?.cleanup?.());
+  assert.deepEqual(order, ['remove:tilesloaded', 'remove:click', 'remove:idle', 'destroy']);
 });
 
 

@@ -5,6 +5,10 @@ import { requestJson } from "../client";
 const NOTIFICATIONS_ENDPOINT = "/api/notifications";
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -51,7 +55,10 @@ async function requestNotificationJson(options) {
         signal: options.signal,
       });
       nextAccessToken = accessToken;
-    } catch {
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
+      }
       throw error;
     }
 

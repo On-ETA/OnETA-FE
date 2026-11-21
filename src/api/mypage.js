@@ -15,7 +15,7 @@
     "message": "인증이 필요합니다"
   }
 */
-import { getAccessToken } from "./auth/tokens";
+import { getAccessToken, getAuthSessionId } from "./auth/tokens";
 import { reissueAuthTokens } from "./auth/reissue";
 import { requestJson } from "./client";
 import { homeCacheKeys, readHomeCache, writeHomeCache } from "./homeCache";
@@ -23,6 +23,10 @@ import { homeCacheKeys, readHomeCache, writeHomeCache } from "./homeCache";
 const MYPAGE_ENDPOINT = "/api/mypage";
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -44,7 +48,7 @@ function createBusinessError(response, fallbackMessage) {
   return error;
 }
 
-async function requestMyPageJson(options) {
+export async function requestMyPageJson(options) {
   const fallbackMessage =
     options.errorMessage ?? "마이페이지 정보를 불러오지 못했습니다.";
 
@@ -62,24 +66,31 @@ async function requestMyPageJson(options) {
       throw error;
     }
 
+    let nextAccessToken;
+
     try {
       const { accessToken } = await reissueAuthTokens({
         signal: options.signal,
       });
-      const response = await requestJson({
-        ...options,
-        accessToken,
-      });
-      const businessError = createBusinessError(response, fallbackMessage);
-
-      if (businessError) {
-        throw businessError;
+      nextAccessToken = accessToken;
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
       }
-
-      return response;
-    } catch {
       throw error;
     }
+
+    const response = await requestJson({
+      ...options,
+      accessToken: nextAccessToken,
+    });
+    const businessError = createBusinessError(response, fallbackMessage);
+
+    if (businessError) {
+      throw businessError;
+    }
+
+    return response;
   }
 }
 
@@ -88,6 +99,7 @@ export async function getMyPage({
   forceRefresh = false,
   signal,
 } = {}) {
+  const sessionId = getAuthSessionId?.();
   if (!forceRefresh) {
     const cachedMyPage = readHomeCache(homeCacheKeys.myPage);
 
@@ -105,10 +117,15 @@ export async function getMyPage({
   });
 
   const myPageData = data?.data ?? data;
-
-  return writeHomeCache(homeCacheKeys.myPage, {
+  const normalized = {
     appVersion: myPageData?.appVersion,
     email: myPageData?.email,
     nickname: myPageData?.nickname,
-  });
+  };
+
+  if (signal?.aborted || sessionId !== getAuthSessionId?.()) {
+    return normalized;
+  }
+
+  return writeHomeCache(homeCacheKeys.myPage, normalized);
 }

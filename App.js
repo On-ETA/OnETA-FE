@@ -246,6 +246,8 @@ function useAuthenticatedRoute(navigation, route, { preload = false, renderExist
     }
 
     const unsubscribeAuthRequired = subscribeAuthRequired(() => {
+      cancelHomePreload().catch(() => null);
+      clearHomeCacheAsync().catch(() => null);
       resetTo(navigation, routes.login);
     });
 
@@ -411,20 +413,24 @@ function OAuthCallbackRoute({ navigation, route }) {
   const handledRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (handledRef.current) return;
+    if (handledRef.current) return undefined;
     handledRef.current = true;
 
+    let isActive = true;
+    const controller =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
     const params = route.params ?? {};
 
     async function finishGoogleAuth() {
       const returnRoute = await consumeAuthReturnRoute().catch(() => null);
+      if (!isActive) return;
       const loginRoute = returnRoute === routes.deleteAccount ? routes.deleteAccount : routes.login;
       const callbackError =
         params.error_description ??
         params.errorMessage ??
         params.oauth2_auth_error ??
-        (params.error ? "Google 인증이 취소되었거나 실패했습니다." : null) ??
-        getGoogleSignupConflictMessage(params);
+        getGoogleSignupConflictMessage(params) ??
+        (params.error ? "Google 인증이 취소되었거나 실패했습니다." : null);
 
       if (callbackError) {
         resetTo(navigation, loginRoute, { loginError: callbackError });
@@ -439,7 +445,11 @@ function OAuthCallbackRoute({ navigation, route }) {
       }
 
       try {
-        const response = await exchangeGoogleAuthCode({ code: params.code });
+        const response = await exchangeGoogleAuthCode({
+          code: params.code,
+          signal: controller?.signal,
+        });
+        if (!isActive || controller?.signal?.aborted) return;
 
         const data = response?.data ?? {};
         if (data.tempId !== undefined && data.tempId !== null) {
@@ -460,10 +470,13 @@ function OAuthCallbackRoute({ navigation, route }) {
         }
 
         await cancelHomePreload();
+        if (!isActive) return;
         await setAuthTokens(authTokens, { persist: true });
         await clearHomeCacheAsync();
+        if (!isActive) return;
         resetTo(navigation, returnRoute || routes.home);
       } catch (error) {
+        if (!isActive || controller?.signal?.aborted || error?.name === "AbortError") return;
         resetTo(navigation, loginRoute, {
           loginError: error?.message || "Google 로그인에 실패했습니다. 다시 시도해 주세요.",
         });
@@ -472,6 +485,10 @@ function OAuthCallbackRoute({ navigation, route }) {
 
     finishGoogleAuth();
 
+    return () => {
+      isActive = false;
+      controller?.abort();
+    };
   }, [navigation, route.params]);
 
   return null;
@@ -542,7 +559,13 @@ function NoticesRoute({ navigation, route }) {
   );
 }
 
-function FaqsRoute({ navigation }) {
+function FaqsRoute({ navigation, route }) {
+  const isReady = useAuthenticatedRoute(navigation, route);
+
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <FaqsScreen
       onBackPress={() => goBackOrReset(navigation, routes.myPage)}
@@ -712,9 +735,12 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
+    if (publicStartupRoute || skipStartupScreens || isSplashComplete) {
+      return undefined;
+    }
     const timeout = setTimeout(() => setIsSplashComplete(true), 1500);
     return () => clearTimeout(timeout);
-  }, []);
+  }, [publicStartupRoute, skipStartupScreens, isSplashComplete]);
 
   React.useEffect(() => {
     let isActive = true;

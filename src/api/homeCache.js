@@ -5,16 +5,13 @@ const CACHE_PREFIX = "oneta.homeCache";
 
 export const homeCacheKeys = {
   addresses: "addresses",
-  firstLastRoute: "firstLastRoute",
   firstTransitRoute: "firstTransitRoute",
   lastTransitRoute: "lastTransitRoute",
   transitRouteSearch: "transitRouteSearch",
-  arrivalNotifications: "arrivalNotifications",
   scheduleNotifications: "scheduleNotifications",
   depotNotifications: "depotNotifications",
   busRouteDirections: "busRouteDirections",
   hiddenArrivalNotifications: "hiddenArrivalNotifications",
-  transitNotifications: "transitNotifications",
   firstTransitNotifications: "firstTransitNotifications",
   lastTransitNotifications: "lastTransitNotifications",
   myPage: "myPage",
@@ -159,10 +156,6 @@ export function removeHomeCache(key) {
   } catch {
     // Ignore cache cleanup failures.
   }
-}
-
-export function clearHomeCache() {
-  Object.values(homeCacheKeys).forEach(removeHomeCache);
 }
 
 export async function clearHomeCacheAsync() {

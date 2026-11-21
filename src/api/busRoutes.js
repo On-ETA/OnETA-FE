@@ -32,10 +32,6 @@ function buildBusRouteDirectionsEndpoint(routeId) {
   return `/api/bus-routes/${encodeURIComponent(routeId)}/directions`;
 }
 
-function buildBusRouteLocationsEndpoint(routeId) {
-  return `/api/bus-routes/${encodeURIComponent(routeId)}/locations`;
-}
-
 function normalizeDirectionName(name, fallback) {
   return String(name ?? fallback)
     .replace(/\s*방면\s*$/, "")
@@ -71,6 +67,10 @@ function toQueryString(params = {}) {
 }
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -192,30 +192,6 @@ export function normalizeBusRouteDirections(direction) {
   };
 }
 
-export function normalizeBusRouteLocations(locations) {
-  const data = locations?.data ?? locations ?? {};
-  const activeBuses = Array.isArray(data.activeBuses)
-    ? data.activeBuses.map((bus, index) => ({
-        id: `${bus?.plainNo ?? "bus"}-${bus?.sectOrd ?? index}`,
-        atStop: Boolean(bus?.atStop),
-        depotDeparted: Boolean(bus?.depotDeparted),
-        plainNo: bus?.plainNo ?? "",
-        sectOrd: bus?.sectOrd,
-        raw: bus,
-      }))
-    : [];
-
-  return {
-    routeId: data.routeId,
-    depotDeparted: Boolean(data.depotDeparted),
-    depotDepartedBusNo: data.depotDepartedBusNo ?? "",
-    turnaroundDeparted: Boolean(data.turnaroundDeparted),
-    turnaroundDepartedBusNo: data.turnaroundDepartedBusNo ?? "",
-    activeBuses,
-    raw: data,
-  };
-}
-
 async function requestBusRouteJson(options) {
   const fallbackMessage = options.errorMessage ?? "버스 API 요청에 실패했습니다.";
 
@@ -233,24 +209,31 @@ async function requestBusRouteJson(options) {
       throw error;
     }
 
+    let nextAccessToken;
+
     try {
       const { accessToken } = await reissueAuthTokens({
         signal: options.signal,
       });
-      const response = await requestJson({
-        ...options,
-        accessToken,
-      });
-      const businessError = createBusinessError(response, fallbackMessage);
-
-      if (businessError) {
-        throw businessError;
+      nextAccessToken = accessToken;
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
       }
-
-      return response;
-    } catch {
       throw error;
     }
+
+    const response = await requestJson({
+      ...options,
+      accessToken: nextAccessToken,
+    });
+    const businessError = createBusinessError(response, fallbackMessage);
+
+    if (businessError) {
+      throw businessError;
+    }
+
+    return response;
   }
 }
 
@@ -335,24 +318,4 @@ export async function getBusRouteDirections({
   } finally {
     if (latestDirectionsRequests.get(requestKey) === requestId) latestDirectionsRequests.delete(requestKey);
   }
-}
-
-export async function getBusRouteLocations({
-  routeId,
-  accessToken = getAccessToken(),
-  signal,
-} = {}) {
-  if (routeId === undefined || routeId === null || routeId === "") {
-    throw new Error("버스 노선 id가 필요합니다.");
-  }
-
-  const response = await requestBusRouteJson({
-    path: buildBusRouteLocationsEndpoint(routeId),
-    method: "GET",
-    accessToken,
-    signal,
-    errorMessage: "버스 위치 정보를 불러오지 못했습니다.",
-  });
-
-  return normalizeBusRouteLocations(response);
 }

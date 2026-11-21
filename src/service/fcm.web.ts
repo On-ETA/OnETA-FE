@@ -22,7 +22,10 @@ let firebaseMessagingModulePromise: Promise<typeof import("firebase/messaging")>
 
 function loadFirebaseMessaging() {
   if (!firebaseMessagingModulePromise) {
-    firebaseMessagingModulePromise = import("firebase/messaging");
+    firebaseMessagingModulePromise = import("firebase/messaging").catch((error) => {
+      firebaseMessagingModulePromise = null;
+      throw error;
+    });
   }
 
   return firebaseMessagingModulePromise;
@@ -53,9 +56,12 @@ async function getServiceWorkerRegistration() {
   }
 
   if (!serviceWorkerPromise) {
-    serviceWorkerPromise = navigator.serviceWorker.register(
-      `/firebase-messaging-sw.js?${encodeServiceWorkerConfig()}`,
-    );
+    serviceWorkerPromise = navigator.serviceWorker
+      .register(`/firebase-messaging-sw.js?${encodeServiceWorkerConfig()}`)
+      .catch((error) => {
+        serviceWorkerPromise = null;
+        throw error;
+      });
   }
 
   return serviceWorkerPromise;
@@ -79,6 +85,7 @@ async function getWebMessaging() {
       await getServiceWorkerRegistration();
       return firebaseMessaging.getMessaging(app);
     }).catch((error) => {
+      messagingPromise = null;
       console.warn("[FCM] Web messaging unavailable", error?.code ?? error?.name);
       return null;
     });
@@ -136,10 +143,12 @@ export function listenForegroundMessage(callback: (message: WebRemoteMessage) =>
 
   getWebMessaging().then((messaging) => {
     if (disposed || !messaging) return;
-    loadFirebaseMessaging().then(({ onMessage: onMessagingMessage }) => {
+    return loadFirebaseMessaging().then(({ onMessage: onMessagingMessage }) => {
       if (disposed) return;
       unsubscribe = onMessagingMessage(messaging, callback);
     });
+  }).catch((error) => {
+    console.warn("[FCM] Web message listener failed", error?.code ?? error?.name);
   });
 
   return () => {

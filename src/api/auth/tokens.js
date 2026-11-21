@@ -45,16 +45,20 @@ async function persistTokens({ accessToken, refreshToken } = {}) {
   const storage = getStorage();
 
   if (storage) {
-    if (accessToken) {
-      storage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    } else {
-      storage.removeItem(ACCESS_TOKEN_KEY);
-    }
+    try {
+      if (accessToken) {
+        storage.setItem(ACCESS_TOKEN_KEY, accessToken);
+      } else {
+        storage.removeItem(ACCESS_TOKEN_KEY);
+      }
 
-    if (refreshToken) {
-      storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    } else {
-      storage.removeItem(REFRESH_TOKEN_KEY);
+      if (refreshToken) {
+        storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      } else {
+        storage.removeItem(REFRESH_TOKEN_KEY);
+      }
+    } catch {
+      // Storage writes (e.g. private browsing / quota exceeded) must not break auth flow.
     }
 
     return;
@@ -73,7 +77,7 @@ async function persistTokens({ accessToken, refreshToken } = {}) {
         : asyncStorage.removeItem(REFRESH_TOKEN_KEY),
     );
 
-    await Promise.all(tasks);
+    await Promise.all(tasks).catch(() => null);
   }
 }
 
@@ -165,19 +169,31 @@ export function clearAuthTokens() {
 }
 
 export async function hydrateAuthTokens() {
+  const startSession = sessionId;
   await tokenPersistenceQueue;
-  const persistedTokens = await readPersistedTokens();
+  const persistedTokens = await readPersistedTokens().catch(() => ({
+    accessToken: null,
+    refreshToken: null,
+  }));
+
+  if (sessionId !== startSession) {
+    return memoryTokens;
+  }
 
   if (!persistedTokens.accessToken && !persistedTokens.refreshToken) {
     persistentAuthEnabled = false;
     return memoryTokens;
   }
 
+  const hadAccessToken = Boolean(memoryTokens.accessToken);
   persistentAuthEnabled = true;
   memoryTokens = {
     accessToken: persistedTokens.accessToken ?? null,
     refreshToken: persistedTokens.refreshToken ?? null,
   };
+  if (!hadAccessToken && memoryTokens.accessToken) {
+    sessionId += 1;
+  }
 
   listeners.forEach((listener) => listener(memoryTokens));
 

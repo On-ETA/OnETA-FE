@@ -10,7 +10,7 @@
 */
 
 import { getAccessToken } from "../auth/tokens";
-import { requestJson } from "../client";
+import { requestMyPageJson } from "../mypage.js";
 
 const INQUIRY_ENDPOINT = "/api/mypage/inquiry";
 
@@ -20,7 +20,7 @@ export async function sendInquiry({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
-  return requestJson({
+  return requestMyPageJson({
     path: INQUIRY_ENDPOINT,
     method: "POST",
     body: {

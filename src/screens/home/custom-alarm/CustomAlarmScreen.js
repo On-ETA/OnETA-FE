@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Modal,
@@ -29,7 +29,11 @@ import {
 } from "../../../api/notifications/arrival";
 import { colors, typography } from "../../../theme";
 import { blurActiveElement } from "../../../utils/accessibility";
-import { FCM_NOTIFICATION_TYPES, subscribeNotifications } from "../../../notifications/events";
+import {
+  FCM_NOTIFICATION_TYPES,
+  getFcmNotificationType,
+  subscribeNotifications,
+} from "../../../notifications/events";
 import { homeCacheKeys, readHomeCache } from "../../../api/homeCache";
 import { DeletionProgressModal } from "../../../components/DeletionProgressModal";
 
@@ -89,25 +93,6 @@ function getAlarmFallbackKey(prefix, alarm, index) {
   return `${prefix}-${alarm?.routeNumber ?? alarm?.routeName ?? alarm?.title ?? "alarm"}-${index}`;
 }
 
-async function deleteScheduleAlarm(alarm, notificationId) {
-  const userBusId = getDepotNotificationId(alarm);
-
-  if (userBusId !== undefined && userBusId !== null && userBusId !== "") {
-    return deleteDepotNotification({ userBusId });
-  }
-
-  try {
-    return await deleteArrivalNotifications({ ids: [notificationId] });
-  } catch (error) {
-    if (error?.status >= 500) {
-      hideArrivalNotificationsLocally([notificationId]);
-      return { code: "LOCAL_HIDDEN" };
-    }
-
-    throw error;
-  }
-}
-
 export function CustomAlarmScreen({
   onGarageDepartureAddPress,
   onGarageAlarmEditPress,
@@ -125,23 +110,72 @@ export function CustomAlarmScreen({
   const deletingAlarmsRef = useRef(false);
   const [updatingScheduleAlarmIds, setUpdatingScheduleAlarmIds] = useState([]);
   const [updatingGarageAlarmIds, setUpdatingGarageAlarmIds] = useState([]);
+  const updatingScheduleIdsRef = useRef(new Set());
+  const updatingGarageIdsRef = useRef(new Set());
   const garageRequest = useRef(null);
   const scheduleRequest = useRef(null);
+  const isMountedRef = useRef(true);
+  const loadGarageAlarmsRef = useRef(null);
+
+  loadGarageAlarmsRef.current = async () => {
+    garageRequest.current?.abort();
+    const controller = new AbortController();
+    garageRequest.current = controller;
+    const cached = readHomeCache(homeCacheKeys.depotNotifications);
+    const hasCached = Array.isArray(cached);
+    if (hasCached) setGarageAlarms(cached);
+    setIsLoadingGarageAlarms(!hasCached);
+    setGarageAlarmError("");
+    try {
+      const alarms = await getMyDepotNotifications({
+        forceRefresh: true,
+        signal: controller.signal,
+      });
+      if (isMountedRef.current && !controller.signal.aborted) {
+        setGarageAlarms(alarms);
+      }
+    } catch (error) {
+      if (isMountedRef.current && !controller.signal.aborted && error?.name !== "AbortError") {
+        if (!hasCached) {
+          setGarageAlarmError(error?.message ?? "차고지 출발 알림을 불러오지 못했습니다.");
+        }
+      }
+    } finally {
+      if (isMountedRef.current && !controller.signal.aborted) {
+        setIsLoadingGarageAlarms(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      garageRequest.current?.abort();
+    };
+  }, []);
 
   useEffect(() => subscribeNotifications((message, { results = [] } = {}) => {
-    if (message?.data?.type === FCM_NOTIFICATION_TYPES.schedule) {
+    if (!message) {
+      loadGarageAlarmsRef.current?.();
+      return;
+    }
+    const type = getFcmNotificationType
+      ? getFcmNotificationType(message)
+      : message?.data?.type;
+    if (type === FCM_NOTIFICATION_TYPES.schedule) {
       const result = results.find(item => item.key === homeCacheKeys.scheduleNotifications);
       if (!result) return;
       scheduleRequest.current?.abort();
       if (result.status === "fulfilled") setScheduleAlarms(result.value);
-      setScheduleAlarmError(result.status === "rejected" ? result.error?.message || "? ?? ??? ???? ?????." : "");
+      setScheduleAlarmError(result.status === "rejected" ? result.error?.message || "내 일정 알림을 불러오지 못했습니다." : "");
       setIsLoadingScheduleAlarms(false);
-    } else if (message?.data?.type === FCM_NOTIFICATION_TYPES.depot) {
+    } else if (type === FCM_NOTIFICATION_TYPES.depot) {
       const result = results.find(item => item.key === homeCacheKeys.depotNotifications);
       if (!result) return;
       garageRequest.current?.abort();
       if (result.status === "fulfilled") setGarageAlarms(result.value);
-      setGarageAlarmError(result.status === "rejected" ? result.error?.message || "??? ??? ???? ?????." : "");
+      setGarageAlarmError(result.status === "rejected" ? result.error?.message || "차고지 출발 알림을 불러오지 못했습니다." : "");
       setIsLoadingGarageAlarms(false);
     }
   }), []);
@@ -157,27 +191,8 @@ export function CustomAlarmScreen({
   const hasEditableAlarms = garageAlarms.length > 0 || scheduleAlarms.length > 0;
 
   useEffect(() => {
-    let isActive = true;
-    const controller = new AbortController();
-    garageRequest.current = controller;
-    async function loadGarageAlarms() {
-      const cached = readHomeCache(homeCacheKeys.depotNotifications);
-      if (Array.isArray(cached)) setGarageAlarms(cached);
-      setIsLoadingGarageAlarms(!Array.isArray(cached));
-      setGarageAlarmError("");
-      try {
-        const alarms = await getMyDepotNotifications({ signal: controller.signal });
-        if (isActive && !controller.signal.aborted) setGarageAlarms(alarms);
-      } catch (error) {
-        if (isActive && !controller.signal.aborted && error?.name !== "AbortError") {
-          setGarageAlarmError(error?.message ?? "??? ?? ??? ???? ?????.");
-        }
-      } finally {
-        if (isActive && !controller.signal.aborted) setIsLoadingGarageAlarms(false);
-      }
-    }
-    loadGarageAlarms();
-    return () => { isActive = false; controller.abort(); };
+    loadGarageAlarmsRef.current?.();
+    return () => { garageRequest.current?.abort(); };
   }, [refreshKey]);
 
   useEffect(() => {
@@ -194,7 +209,7 @@ export function CustomAlarmScreen({
         if (isActive && !controller.signal.aborted) setScheduleAlarms(alarms);
       } catch (error) {
         if (isActive && !controller.signal.aborted && error?.name !== "AbortError") {
-          setScheduleAlarmError(error?.message ?? "? ?? ??? ???? ?????.");
+          setScheduleAlarmError(error?.message ?? "내 일정 알림을 불러오지 못했습니다.");
         }
       } finally {
         if (isActive && !controller.signal.aborted) setIsLoadingScheduleAlarms(false);
@@ -205,13 +220,14 @@ export function CustomAlarmScreen({
   }, [refreshKey]);
 
   const toggleEditSection = (sectionKey) => {
-    setEditingSections((current) => {
-      const next = { ...current, [sectionKey]: !current[sectionKey] };
-      if (!next.garage && !next.schedule) {
-        setSelectedIds([]);
-      }
-      return next;
-    });
+    const next = { ...editingSections, [sectionKey]: !editingSections[sectionKey] };
+    setEditingSections(next);
+    if (!next.garage && !next.schedule) {
+      setSelectedIds([]);
+    } else if (!next[sectionKey]) {
+      const prefix = `${sectionKey}-`;
+      setSelectedIds((current) => current.filter((id) => !String(id).startsWith(prefix)));
+    }
   };
 
   const toggleSelect = (alarmId) => {
@@ -239,10 +255,17 @@ export function CustomAlarmScreen({
   const toggleGarageAlarm = async (alarmId) => {
     const target = garageAlarms.find((alarm) => getGarageAlarmUiId(alarm) === alarmId);
     const userBusId = getDepotNotificationId(target);
-    if (!target || !userBusId || updatingGarageAlarmIds.includes(alarmId)) {
+    if (
+      !target ||
+      !userBusId ||
+      updatingGarageIdsRef.current.has(alarmId) ||
+      updatingGarageAlarmIds.includes(alarmId)
+    ) {
       return;
     }
     const active = !target.enabled;
+    garageRequest.current?.abort();
+    updatingGarageIdsRef.current.add(alarmId);
     setUpdatingGarageAlarmIds((ids) => [...ids, alarmId]);
     try {
       await updateDepotNotificationStatus({ userBusId, active });
@@ -252,6 +275,7 @@ export function CustomAlarmScreen({
     } catch (error) {
       Alert.alert("알림 상태 변경 실패", error?.message ?? "차고지 출발 알림 상태 변경에 실패했습니다.");
     } finally {
+      updatingGarageIdsRef.current.delete(alarmId);
       setUpdatingGarageAlarmIds((ids) => ids.filter((id) => id !== alarmId));
     }
   };
@@ -267,12 +291,16 @@ export function CustomAlarmScreen({
       return;
     }
 
-    if (updatingScheduleAlarmIds.includes(alarmId)) {
+    if (
+      updatingScheduleIdsRef.current.has(alarmId) ||
+      updatingScheduleAlarmIds.includes(alarmId)
+    ) {
       return;
     }
 
     const nextEnabled = !targetAlarm.enabled;
 
+    updatingScheduleIdsRef.current.add(alarmId);
     setUpdatingScheduleAlarmIds((current) => [...current, alarmId]);
     setScheduleAlarms((current) =>
       current.map((alarm) =>
@@ -300,6 +328,7 @@ export function CustomAlarmScreen({
         error?.message ?? "도착 알림 상태 변경에 실패했습니다.",
       );
     } finally {
+      updatingScheduleIdsRef.current.delete(alarmId);
       setUpdatingScheduleAlarmIds((current) =>
         current.filter((id) => id !== alarmId),
       );
@@ -347,6 +376,8 @@ export function CustomAlarmScreen({
     }
 
     deletingAlarmsRef.current = true;
+    const previousGarageAlarms = garageAlarms;
+    const previousScheduleAlarms = scheduleAlarms;
     setIsDeletingAlarms(true);
     setGarageAlarms((current) =>
       current.filter((alarm) => !deleteTargetIds.includes(getGarageAlarmUiId(alarm))),
@@ -360,23 +391,105 @@ export function CustomAlarmScreen({
     setDeleteTargetIds([]);
 
     try {
+      const refreshEachDepot = garageTargetIds.length <= 1;
       const garageResults = await Promise.allSettled(
         garageTargetIds.map((userBusId) =>
-          deleteDepotNotification({ userBusId }),
+          deleteDepotNotification({ userBusId, refresh: refreshEachDepot }),
         ),
       );
-      const scheduleResults = await Promise.allSettled(
-        scheduleTargets.map((alarm, index) =>
-          deleteScheduleAlarm(alarm, scheduleTargetIds[index]),
-        ),
+      if (garageTargetIds.length > 1 && typeof getMyDepotNotifications === "function") {
+        await getMyDepotNotifications({ forceRefresh: true }).catch(() => null);
+      }
+
+      const depotBackedScheduleIndexes = [];
+      const arrivalScheduleIndexes = [];
+      scheduleTargets.forEach((alarm, index) => {
+        const userBusId = getDepotNotificationId(alarm);
+        if (userBusId !== undefined && userBusId !== null && userBusId !== "") {
+          depotBackedScheduleIndexes.push(index);
+        } else {
+          arrivalScheduleIndexes.push(index);
+        }
+      });
+
+      const scheduleResults = new Array(scheduleTargets.length);
+      if (depotBackedScheduleIndexes.length > 0) {
+        const depotScheduleResults = await Promise.allSettled(
+          depotBackedScheduleIndexes.map((index) =>
+            deleteDepotNotification({
+              userBusId: getDepotNotificationId(scheduleTargets[index]),
+              refresh: depotBackedScheduleIndexes.length <= 1,
+            }),
+          ),
+        );
+        depotBackedScheduleIndexes.forEach((targetIndex, resultIndex) => {
+          scheduleResults[targetIndex] = depotScheduleResults[resultIndex];
+        });
+        if (depotBackedScheduleIndexes.length > 1 && typeof getMyDepotNotifications === "function") {
+          await getMyDepotNotifications({ forceRefresh: true }).catch(() => null);
+        }
+      }
+
+      if (arrivalScheduleIndexes.length > 0) {
+        const refreshEachArrival = arrivalScheduleIndexes.length <= 1;
+        const arrivalResults = await Promise.allSettled(
+          arrivalScheduleIndexes.map(async (index) => {
+            const notificationId = scheduleTargetIds[index];
+            try {
+              return await deleteArrivalNotifications({
+                ids: [notificationId],
+                refresh: refreshEachArrival,
+              });
+            } catch (error) {
+              if (error?.status >= 500) {
+                hideArrivalNotificationsLocally([notificationId]);
+                return { code: "LOCAL_HIDDEN" };
+              }
+              throw error;
+            }
+          }),
+        );
+        arrivalScheduleIndexes.forEach((targetIndex, resultIndex) => {
+          scheduleResults[targetIndex] = arrivalResults[resultIndex];
+        });
+        if (arrivalScheduleIndexes.length > 1 && typeof getArrivalNotifications === "function") {
+          await getArrivalNotifications({ forceRefresh: true }).catch(() => null);
+        }
+      }
+      const failedGarageIds = new Set(
+        garageTargets
+          .filter((_, index) => garageResults[index]?.status === "rejected")
+          .map(getGarageAlarmUiId),
       );
-      if (
-        garageResults.some((result) => result.status === "rejected") ||
-        scheduleResults.some((result) => result.status === "rejected")
-      ) {
+      const failedScheduleIds = new Set(
+        scheduleTargets
+          .filter((_, index) => scheduleResults[index]?.status === "rejected")
+          .map(getScheduleAlarmUiId),
+      );
+      if (failedGarageIds.size > 0) {
+        setGarageAlarms((current) => {
+          const restored = previousGarageAlarms.filter((alarm) =>
+            failedGarageIds.has(getGarageAlarmUiId(alarm)),
+          );
+          const existingIds = new Set(current.map(getGarageAlarmUiId));
+          return [...restored.filter((alarm) => !existingIds.has(getGarageAlarmUiId(alarm))), ...current];
+        });
+      }
+      if (failedScheduleIds.size > 0) {
+        setScheduleAlarms((current) => {
+          const restored = previousScheduleAlarms.filter((alarm) =>
+            failedScheduleIds.has(getScheduleAlarmUiId(alarm)),
+          );
+          const existingIds = new Set(current.map(getScheduleAlarmUiId));
+          return [...restored.filter((alarm) => !existingIds.has(getScheduleAlarmUiId(alarm))), ...current];
+        });
+      }
+      if (failedGarageIds.size > 0 || failedScheduleIds.size > 0) {
         Alert.alert("알림 삭제 실패", "일부 알림을 삭제하지 못했습니다.");
       }
     } catch (error) {
+      setGarageAlarms(previousGarageAlarms);
+      setScheduleAlarms(previousScheduleAlarms);
       Alert.alert(
         "알림 삭제 실패",
         error?.message ?? "알림 삭제에 실패했습니다.",
@@ -674,7 +787,14 @@ function ScheduleAlarmRow({
 
 function DeleteConfirmModal({ deleting = false, onCancel, onConfirm, visible }) {
   return (
-    <Modal animationType="fade" transparent visible={visible}>
+    <Modal
+      animationType="fade"
+      onRequestClose={() => {
+        if (!deleting) onCancel?.();
+      }}
+      transparent
+      visible={visible}
+    >
       <View style={styles.modalOverlay}>
         <View style={styles.confirmCard}>
           <Text style={styles.confirmTitle}>선택한 알림을 삭제할까요?</Text>

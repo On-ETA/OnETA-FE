@@ -23,23 +23,25 @@ export function FaqsScreen({ faqs, onBackPress }) {
       };
     }
 
+    const controller = new AbortController();
+
     async function loadFaqs() {
       setIsLoading(true);
       setErrorMessage("");
 
       try {
-        const data = await getFaqs();
+        const data = await getFaqs({ signal: controller.signal });
 
-        if (isActive) {
+        if (isActive && !controller.signal.aborted) {
           setFaqItems(data);
         }
       } catch (error) {
-        if (isActive) {
+        if (isActive && !controller.signal.aborted && error?.name !== "AbortError") {
           setFaqItems([]);
           setErrorMessage(error?.message ?? "FAQ 목록을 불러오지 못했습니다.");
         }
       } finally {
-        if (isActive) {
+        if (isActive && !controller.signal.aborted) {
           setIsLoading(false);
         }
       }
@@ -49,6 +51,7 @@ export function FaqsScreen({ faqs, onBackPress }) {
 
     return () => {
       isActive = false;
+      controller.abort();
     };
   }, [faqs]);
 

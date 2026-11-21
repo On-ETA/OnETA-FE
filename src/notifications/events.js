@@ -10,6 +10,14 @@ export const FCM_NOTIFICATION_TYPES = {
   depot: "depot",
 };
 
+export function getFcmNotificationType(message) {
+  const rawType = message?.data?.type ?? message?.data?.notificationType;
+  if (typeof rawType !== "string") return "";
+  const normalized = rawType.trim().toLowerCase();
+  if (normalized === "first_and_last") return FCM_NOTIFICATION_TYPES.transit;
+  return normalized;
+}
+
 const listeners = new Set();
 const activeRequests = new Map();
 const receipts = new Map();
@@ -97,7 +105,7 @@ async function refreshList(job, persist, requestSession) {
 }
 
 async function refreshMessage(message, persist) {
-  const type = message?.data?.type;
+  const type = getFcmNotificationType(message);
   const requestSession = getAuthSessionId?.();
   const jobs = getRefreshes(type);
   if (!getAccessToken()) return [];
@@ -130,7 +138,7 @@ export function invalidateNotifications(message, { persist = false } = {}) {
     return Promise.resolve([]);
   }
   if (!getAccessToken()) return Promise.resolve([]);
-  const receiptKey = message.messageId && `${getAuthSessionId?.()}:${message.data?.type}:${message.messageId}`;
+  const receiptKey = message.messageId && `${getAuthSessionId?.()}:${getFcmNotificationType(message)}:${message.messageId}`;
   if (receiptKey && receipts.has(receiptKey)) return receipts.get(receiptKey);
   const refresh = refreshMessage(message, persist);
   if (receiptKey) {

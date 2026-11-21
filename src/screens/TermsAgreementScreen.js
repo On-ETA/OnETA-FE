@@ -52,7 +52,7 @@ const TERMS = [
 ];
 
 function getConsentErrorMessage(error) {
-  const detailData = error?.details?.data;
+  const detailData = error?.data?.data ?? error?.details?.data;
 
   if (detailData && typeof detailData === "object") {
     const fieldMessage = Object.values(
@@ -69,6 +69,7 @@ function getConsentErrorMessage(error) {
   }
 
   const message =
+    error?.data?.message ??
     error?.details?.message ??
     error?.message ??
     "약관 동의 처리에 실패했습니다. 다시 시도해 주세요.";

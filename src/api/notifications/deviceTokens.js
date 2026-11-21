@@ -5,6 +5,10 @@ import { requestJson } from "../client";
 const DEVICE_TOKENS_ENDPOINT = "/api/notifications/device-tokens";
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -52,7 +56,10 @@ async function requestDeviceTokenJson(options) {
         signal: options.signal,
       });
       nextAccessToken = accessToken;
-    } catch {
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
+      }
       throw error;
     }
 

@@ -93,6 +93,33 @@ test('internal pages animate when the step changes without animating their initi
   f.render({ transitionKey: 'list', animateOnMount: false }); await settle(); assert.equal(f.starts.length, 2);
 });
 
+test('disabling a transition displays the next page with no leftover translation or opacity', async () => {
+  for (const platform of ['android', 'ios', 'web']) {
+    const f = fixture({ platform });
+    const setup = { transitionKey: 'setup' };
+    f.render(setup);
+    await settle();
+    const setupStyle = f.render(setup).props.children[0].props.style;
+    if (platform === 'web') assert.ok(setupStyle[2].animationKeyframes);
+    else assert.equal(f.starts.length, 1);
+
+    for (const transitionKey of ['map', 'results']) {
+      const tree = f.render({ active: false, transitionKey });
+      const style = tree.props.children[0].props.style;
+      if (platform === 'web') {
+        assert.equal(Array.isArray(style), false);
+        assert.equal(style.animationKeyframes, undefined);
+      } else {
+        assert.equal(style[1], false);
+        assert.equal(f.starts.length, 1);
+      }
+    }
+    f.render(setup);
+    if (platform === 'web') assert.ok(f.render(setup).props.children[0].props.style[2].animationKeyframes);
+    else assert.equal(f.starts.length, 2);
+  }
+});
+
 test('reduced motion skips animations and enabling it during a transition restores the visible screen', async () => {
   const reduced = fixture({ reduced: true });
   reduced.render(); await settle(); assert.equal(reduced.starts.length, 0);
@@ -109,7 +136,7 @@ function horizontalStart(tree) {
   return tree.props.children[0].props.style[1].transform[0].translateX.outputRange[0];
 }
 
-test('home tab content moves left for first-last to custom alarms and right for the reverse switch', async () => {
+test('home tab content slides from the chosen side in both directions', async () => {
   const f = fixture();
   f.render({ transitionKey: 'firstLast', direction: 'backward', animateOnMount: false });
   const next = f.render({ transitionKey: 'customAlarm', direction: 'forward', animateOnMount: false });
@@ -119,9 +146,12 @@ test('home tab content moves left for first-last to custom alarms and right for 
   assert.equal(f.starts.length, 2);
 });
 
-test('web navigation returning to a previous stack screen slides right instead of repeating the forward slide', async () => {
+test('stack route entry and return slide in opposite directions without ref churn on rerender', async () => {
   const f = fixture();
-  assert.ok(horizontalStart(f.renderRoute()) > 0); await settle();
+  const initial = f.renderRoute(); await settle();
+  const rerender = f.renderRoute();
+  assert.ok(horizontalStart(initial) > 0);
+  assert.equal(initial.props.children[0].props.style[1], rerender.props.children[0].props.style[1]);
   f.navigation({ index: 1, routes: [{ key: 'home' }, { key: 'myPage' }] });
   f.focus(false); f.renderRoute(); await settle();
   f.navigation({ index: 0, routes: [{ key: 'home' }] });
@@ -131,7 +161,7 @@ test('web navigation returning to a previous stack screen slides right instead o
   assert.ok(horizontalStart(f.renderRoute()) > 0);
 });
 
-test('internal next steps slide left and returning to a shallower screen slides right', async () => {
+test('internal next steps slide forward and returning to a shallower screen slides backward', async () => {
   const f = fixture();
   f.render({ transitionKey: 'home', transitionDepth: 0, animateOnMount: false });
   const next = f.render({ transitionKey: 'myPage', transitionDepth: 1, animateOnMount: false });
@@ -173,7 +203,7 @@ test('later screen transitions start immediately from the shared accessibility p
   assert.equal(f.starts.length, 2); assert.equal(f.preferenceReads(), 1);
 });
 
-test('web uses CSS animations in both directions without driving Animated frames in JavaScript', async () => {
+test('web uses CSS directional animations in both directions without JS Animated frames', async () => {
   const f = fixture({ platform: 'web' });
   f.render({ transitionKey: 'home', animateOnMount: false });
   f.render({ transitionKey: 'next', direction: 'forward', animateOnMount: false }); await settle();
@@ -182,7 +212,8 @@ test('web uses CSS animations in both directions without driving Animated frames
   assert.equal(frames.from.transform, 'translateX(24px)'); assert.equal(f.starts.length, 0);
   f.render({ transitionKey: 'home', direction: 'backward', animateOnMount: false });
   const back = f.render({ transitionKey: 'home', direction: 'backward', animateOnMount: false });
-  assert.equal(back.props.children[0].props.style[2].animationKeyframes['0%'].transform, 'translateX(-24px)');
+  const backFrames = back.props.children[0].props.style[2].animationKeyframes;
+  assert.equal(backFrames['0%'].transform, 'translateX(-24px)');
   f.changeMotion(true);
   const stopped = f.render({ transitionKey: 'home', direction: 'backward', animateOnMount: false });
   assert.equal(stopped.props.children[0].props.style[2], null);
@@ -208,7 +239,7 @@ test('onboarding duration applies in both directions on native and web', async (
   }
 });
 
-test('the actual web renderer emits valid directional transforms for all CSS transition variants', () => {
+test('the actual web renderer emits valid CSS keyframes for all directional transition variants', () => {
   const rn = require('react-native-web'), React = require('react'), { renderToStaticMarkup } = require('react-dom/server');
   const source = fs.readFileSync(path.join(__dirname, '../src/components/ScreenTransition.js'), 'utf8');
   const { code } = babel.transformSync(source, {

@@ -43,13 +43,163 @@ function resultFixture(scheduleType = 'NORMAL') {
   return { view, request, calls, back: () => back, render: () => view.render(exports.ScheduleRouteResultStep, props) };
 }
 
+test('alarm setup opens the map and route results without animating their screen position', () => {
+  const view = renderer();
+  const { ScheduleAlarmAddScreen } = load('src/screens/home/custom-alarm/ScheduleAlarmAddScreen.js', {
+    react: view.react,
+    'react-native': { Platform: { select: options => options.default }, StyleSheet: { create: styles => styles } },
+    '../../../theme': { colors: {}, typography: {}, layout: {} },
+    '../../../hooks/useAndroidBackPress': { useAndroidBackPress() {} },
+    '../../../components/ScreenTransition': { ScreenTransition: 'Transition' },
+    '../../../components/NaverMapView': { preloadNaverMap: async () => {} },
+    '../../../utils/routeSetupPlaces': { getRouteSetupPlaces: () => ({ origin: null, destination: null }) },
+  });
+  const render = () => view.render(ScheduleAlarmAddScreen, { initialStep: 'routeSetup' });
+
+  const setup = render();
+  assert.equal(setup.type, 'Transition');
+  assert.equal(setup.props.active, true);
+  setup.children[0].props.onPlacePress('origin');
+
+  const map = render();
+  assert.equal(map.props.transitionKey, 'route');
+  assert.equal(map.props.active, false);
+  map.children[0].props.onBackPress();
+  render().children[0].props.onNextPress();
+
+  const results = render();
+  assert.equal(results.props.transitionKey, 'routeResult');
+  assert.equal(results.props.active, false);
+});
+
+test('route result header edits origin/destination and returns to routeResult, and arrow swaps endpoints', async () => {
+  const view = renderer();
+  const { ScheduleAlarmAddScreen } = load('src/screens/home/custom-alarm/ScheduleAlarmAddScreen.js', {
+    react: view.react,
+    'react-native': { Platform: { select: options => options.default }, StyleSheet: { create: styles => styles } },
+    '../../../theme': { colors: {}, typography: {}, layout: {} },
+    '../../../hooks/useAndroidBackPress': { useAndroidBackPress() {} },
+    '../../../components/ScreenTransition': { ScreenTransition: 'Transition' },
+    '../../../components/NaverMapView': { preloadNaverMap: async () => {} },
+    '../../../utils/accessibility': { blurActiveElement() {} },
+    '../../../utils/routeSetupPlaces': {
+      getRouteSetupPlaces: () => ({
+        origin: { label: '출발A', name: '출발A', address: '출발A', x: 126.9, y: 37.5 },
+        destination: { label: '도착B', name: '도착B', address: '도착B', x: 127.1, y: 37.6 },
+      }),
+    },
+    '../../AddressManagementScreen': { AddressManagementScreen: 'AddressManagementScreen' },
+  });
+  const render = () => view.render(ScheduleAlarmAddScreen, { initialStep: 'routeSetup' });
+
+  // Navigate to routeResult
+  render().children[0].props.onNextPress();
+  let results = render();
+  assert.equal(results.props.transitionKey, 'routeResult');
+
+  // 1) Tap origin -> opens map for origin -> selecting new origin returns to routeResult
+  results.children[0].props.onEditPlacePress('origin');
+  let map = render();
+  assert.equal(map.props.transitionKey, 'route');
+  assert.equal(map.children[0].props.activePlaceType, 'origin');
+  map.children[0].props.onPlaceSelect('origin', { label: '새출발', name: '새출발', address: '새출발', x: 126.8, y: 37.4 });
+  results = render();
+  assert.equal(results.props.transitionKey, 'routeResult');
+  assert.equal(results.children[0].props.initialOrigin.label, '새출발');
+  assert.equal(results.children[0].props.initialDestination.label, '도착B');
+
+  // 2) Tap destination -> opens map -> addressList -> selecting address returns to routeResult
+  results.children[0].props.onEditPlacePress('destination');
+  map = render();
+  assert.equal(map.props.transitionKey, 'route');
+  assert.equal(map.children[0].props.activePlaceType, 'destination');
+  map.children[0].props.onAddressListPress();
+  const addressList = render();
+  assert.equal(addressList.props.transitionKey, 'addressList');
+  addressList.children[0].props.onAddressSelect({ name: '새도착', address: '새도착 주소', x: 127.2, y: 37.7 });
+  results = render();
+  assert.equal(results.props.transitionKey, 'routeResult');
+  assert.equal(results.children[0].props.initialOrigin.label, '새출발');
+  assert.equal(results.children[0].props.initialDestination.label, '새도착');
+
+  // 3) Back from map opened via routeResult returns to routeResult
+  results.children[0].props.onEditPlacePress('origin');
+  map = render();
+  map.children[0].props.onBackPress();
+  results = render();
+  assert.equal(results.props.transitionKey, 'routeResult');
+
+  // 4) Swapping updates parent routePlaces
+  results.children[0].props.onSwapPlaces({
+    origin: results.children[0].props.initialDestination,
+    destination: results.children[0].props.initialOrigin,
+  });
+  results = render();
+  assert.equal(results.children[0].props.initialOrigin.label, '새도착');
+  assert.equal(results.children[0].props.initialDestination.label, '새출발');
+});
+
+test('ScheduleRouteResultStep pill buttons trigger origin edit, swap with re-search, and destination edit', async () => {
+  const view = renderer();
+  const calls = [];
+  const editedTypes = [];
+  const swapped = [];
+  const exports = load('src/screens/home/custom-alarm/ScheduleAlarmAddScreen.js', {
+    react: view.react,
+    'react-native': {
+      View: 'View', Text: 'Text', Pressable: 'Pressable', ScrollView: 'ScrollView', Modal: 'Modal',
+      Platform: { select: value => value.default }, StyleSheet: { create: value => value },
+    },
+    '../../../components/RouteSearchLoadingScreen': { RouteSearchLoadingScreen: 'Loading' },
+    '../../../components/DelayedLoading': { DelayedLoading: 'DelayedLoading' },
+    '../../../api/transit/routes': {
+      searchTransitRoutes: async options => { calls.push(options); return []; },
+      searchFirstLastTransitRoutes: async options => { calls.push(options); return []; },
+    },
+    '../../../theme': { colors: {}, typography: {}, layout: {} },
+  });
+  const props = {
+    scheduleType: 'NORMAL',
+    initialOrigin: { label: '출발지A', address: '출발지A', x: 126.9, y: 37.5 },
+    initialDestination: { label: '목적지B', address: '목적지B', x: 127.1, y: 37.6 },
+    onEditPlacePress: type => editedTypes.push(type),
+    onSwapPlaces: places => swapped.push(places),
+  };
+  const render = () => view.render(exports.ScheduleRouteResultStep, props);
+  render();
+  view.flush();
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].originX, 126.9);
+  assert.equal(calls[0].destX, 127.1);
+
+  const tree = render();
+  find(tree, node => node.props?.accessibilityLabel === '출발지 변경').props.onPress();
+  find(tree, node => node.props?.accessibilityLabel === '목적지 변경').props.onPress();
+  assert.deepEqual(editedTypes, ['origin', 'destination']);
+
+  find(tree, node => node.props?.accessibilityLabel === '출발지와 목적지 바꾸기').props.onPress();
+  assert.equal(swapped.length, 1);
+  assert.equal(swapped[0].origin.label, '목적지B');
+  assert.equal(swapped[0].destination.label, '출발지A');
+
+  render();
+  view.flush();
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].originX, 127.1);
+  assert.equal(calls[1].destX, 126.9);
+  view.unmount();
+});
+
 for (const type of ['NORMAL', 'FIRST_TRANSIT', 'LAST_TRANSIT']) {
-  test(type + ' delays loading and cancels before returning to place setup', async () => {
+  test(type + ' shows search status immediately and can cancel before animation starts', async () => {
     const f = resultFixture(type); const initial = f.render();
     assert.equal(initial.type, 'DelayedLoading');
-    assert.equal(initial.props.fallback.type, 'View'); f.view.flush();
+    assert.equal(initial.props.fallback.type, 'Loading');
+    assert.equal(initial.props.fallback.props.animateDots, false); f.view.flush();
     assert.equal(f.calls[0].scheduleType, type);
-    find(f.render(), node => node.type === 'Loading').props.onFindAnotherRoute(); assert.equal(f.calls[0].signal.aborted, true); assert.equal(f.back(), 1);
+    initial.props.fallback.props.onFindAnotherRoute(); assert.equal(f.calls[0].signal.aborted, true); assert.equal(f.back(), 1);
     f.request.resolve([{ routeId: 'late', totalDurationMinutes: 10 }]); await settle();
     assert.equal(f.render().type, 'DelayedLoading'); f.view.unmount();
   });
@@ -109,7 +259,10 @@ function dotsFixture(reduced = false) {
 }
 
 test('three typing dots bob sequentially using the native driver, and reduced motion stops them', async () => {
-  const f = dotsFixture(); const tree = f.render({}); f.view.flush(); await settle();
+  const f = dotsFixture(); const initial = f.render({ animateDots: false }); f.view.flush(); await settle();
+  assert.ok(text(initial).includes('이동 경로를 찾고 있어요'));
+  assert.equal(f.loops.length, 0);
+  const tree = f.render({ animateDots: true }); f.view.flush(); await settle();
   const dots = find(tree, node => node.props.accessibilityRole === 'progressbar').children[0];
   assert.equal(dots.length, 3); assert.equal(f.loops[0].started, true);
   assert.deepEqual(Array.from(f.loops[0].sequences, sequence => sequence[0].duration), [0, 140, 280]);

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Modal,
@@ -237,9 +237,7 @@ export function MyPageScreen({
     <View style={styles.container}>
       {showHeader ? (
         <HomeTopSection
-          notificationCount={notificationCount}
           onBackPress={onBackPress}
-          onBellPress={onOpenNotifications}
           showAddress={false}
           showBackButton
           showTabs={false}

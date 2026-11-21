@@ -6,7 +6,12 @@ import { AppScreen, Header } from "../components";
 import { colors } from "../theme";
 import { DEFAULT_NOTICE_ITEMS } from "./NoticesScreen";
 
-const FALLBACK_NOTICE = DEFAULT_NOTICE_ITEMS[0];
+const EMPTY_NOTICE = {
+  title: "",
+  dateText: "",
+  content: "",
+};
+const FALLBACK_NOTICE = DEFAULT_NOTICE_ITEMS[0] ?? EMPTY_NOTICE;
 
 /**
  * 공지 상세 페이지
@@ -27,16 +32,17 @@ export function NoticeDetailScreen({ notice = FALLBACK_NOTICE, onBackPress }) {
     }
 
     setNoticeDetail(notice);
+    const controller = new AbortController();
 
     async function loadNoticeDetail() {
       try {
-        const data = await getNoticeById({ id: notice.id });
+        const data = await getNoticeById({ id: notice.id, signal: controller.signal });
 
-        if (isActive) {
+        if (isActive && !controller.signal.aborted) {
           setNoticeDetail(data);
         }
-      } catch {
-        if (isActive) {
+      } catch (error) {
+        if (isActive && !controller.signal.aborted && error?.name !== "AbortError") {
           setNoticeDetail(notice);
         }
       }
@@ -46,6 +52,7 @@ export function NoticeDetailScreen({ notice = FALLBACK_NOTICE, onBackPress }) {
 
     return () => {
       isActive = false;
+      controller.abort();
     };
   }, [notice]);
 
@@ -58,13 +65,13 @@ export function NoticeDetailScreen({ notice = FALLBACK_NOTICE, onBackPress }) {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator
         >
-          <Text style={styles.title}>{noticeDetail.title}</Text>
+          <Text style={styles.title}>{noticeDetail?.title ?? ""}</Text>
 
           <View style={styles.metaRow}>
-            <Text style={styles.metaText}>{noticeDetail.dateText}</Text>
+            <Text style={styles.metaText}>{noticeDetail?.dateText ?? ""}</Text>
           </View>
 
-          <Text style={styles.body}>{noticeDetail.content}</Text>
+          <Text style={styles.body}>{noticeDetail?.content ?? ""}</Text>
         </ScrollView>
       </View>
     </AppScreen>

@@ -1,11 +1,7 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { AppState, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Path } from "react-native-svg";
 
 import ArrowRightIcon from "../../../../assets/images/R_w.svg";
-import BigBusAsset from "../../../../assets/images/bigbus.svg";
-import DirectionCircleAsset from "../../../../assets/images/circle.svg";
-import StopLineAsset from "../../../../assets/images/line.svg";
 import ChangeIcon from "../../../../public/images/change.svg";
 import CloseIcon from "../../../../public/images/close.svg";
 import LoadIcon from "../../../../public/images/load.svg";
@@ -42,20 +38,6 @@ export function FirstLastRouteScreen({
   const [isAlarmModalVisible, setIsAlarmModalVisible] = useState(false);
   const [isNightOnlyNoticeVisible, setIsNightOnlyNoticeVisible] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
-
-  React.useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 30_000);
-    const subscription = AppState.addEventListener("change", state => {
-      if (state === "active") setCurrentTime(Date.now());
-    });
-    return () => {
-      clearInterval(timer);
-      subscription.remove();
-    };
-  }, []);
-
-  React.useEffect(() => setCurrentTime(Date.now()), [routeSummary]);
-
   const isLastRouteActive = activeScheduleType === LAST_TRANSIT;
   const [alarmSettings, setAlarmSettings] = useState({
     1: false,
@@ -75,6 +57,23 @@ export function FirstLastRouteScreen({
     routeSummary?.route?.raw?.status,
   ].includes("NIGHT_ONLY") || routeSummary?.segments?.some(segment => segment.nightBus);
   const hasEstimatedDeparture = Number.isFinite(routeSummary?.estimatedDepartureTimestamp);
+  const shouldTickRemainingTime = hasConfiguredRoute && hasEstimatedDeparture;
+
+  React.useEffect(() => {
+    if (!shouldTickRemainingTime) {
+      return undefined;
+    }
+    const timer = setInterval(() => setCurrentTime(Date.now()), 30_000);
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") setCurrentTime(Date.now());
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [shouldTickRemainingTime]);
+
+  React.useEffect(() => setCurrentTime(Date.now()), [routeSummary]);
   const remainingMinutes = getCorrectedRemainingMinutes(routeSummary, currentTime);
   const enabledAlarmLabels = PRE_DEPARTURE_ALARMS
     .filter((alarm) => alarmSettings[alarm.key])
@@ -121,11 +120,16 @@ export function FirstLastRouteScreen({
         >
           <View style={styles.routeCardTop}>
             <View style={styles.routeTitleGroup}>
-              <Text
-                style={isLastRouteActive ? styles.routeTitleMuted : styles.routeTitle}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: !isLastRouteActive }}
+                onPress={() => onScheduleTypeChange?.(FIRST_TRANSIT)}
+                style={styles.routeTitleButton}
               >
-                첫차
-              </Text>
+                <Text style={isLastRouteActive ? styles.routeTitleMuted : styles.routeTitle}>
+                  첫차
+                </Text>
+              </Pressable>
               <Pressable
                 accessibilityLabel="첫차 막차 전환"
                 accessibilityRole="button"
@@ -139,11 +143,16 @@ export function FirstLastRouteScreen({
               >
                 <ChangeIcon height={17} width={17} />
               </Pressable>
-              <Text
-                style={isLastRouteActive ? styles.routeTitle : styles.routeTitleMuted}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: isLastRouteActive }}
+                onPress={() => onScheduleTypeChange?.(LAST_TRANSIT)}
+                style={styles.routeTitleButton}
               >
-                막차
-              </Text>
+                <Text style={isLastRouteActive ? styles.routeTitle : styles.routeTitleMuted}>
+                  막차
+                </Text>
+              </Pressable>
             </View>
             {hasConfiguredRoute ? (
               <View style={styles.routeHeaderActions}>
@@ -316,6 +325,7 @@ export function FirstLastRouteScreen({
                 accessibilityRole="button"
                 onPress={() => {
                   closeNightOnlyNotice();
+                  if (!routeSummary?.route) return;
                   onNightOnlyRouteSelect?.(routeSummary.route, {
                     origin: routeSummary.originPlace,
                     destination: routeSummary.destinationPlace,
@@ -340,44 +350,6 @@ export function FirstLastRouteScreen({
         </View>
       </Modal>
     </ScrollView>
-  );
-}
-
-function StopRow({ active = false, label, name, time }) {
-  return (
-    <View style={styles.stopRow}>
-      <View style={[styles.stopOuter, active && styles.stopOuterActive]}>
-        <View style={[styles.stopInner, active && styles.stopInnerActive]}>
-          <View style={styles.stopCenter} />
-        </View>
-      </View>
-      <Text style={styles.stopLabel}>{label}</Text>
-      <Text style={styles.stopName}>{name}</Text>
-      <Text style={styles.stopTime}>{time}</Text>
-    </View>
-  );
-}
-
-function WalkIcon() {
-  return (
-    <Svg height={12} viewBox="0 0 12 12" width={12}>
-      <Circle cx={6} cy={2.2} fill={colors.white} r={1.4} />
-      <Path
-        d="M5.4 4.1 3.7 6.1c-.2.2-.2.6.1.8.2.2.6.2.8-.1l.9-1.1.8 1.1-1.3 3c-.1.3 0 .7.3.8.3.1.7 0 .8-.3l1.1-2.5 1.2 1.5c.2.3.6.3.8.1.3-.2.3-.6.1-.8L7.8 6.7 7 4.8l.9.6c.3.2.6.1.8-.1.2-.3.1-.6-.1-.8L7 3.4c-.5-.3-1.1-.1-1.6.7Z"
-        fill={colors.white}
-      />
-    </Svg>
-  );
-}
-
-function BusIcon({ size = 13 }) {
-  return (
-    <Svg height={size} viewBox="0 0 16 16" width={size}>
-      <Path
-        d="M4.2 1.5h7.6c1.1 0 2 .9 2 2v7.4c0 .9-.6 1.7-1.4 1.9v1.1c0 .3-.3.6-.6.6h-.7c-.3 0-.6-.3-.6-.6v-1H5.5v1c0 .3-.3.6-.6.6h-.7c-.3 0-.6-.3-.6-.6v-1.1c-.8-.3-1.4-1-1.4-1.9V3.5c0-1.1.9-2 2-2Zm.4 2.2v3.7h6.8V3.7H4.6Zm1 7.4a1.1 1.1 0 1 0 0-2.2 1.1 1.1 0 0 0 0 2.2Zm4.8-1.1a1.1 1.1 0 1 0 2.2 0 1.1 1.1 0 0 0-2.2 0Z"
-        fill={colors.white}
-      />
-    </Svg>
   );
 }
 
@@ -441,8 +413,13 @@ const styles = StyleSheet.create({
   routeTitleGroup: {
     flexShrink: 0,
     flexDirection: "row",
+    alignSelf: "stretch",
     alignItems: "center",
     gap: 8,
+  },
+  routeTitleButton: {
+    alignSelf: "stretch",
+    justifyContent: "center",
   },
   routeTitle: {
     fontFamily: "SUIT",
@@ -582,196 +559,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 8,
-  },
-  timeline: {
-    height: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    overflow: "hidden",
-    borderRadius: 10,
-    backgroundColor: colors.gray04,
-  },
-  timelineSegment: {
-    height: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    minWidth: 0,
-  },
-  walkSegment: {
-    flex: 1.1,
-  },
-  busSegment: {
-    flex: 1.05,
-    borderRadius: 10,
-    backgroundColor: colors.bus,
-  },
-  afterWalkSegment: {
-    flex: 1.9,
-  },
-  walkDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.gray06,
-    zIndex: 1,
-  },
-  busDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.bus,
-    zIndex: 1,
-  },
-  timelineLabelWrap: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dotIcon: {
-    fontSize: 8,
-    fontWeight: "700",
-    lineHeight: 10,
-    color: colors.white,
-  },
-  busDotIcon: {
-    fontSize: 8,
-    fontWeight: "700",
-    lineHeight: 10,
-    color: colors.white,
-  },
-  timelineLabel: {
-    fontFamily: "SUIT",
-    fontSize: 12,
-    fontStyle: "normal",
-    fontWeight: "500",
-    lineHeight: 19.2,
-    letterSpacing: -0.12,
-    textAlign: "center",
-    color: colors.gray07,
-  },
-  timelineLabelOn: {
-    fontFamily: "SUIT",
-    fontSize: 12,
-    fontStyle: "normal",
-    fontWeight: "500",
-    lineHeight: 19.2,
-    letterSpacing: -0.12,
-    textAlign: "center",
-    color: colors.white,
-  },
-  busInfoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  busBadge: {
-    width: 22,
-    height: 22,
-    marginRight: 7,
-    alignItems: "center",
-    justifyContent:
-      "center",
-    borderRadius: 11,
-    backgroundColor:
-      colors.bus,
-  },
-  busNumber: {
-    fontFamily: "SUIT",
-    fontSize: 18,
-    fontStyle: "normal",
-    fontWeight: "600",
-    lineHeight: 18,
-    letterSpacing: -0.18,
-    color: colors.gray09,
-  },
-  busDirectionRow: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  busDirection: {
-    flex: 1,
-    fontFamily: "SUIT",
-    fontSize: 13,
-    fontStyle: "normal",
-    fontWeight: "500",
-    lineHeight: 18.2,
-    letterSpacing: -0.13,
-    color: colors.gray06,
-  },
-  stopCenter: { width: 6, height: 6, flexShrink: 0, borderRadius: 100, backgroundColor: colors.white },
-  stopLine: { position: "absolute", left: 11, top: 12, zIndex: 0 },
-  stopRows: {
-    gap: 12,
-    position: "relative",
-  },
-  stopRow: {
-    minHeight: 23,
-    flexDirection: "row",
-    alignItems: "center",
-    position: "relative",
-    zIndex: 1,
-  },
-  stopOuter: {
-    width: 23,
-    height: 23,
-    marginRight: 9,
-    alignItems: "center",
-    justifyContent:
-      "center",
-    borderRadius: 12,
-    backgroundColor:
-      colors.gray04,
-  },
-  stopOuterActive: {
-    backgroundColor:
-      colors.sub,
-  },
-  stopInner: {
-    width: 16,
-    height: 16,
-    borderRadius: 100,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor:
-      colors.gray06,
-  },
-  stopInnerActive: {
-    backgroundColor:
-      colors.main,
-  },
-  stopLabel: {
-    width: 42,
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontStyle: "normal",
-    fontWeight: "600",
-    lineHeight: 19.6,
-    letterSpacing: -0.14,
-    color: colors.gray07,
-  },
-  stopName: {
-    flex: 1,
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontStyle: "normal",
-    fontWeight: "600",
-    lineHeight: 19.6,
-    letterSpacing: -0.14,
-    color: colors.gray08,
-  },
-  stopTime: {
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontWeight: "500",
-    lineHeight: 19.6,
-    color: colors.gray06,
   },
   routeAction: {
     height: 54,

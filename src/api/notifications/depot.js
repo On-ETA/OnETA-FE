@@ -17,6 +17,10 @@ function buildDepotNotificationEndpoint(userBusId) {
 }
 
 function isAuthError(error) {
+  if (error?.code === "AUTH_REQUIRED") {
+    return false;
+  }
+
   return (
     error?.status === 401 ||
     error?.status === 403 ||
@@ -63,7 +67,10 @@ async function requestDepotNotificationJson(options) {
         signal: options.signal,
       });
       nextAccessToken = accessToken;
-    } catch {
+    } catch (reissueError) {
+      if (reissueError?.name === "AbortError") {
+        throw reissueError;
+      }
       throw error;
     }
 
@@ -91,6 +98,11 @@ export function normalizeDepotNotification(notification) {
   const userBusId = notification?.userBusId;
   const busNumber = notification?.busNumber ?? "";
   const directionName = notification?.directionName ?? "";
+  const isActive =
+    notification?.active ??
+    notification?.isActive ??
+    notification?.enabled ??
+    notification?.status === "ACTIVE";
 
   return {
     id: userBusId,
@@ -100,7 +112,7 @@ export function normalizeDepotNotification(notification) {
     directionType: notification?.direction ?? "",
     routeNumber: busNumber,
     routeName: busNumber ? `${busNumber}번` : "버스 정보 없음",
-    enabled: Boolean(notification?.active),
+    enabled: Boolean(isActive),
     raw: notification,
   };
 }
@@ -110,6 +122,7 @@ export async function createDepotNotification({
   accessToken = getAccessToken(),
   signal,
 } = {}) {
+  const sessionId = getAuthSessionId?.();
   const response = await requestDepotNotificationJson({
     path: DEPOT_NOTIFICATIONS_ENDPOINT,
     method: "POST",
@@ -119,8 +132,14 @@ export async function createDepotNotification({
     errorMessage: "차고지 출발 알림 등록에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.depotNotifications);
-  await getMyDepotNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  if (sessionId === getAuthSessionId?.()) {
+    removeHomeCache(homeCacheKeys.depotNotifications);
+    await getMyDepotNotifications({
+      accessToken: getAccessToken() ?? accessToken,
+      forceRefresh: true,
+      signal,
+    }).catch(() => null);
+  }
 
   return response;
 }
@@ -168,6 +187,7 @@ export async function updateDepotNotification({
     throw new Error("사용자 버스 id가 필요합니다.");
   }
 
+  const sessionId = getAuthSessionId?.();
   const response = await requestDepotNotificationJson({
     path: buildDepotNotificationEndpoint(userBusId),
     method: "PATCH",
@@ -177,8 +197,14 @@ export async function updateDepotNotification({
     errorMessage: "차고지 출발 알림 수정에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.depotNotifications);
-  await getMyDepotNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  if (sessionId === getAuthSessionId?.()) {
+    removeHomeCache(homeCacheKeys.depotNotifications);
+    await getMyDepotNotifications({
+      accessToken: getAccessToken() ?? accessToken,
+      forceRefresh: true,
+      signal,
+    }).catch(() => null);
+  }
 
   return response;
 }
@@ -196,6 +222,7 @@ export async function updateDepotNotificationStatus({
     throw new Error("활성화 여부(active)를 지정해주세요.");
   }
 
+  const sessionId = getAuthSessionId?.();
   const response = await requestDepotNotificationJson({
     path: `${buildDepotNotificationEndpoint(userBusId)}/status`,
     method: "PATCH",
@@ -205,13 +232,16 @@ export async function updateDepotNotificationStatus({
     errorMessage: "차고지 출발 알림 상태 변경에 실패했습니다.",
   });
 
-  const cached = readHomeCache(homeCacheKeys.depotNotifications);
-  if (cached) {
-    writeHomeCache(homeCacheKeys.depotNotifications, cached.map((alarm) =>
-      String(alarm.userBusId) === String(userBusId)
-        ? { ...alarm, enabled: active, raw: { ...alarm.raw, active } }
-        : alarm,
-    ));
+  if (sessionId === getAuthSessionId?.()) {
+    ++depotListRequestId;
+    const cached = readHomeCache(homeCacheKeys.depotNotifications);
+    if (Array.isArray(cached)) {
+      writeHomeCache(homeCacheKeys.depotNotifications, cached.map((alarm) =>
+        String(alarm.userBusId) === String(userBusId)
+          ? { ...alarm, enabled: active, raw: { ...alarm.raw, active } }
+          : alarm,
+      ));
+    }
   }
   return response;
 }
@@ -219,12 +249,14 @@ export async function updateDepotNotificationStatus({
 export async function deleteDepotNotification({
   userBusId,
   accessToken = getAccessToken(),
+  refresh = true,
   signal,
 } = {}) {
   if (userBusId === undefined || userBusId === null || userBusId === "") {
     throw new Error("사용자 버스 id가 필요합니다.");
   }
 
+  const sessionId = getAuthSessionId?.();
   const response = await requestDepotNotificationJson({
     path: buildDepotNotificationEndpoint(userBusId),
     method: "DELETE",
@@ -233,8 +265,16 @@ export async function deleteDepotNotification({
     errorMessage: "차고지 출발 알림 삭제에 실패했습니다.",
   });
 
-  removeHomeCache(homeCacheKeys.depotNotifications);
-  await getMyDepotNotifications({ accessToken, forceRefresh: true, signal }).catch(() => null);
+  if (sessionId === getAuthSessionId?.()) {
+    removeHomeCache(homeCacheKeys.depotNotifications);
+    if (refresh) {
+      await getMyDepotNotifications({
+        accessToken: getAccessToken() ?? accessToken,
+        forceRefresh: true,
+        signal,
+      }).catch(() => null);
+    }
+  }
 
   return response;
 }

@@ -31,12 +31,26 @@ export function ScreenTransition({ children, transitionKey, active = true, anima
   const progressRef = useRef(null);
   if (!progressRef.current) progressRef.current = new Animated.Value(1);
   const progress = progressRef.current;
+  const animatedStylesRef = useRef(null);
+  if (!animatedStylesRef.current) {
+    const opacity = progress.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
+    animatedStylesRef.current = {
+      forward: {
+        opacity,
+        transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }],
+      },
+      backward: {
+        opacity,
+        transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }) }],
+      },
+    };
+  }
   const mounted = useRef(false);
   const previousTransition = useRef({ key: transitionKey, depth: transitionDepth });
   const inferredDirection = useRef("forward");
   const webRun = useRef(0);
   const [webAnimation, setWebAnimation] = useState(null);
-  // Route focus and internal steps share one content transition, avoiding nested slides.
+  // Route focus and internal steps share one content transition, avoiding nested animations.
   if (route && (!previousRoute.current || previousRoute.current.active !== route.active || previousRoute.current.index !== route.index)) {
     inferredDirection.current = route.direction;
     previousRoute.current = route;
@@ -48,7 +62,6 @@ export function ScreenTransition({ children, transitionKey, active = true, anima
   const resolvedDirection = direction ?? inferredDirection.current;
   const isActive = route ? route.active && active : active;
   const animateEntry = route ? true : animateOnMount;
-  const startOffset = resolvedDirection === "backward" ? -24 : 24;
 
   useEffect(() => {
     const shouldAnimate = isActive && (mounted.current || animateEntry);
@@ -74,24 +87,23 @@ export function ScreenTransition({ children, transitionKey, active = true, anima
       animation = Animated.timing(progress, {
         toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: true,
       });
-      animation.start();
+      animation.start(({ finished } = {}) => {
+        if (!cancelled && !finished) progress.setValue(1);
+      });
     };
     if (shouldAnimate) {
       if (reducedMotionPreference !== undefined) start();
       else preloadPreference().then(start);
     }
-    return () => { cancelled = true; animation?.stop(); subscription.remove(); };
+    return () => { cancelled = true; animation?.stop(); progress.setValue(1); subscription.remove(); };
   }, [isActive, transitionKey, animateEntry, resolvedDirection, progress, duration]);
 
   return (
     <View style={[styles.frame, style]}>
       {Platform.OS === "web" ? (
-        <View style={[styles.content, styles.webAnimation, webAnimation, { animationDuration: `${duration}ms` }]}>{children}</View>
+        <View style={active ? [styles.content, styles.webAnimation, webAnimation, { animationDuration: `${duration}ms` }] : styles.content}>{children}</View>
       ) : (
-        <Animated.View style={[styles.content, {
-          opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }),
-          transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [startOffset, 0] }) }],
-        }]}>{children}</Animated.View>
+        <Animated.View style={[styles.content, active && animatedStylesRef.current[resolvedDirection === "backward" ? "backward" : "forward"]]}>{children}</Animated.View>
       )}
     </View>
   );

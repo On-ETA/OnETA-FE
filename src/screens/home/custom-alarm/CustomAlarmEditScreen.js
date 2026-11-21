@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Modal,
@@ -10,9 +10,6 @@ import {
   View,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
-import BigBusAsset from "../../../../assets/images/bigbus.svg";
-import DirectionCircleAsset from "../../../../assets/images/circle.svg";
-import StopLineAsset from "../../../../assets/images/line.svg";
 
 import {
   getArrivalNotifications,
@@ -79,10 +76,6 @@ function formatArrivalTime(time) {
   ).padStart(2, "0")}`;
 }
 
-function getPrimaryTransitSegment(route) {
-  return route?.segments?.find((segment) => segment.transitType !== "WALK");
-}
-
 function parseRouteDetails(routeDetails) {
   if (!routeDetails) {
     return null;
@@ -119,22 +112,6 @@ function getScheduleEditData(alarm) {
     reminderOffsetMinutes: alarm?.reminderOffsetMinutes,
     scheduleType: alarm?.scheduleType ?? "NORMAL",
   };
-}
-
-function getSegmentStopName(segment, edge) {
-  if (!segment) {
-    return "";
-  }
-
-  if (edge === "start") {
-    return segment.startStation || segment.stations?.[0]?.name || "";
-  }
-
-  return (
-    segment.endStation ||
-    segment.stations?.[segment.stations.length - 1]?.name ||
-    ""
-  );
 }
 
 function formatKoreanTime(time) {
@@ -226,13 +203,9 @@ export function ScheduleAlarmEditScreen({
   const [isReminderModalVisible, setIsReminderModalVisible] = useState(false);
   const notificationId = getNotificationId(alarm);
   const route = getAlarmRoute(arrivalAlarm);
-  const primarySegment = useMemo(() => getPrimaryTransitSegment(route), [route]);
   const timelineSegments = useMemo(
     () => normalizeTimelineSegments(route?.segments ?? []),
     [route],
-  );
-  const arrivalTime = formatArrivalTime(
-    arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
   );
   const formattedArrivalTime = formatKoreanTime(
     arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
@@ -264,12 +237,6 @@ export function ScheduleAlarmEditScreen({
     arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
     totalDuration,
   );
-  const firstReminderStartTime = reminderOffsets.length
-    ? getFormattedStartTime(
-        arrivalAlarm?.targetArrivalTime ?? arrivalAlarm?.arrivalTime,
-        totalDuration + Number(reminderOffsets[0]),
-      )
-    : formattedStartTime;
 
   useEffect(() => {
     if (!notificationId) {
@@ -853,25 +820,6 @@ function BusIcon() {
   );
 }
 
-function StopRow({
-  active = false,
-  label,
-  name,
-  style,
-}) {
-  return (
-    <View style={[styles.stopRow, style]}>
-      <View style={[styles.stopOuter, active && styles.stopOuterActive]}>
-        <View style={[styles.stopInner, active && styles.stopInnerActive]}>
-          <View style={styles.stopCenter} />
-        </View>
-      </View>
-      <Text style={styles.stopLabel}>{label}</Text>
-      <Text numberOfLines={1} style={styles.stopName}>{name}</Text>
-    </View>
-  );
-}
-
 function ChevronRightIcon() {
   return (
     <Svg height={24} viewBox="0 0 24 24" width={24}>
@@ -941,12 +889,6 @@ const styles = StyleSheet.create({
     ...typography.caption01M,
     color: colors.gray07,
   },
-  busInfo: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-  },
   routeClockGroup: {
     flexDirection: "row",
     alignItems: "center",
@@ -967,31 +909,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 11,
     backgroundColor: colors.bus,
-  },
-  busNumber: {
-    fontFamily: "SUIT",
-    fontSize: 18,
-    fontWeight: "700",
-    lineHeight: 25.2,
-    color: colors.gray09,
-  },
-  busDirection: {
-    flex: 1,
-    fontFamily: "SUIT",
-    fontSize: 13,
-    fontStyle: "normal",
-    fontWeight: "500",
-    lineHeight: 18.2,
-    letterSpacing: -0.13,
-    color: colors.gray06,
-  },
-  busDirectionRow: {
-    marginLeft: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    minWidth: 0,
-    flexShrink: 1,
   },
   totalTime: {
     flexDirection: "row",
@@ -1069,80 +986,6 @@ const styles = StyleSheet.create({
     borderColor: colors.gray04,
     borderRadius: 8,
     backgroundColor: colors.white,
-  },
-  stopRows: {
-    marginTop: 16,
-    position: "relative",
-  },
-  stopLine: {
-    position: "absolute",
-    left: 11,
-    top: 7,
-    zIndex: 0,
-  },
-  stopRow: {
-    height: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    position: "relative",
-    zIndex: 1,
-  },
-  dropoffRow: {
-    marginTop: 8,
-  },
-  stopOuter: {
-    width: 23,
-    height: 23,
-    marginRight: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    backgroundColor: colors.gray04,
-  },
-  stopOuterActive: {
-    backgroundColor: colors.sub,
-  },
-  stopInner: {
-    width: 16,
-    height: 16,
-    borderRadius: 100,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.gray06,
-  },
-  stopInnerActive: {
-    backgroundColor: colors.main,
-  },
-  stopCenter: {
-    display: "flex",
-    width: 6,
-    height: 6,
-    flexDirection: "column",
-    alignItems: "flex-start",
-    flexShrink: 0,
-    borderRadius: 100,
-    backgroundColor: colors.white,
-  },
-  stopLabel: {
-    width: 32,
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontStyle: "normal",
-    fontWeight: "600",
-    lineHeight: 19.6,
-    letterSpacing: -0.14,
-    color: colors.gray07,
-  },
-  stopName: {
-    flex: 1,
-    minWidth: 0,
-    fontFamily: "SUIT",
-    fontSize: 14,
-    fontStyle: "normal",
-    fontWeight: "600",
-    lineHeight: 19.6,
-    letterSpacing: -0.14,
-    color: colors.gray08,
   },
   routeTimeline: {
     height: 16,

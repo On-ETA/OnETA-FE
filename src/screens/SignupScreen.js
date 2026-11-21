@@ -319,6 +319,7 @@ export function SignupScreen({ onBackPress, onNextPress }) {
         nextAttempt < MAX_EMAIL_VERIFY_ATTEMPTS;
 
       const errorMessage =
+        error?.data?.message ??
         error?.details?.message ??
         error?.message ??
         "인증번호 확인에 실패했습니다. 다시 시도해 주세요.";
